@@ -1,4 +1,4 @@
-function [Fnew,Qnew,Hnew,Rnew,Bnew] = KalmanFilterX_LearnEM_Mstep(est_f,est_s,F,H,B)
+function [Fnew,Qnew,Hnew,Rnew,Bnew,Params] = KalmanFilterX_LearnEM_Mstep(est_f,est_s,F,H,B)
     
     if(nargin<5)
         Bnew = 0;
@@ -65,4 +65,7 @@ function [Fnew,Qnew,Hnew,Rnew,Bnew] = KalmanFilterX_LearnEM_Mstep(est_f,est_s,F,
     Hnew = sumH{1}/sumH{2};
     Rnew = sumR/N; Rnew = (Rnew+Rnew')/2;
     Qnew = sumQ/(N-1); Qnew = (Qnew+Qnew')/2;
+    Params.Vt_tm1 = Vt_tm1;
+    Params.Pt_tm1 = Pt_tm1;
+    Params.Pt = Pt;
 end

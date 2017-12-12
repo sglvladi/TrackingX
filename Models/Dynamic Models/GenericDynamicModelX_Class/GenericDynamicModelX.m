@@ -58,17 +58,10 @@ classdef GenericDynamicModelX <  DynamicModelX % Handle class with copy function
             end
             
             % Define .F
-            Params.F = @(~) [1 0 0 0;
-                             0 1 0 0;
-                             0 0 1 0;
-                             0 0 0 1];
-            
+            Params.F = @(~) 1;
             
             % Validate .Q
-            Params.Q = @(Dt) [Dt^3/3, 0, Dt^2/2, 0;
-                                      0, Dt^3/3, 0, Dt^2/2; 
-                                      Dt^2/2, 0, Dt, 0;
-                                      0, Dt^2/2, 0, Dt]*Params.q;
+            Params.Q = @(Dt) Params.q^2;
             
             % Call SuperClass method
             this@DynamicModelX(Params);
