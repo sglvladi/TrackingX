@@ -174,7 +174,7 @@ classdef KalmanFilterX < matlab.mixin.Copyable % Handle class with copy function
         
         function UpdatePDA(this, assocWeights)
         % UpdatePDA - Performs KF update step, for multiple measurements
-        %               Update is performed according to the generic (J)PDAF equations [1] 
+        %             Update is performed according to the generic (J)PDAF equations [1] 
         %   
         %   Inputs:
         %       assoc_weights: a (1 x Nm+1) association weights matrix. The first index corresponds to the dummy measurement and
@@ -204,7 +204,9 @@ classdef KalmanFilterX < matlab.mixin.Copyable % Handle class with copy function
                 assocWeights = [0, ones(1,nData)/nData]; % (1 x Nm+1)
             end
             
-            [this.Params.x,this.Params.P,this.Params.K] = KalmanFilterX_UpdatePDA(this.Params.xPred,this.Params.PPred,this.Params.y,assocWeights,this.Params.yPred,this.Params.S,this.Params.Pxy);
+            [this.Params.x,this.Params.P,this.Params.K] = ...
+                KalmanFilterX_UpdatePDA(this.Params.xPred,this.Params.PPred,this.Params.y,...
+                                        assocWeights,this.Params.yPred,this.Params.S,this.Params.Pxy);
         end
         
         function Iterate(this)

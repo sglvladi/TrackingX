@@ -7,7 +7,7 @@ CVmodel = ConstantVelocityModel(Params_cv);
 
 % Positional Observation Model
 Params_meas.dim = 2;
-Params_meas.r = 1;
+Params_meas.r = .5;
 obs_model = PositionalObsModel(Params_meas);
 
 % Set initial true target state
@@ -29,10 +29,10 @@ filtered_estimates = cell(1,N);
 for k = 1:N
 
     % Generate new state and measurement
-    if(k~=1)
-        s(:,k) = CVmodel.propagate_parts(s(:,k-1));
-    end
-    y(:,k) = obs_model.sample(obs_model.transform_mean(s(:,k)));
+%     if(k~=1)
+%         s(:,k) = CVmodel.propagate_parts(s(:,k-1));
+%     end
+%     y(:,k) = obs_model.sample(obs_model.transform_mean(s(:,k)));
 
     % Iterate Kalman Filter
     kf.Params.y = y(:,k);

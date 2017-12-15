@@ -14,7 +14,7 @@ CVModel = ConstantVelocityModelX(Params_cv);
 % Positional Observation Model
 Params_meas.xDim = 4;
 Params_meas.yDim = 2;
-Params_meas.r = 0.2;
+Params_meas.r = 0.5;
 ObsModel = PositionalObsModelX(Params_meas);
 
 % Initiate Kalman Filter
@@ -28,8 +28,8 @@ kf = KalmanFilterX(Init);
 % Containers
 N = size(x_true,1)-2;
 xV = zeros(4,N);          %estmate        % allocate memory
-sV = zeros(2,N);          %actual
-zV = zeros(2,N);
+%sV = zeros(2,N);          %actual
+%zV = zeros(2,N);
 filtered_estimates = {};
 
 % Create figure windows
@@ -57,9 +57,9 @@ tic;
 for k = 1:N
   
   % Generate new measurement from ground truth
-  sV(:,k) = [x_true(k+2,1); y_true(k+2,1)];     % save ground truth
-  zV(:,k) = ObsModel.sample(0, sV(:,k),1);     % generate noisy measurment
-  
+%   sV(:,k) = [x_true(k+2,1); y_true(k+2,1)];     % save ground truth
+%   zV(:,k) = ObsModel.sample(0, sV(:,k),1);     % generate noisy measurment
+%   
   % Iterate Kalman Filter
   kf.Params.y = zV(:,k);
   kf.Predict(); 

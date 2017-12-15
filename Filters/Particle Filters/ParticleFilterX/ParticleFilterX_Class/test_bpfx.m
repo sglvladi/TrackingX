@@ -16,21 +16,21 @@ Params.q_head = 0.3;
 CHmodel = ConstantHeadingModelX(Params);
 
 % Positional Observation Model
-%Params_meas.xDim = 4;
-% Params_meas.yDim = 2;
-% Params_meas.r = .1;
-% obs_model = PositionalObsModelX(Params_meas);
+Params_meas.xDim = 4;
+Params_meas.yDim = 2;
+Params_meas.r = .5;
+obs_model = PositionalObsModelX(Params_meas);
 
 % Polar2Cart Observation Model
-Params_meas.xDim = 4;
-Params_meas.R = [pi/3600 0 ; 0 0.1];
-obs_model = Polar2CartGaussModelX(Params_meas);
+% Params_meas.xDim = 4;
+% Params_meas.R = [pi/3600 0 ; 0 0.1];
+% obs_model = Polar2CartGaussModelX(Params_meas);
 
 % Initiate Particle Filter
 Params_pf.k = 1;
 Params_pf.Np = 1000;
-Params_pf.gen_x0 = @(Np) mvnrnd(repmat([x_true(2,1); y_true(2,1); x_true(2,1)-x_true(1,1); y_true(2,1)-y_true(2,1)]', Np,1), diag([Params_meas.r^2, Params_meas.r^2, 0, 0])+CHmodel.Params.Q(1));
-Params_pf.DynModel = CHmodel;
+Params_pf.gen_x0 = @(Np) mvnrnd(repmat([x_true(2,1); y_true(2,1); x_true(2,1)-x_true(1,1); y_true(2,1)-y_true(2,1)]', Np,1), CVmodel.Params.Q(1));
+Params_pf.DynModel = CVmodel;
 Params_pf.ObsModel = obs_model;
 pf = ParticleFilterX(Params_pf);
 
@@ -104,6 +104,9 @@ for k = 1:N
   pf.Update();
   
   xV(:,k) = pf.Params.x;                    % save estimate
+  %clear pFilt wFilt;
+  pFilt(:,:,k) = pf.Params.particles;
+  wFilt(:,:,k) = pf.Params.w;
   filtered_estimates{k} = pf.Params;
   
   % Plot update step results
@@ -115,7 +118,7 @@ for k = 1:N
 
         % NOTE: if your image is RGB, you should use flipdim(img, 1) instead of flipud.
         hold on;
-        h2 = plot(ax(1),zV(2,k)*sin(zV(1,k)),zV(2,k)*cos(zV(1,k)),'k*','MarkerSize', 10);
+        h2 = plot(ax(1),zV(1,k),zV(2,k),'k*','MarkerSize', 10);
         h2 = plot(ax(1),sV(1,1:k),sV(2,1:k),'b.-','LineWidth',1);
         if j==2
             set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
@@ -136,14 +139,31 @@ for k = 1:N
     end
   %s = f(s) + q*randn(3,1);                % update process 
 end
-%smoothed_estimates = pf.Smooth(filtered_estimates);
+
+%% Particle Filter Backward Simulation Smoother
+% tic;
+% pSmooth = ParticleFilterX_SmoothBS(pFilt,wFilt,@(x)pf.DynModel.sys(1,x),@(xk,xkm1)pf.DynModel.eval(1,xk,xkm1),10000);
+% toc;
+% xV_smooth = squeeze(mean(pSmooth,2));
+
+%% Particle Filter Forward-Backward Smoother (Backward Step)
+tic;
+wSmooth = ParticleFilterX_SmoothFB(pFilt,wFilt,@(xk,xkm1)pf.DynModel.eval(1,xk,xkm1));
+toc;
+for i=1:N
+      xV_smooth(:,i) = sum(wSmooth(1,:,i).*filtered_estimates{i}.particles,2);%smoothed_estimates{i}.x;          %estmate        % allocate memory
+end
+
+
+% smoothed_estimates = pf.Smooth(filtered_estimates);
 toc;
 % END OF SIMULATION
 % ===================>
 
 % for i=1:N
-%     xV_smooth(:,i) = smoothed_estimates{i}.x;          %estmate        % allocate memory
+%      xV_smooth(:,i) = smoothed_estimates{i}.x;          %estmate        % allocate memory
 % end
+%for
 if(ShowPlots)
     img = imread('maze.png');
     
@@ -178,8 +198,8 @@ if(ShowPlots)
     set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off'); % Exclude line from legend
     plot(xV(1,k), xV(2,k), 'ro', 'MarkerSize', 10);
     plot(xV(1,1:k), xV(2,1:k), 'r.-', 'MarkerSize', 10);
-%     plot(xV_smooth(1,k), xV_smooth(2,k), 'go', 'MarkerSize', 10);
-%     plot(xV_smooth(1,1:k), xV_smooth(2,1:k), 'g.-', 'MarkerSize', 10);
+    plot(xV_smooth(1,k), xV_smooth(2,k), 'go', 'MarkerSize', 10);
+    plot(xV_smooth(1,1:k), xV_smooth(2,1:k), 'g.-', 'MarkerSize', 10);
     % set the y-axis back to normal.
     set(ax(1),'ydir','normal');
     str = sprintf('Robot positions (Update)');
@@ -190,7 +210,7 @@ if(ShowPlots)
     pause(0.01);
 end
 
-err(4,:) = sqrt((xV(1,:)-sV(1,:)).^2 + (xV(2,:)-sV(2,:)).^2);
+%err(4,:) = sqrt((xV(1,:)-sV(1,:)).^2 + (xV(2,:)-sV(2,:)).^2);
 
 
 % for k=1:2                                 % plot results

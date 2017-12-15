@@ -156,19 +156,9 @@ classdef ConstantHeadingModelX <  DynamicModelX % Handle class with copy functio
         % USAGE:    ProbabilityMatrix = DynModel.eval(this, Dt, x_k, x_km1) 
         %
         % See also CONSTANTHEADINGMODELX, SYS, SYS_COV, SYS_NOISE.
-            
-            ProbabilityMatrix = zeros(size(xk,2), size(xkm1,2));
-            if(issymmetric(this.Params.Q(k)) && size(xkm1,2)>size(xk,2))
-                % If R is symmetric and the number of state vectors is higher than the number of measurements,
-                %   then evaluate N(x_km1; x_k, R) = N(x_k; x_km1, R) to increase speed
-                for i=1:size(xk,2)
-                    ProbabilityMatrix(i,:) = mvnpdf(xkm1', xk(:,i)', this.Params.Q(k))';
-                end
-            else
-                for i=1:size(p.Results.xkm1,2)
-                    ProbabilityMatrix(:,i) = mvnpdf(xk', xkm1(:,i)', this.Params.Q(k))';  
-                end
-             end
+        
+            xk_km1 = this.sys(k,xkm1);
+            ProbabilityMatrix = gauss_pdf(xk_km1, xk, this.Params.Q(k));
         end
     end
 end

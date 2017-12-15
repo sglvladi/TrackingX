@@ -1,14 +1,14 @@
 % Plot settings
 ShowPlots = 1;              % Enable|Disable plot outputs
-SkipSimFrames = 5;          % Number of EM output plot frames to skip 
+SkipSimFrames = 1;          % Number of EM output plot frames to skip 
 ShowPredict = 0;            % Show KF Prediction Step plot Output
 ShowUpdate = 0;             % Show KF Update Step plot Output
 nEMIter = 50000;            % Number of EM iterations
 
-loglik = @(F,H,Q,R)-.5*( ln(det(params_kf.P_init)) ...
-                                 - sum((Log.xV(2:end) - F*Log.xV(1:end-1))/Q*(Log.xV(2:end) - F*Log.xV(1:end-1))') ...
-                                 - sum((zV-H*Log.xV)/R*sum(zV-H*Log.xV)') - (N-1)*ln(det(Q)) ...
-                                 - N*ln(det(R)) - 2*N*ln(2*pi));
+% loglik = @(F,H,Q,R)-.5*( ln(det(params_kf.P_init)) ...
+%                                  - sum((Log.xV(2:end) - F*Log.xV(1:end-1))/Q*(Log.xV(2:end) - F*Log.xV(1:end-1))') ...
+%                                  - sum((zV-H*Log.xV)/R*sum(zV-H*Log.xV)') - (N-1)*ln(det(Q)) ...
+%                                  - N*ln(det(R)) - 2*N*ln(2*pi));
 
 % Recording Settings
 Record = 0;                 % Enable|Disable recording
@@ -34,7 +34,7 @@ Params_dyn.xDim = 1;
 Params_dyn.q = 1;                          
 DynModel = GenericDynamicModelX(Params_dyn);
 DynModel.Params.F = @(~) 1;                 % Set Transition matrix F = 1;
-DynModel.Params.Q = @(~) 10;    % Set Process noise covariance Q = q^2
+DynModel.Params.Q = @(~) 5;    % Set Process noise covariance Q = q^2
 
 % Instatiate a generic observation model
 % ( H = 1, R = r^2)
@@ -189,7 +189,7 @@ for EMIter = 1:nEMIter
     if(Record || (ShowPlots && (EMIter==1 || rem(EMIter,SkipSimFrames)==0)))
         
         clf;
-        sp1 = subplot(2,4,[1 2 5 6]);
+        sp1 = subplot(2,4,[1 2 3 4]);
         % NOTE: if your image is RGB, you should use flipdim(img, 1) instead of flipud.
         % Flip the image upside down before showing it
         % Plot data
@@ -213,52 +213,52 @@ for EMIter = 1:nEMIter
         
         
         % Plot loglikelihood vs. Q
-        Qi = 0.001:0.01:20;
-        loglik_sum = 0;
-        for t = 2:N
-            loglik_sum = loglik_sum + EMParams.Pt{t} + F_old*EMParams.Pt{t-1}*F_old'...
-                          - EMParams.Pt_tm1{t}*F_old' - F*EMParams.Pt_tm1{t}';
-        end
-        loglik = [];
-        for i = 1:numel(Qi)
-            loglik(i) = -(N-1)*Qi(i)^2/2 + loglik_sum*Qi(i);
-        end
-        sp2 = subplot(2,4,3);    
-        plot(sp2,Qi,loglik);
-        hold on;
-        plot(Q, loglik_sum*Q-(N-1)*Q^2/2,'r+');
-        str = sprintf('(%0.5f,%0.5f)',Q,loglik_sum*Q-(N-1)*Q^2/2);
-        text(Q+0.2, loglik_sum*Q-(N-1)*Q^2/2+abs(max(loglik)-min(loglik))*0.02, str);
-        %plot(repmat(loglik_sum-N*R,1,numel(Ri)),'r--');
-        axis([0 20 min(loglik) max(loglik)+(max(loglik)-min(loglik))*.05]);
-        xlabel(sp2,'\textbf{Q}','Interpreter','latex');
-        ylabel(sp2,'Joint log-likelihood','Interpreter','latex');
-        title(sp2,'\textbf{Joint LogLikelihood vs Q}','Interpreter','latex');    
-              
-        % Plot loglikelihood vs. R
-        loglik_sum = 0;
-        for t = 1:N
-            loglik_sum = loglik_sum + zV(t)*zV(t)' - zV(t)*xV_smooth(t)'*H_old' - H_old*xV_smooth(t)*zV(t)' + H_old*EMParams.Pt{t}*H_old';
-        end  
-        Ri = 0.001:0.01:10;
-        loglik = [];
-        for i = 1:numel(Ri)
-            loglik(i) = -N*Ri(i)^2/2 + loglik_sum*Ri(i);
-        end
-        sp2 = subplot(2,4,4);                  
-        plot(sp2,Ri,loglik);
-        hold on;
-        plot(R, loglik_sum*R-N*R^2/2,'r+');
-        str = sprintf('(%0.5f,%0.5f)',R,loglik_sum*R-N*R^2/2);
-        text(R+0.2, loglik_sum*R-N*R^2/2+abs(max(loglik)-min(loglik))*0.02, str);
-        %plot(repmat(loglik_sum-N*R,1,numel(Ri)),'r--');
-        axis([0 10 min(loglik) max(loglik)+(max(loglik)-min(loglik))*.05]);
-        xlabel(sp2,'\textbf{R}','Interpreter','latex');
-        ylabel(sp2,'joint likelihood','Interpreter','latex');
-        title(sp2,'\textbf{LogLikelihood vs R}','Interpreter','latex');                            
+%         Qi = Q-abs(Q):0.01:Q+abs(Q);
+%         loglik_sum = 0;
+%         for t = 2:N
+%             loglik_sum = loglik_sum + EMParams.Pt{t} + F_old*EMParams.Pt{t-1}*F_old'...
+%                           - EMParams.Pt_tm1{t}*F_old' - F*EMParams.Pt_tm1{t}';
+%         end
+%         loglik = [];
+%         for i = 1:numel(Qi)
+%             loglik(i) = .5*(-(N-1)*log(Qi(i)) - loglik_sum/Qi(i));
+%         end
+%         sp2 = subplot(2,4,5);    
+%         plot(sp2,Qi,loglik);
+%         hold on;
+%         plot(sp2, Q, -.5*(N-1)*log(Q) - .5*loglik_sum/Q,'r+');
+%         str = sprintf('(%0.5f,%0.5f)',Q,-(N-1)*log(Q) - loglik_sum/Q);
+%         text(sp2, Q+0.52, -(N-1)*log(Q) - loglik_sum/Q+abs(max(loglik)-min(loglik))*0.02, str);
+%         %plot(repmat(loglik_sum-N*R,1,numel(Ri)),'r--');
+%         axis([Q-abs(Q)*0.5 Q+abs(Q)*0.5 max(loglik)- abs(max(loglik)*.05) max(loglik)+abs(max(loglik)*.05)]);
+%         xlabel(sp2,'\textbf{Q}','Interpreter','latex');
+%         ylabel(sp2,'Joint log-likelihood','Interpreter','latex');
+%         title(sp2,'\textbf{Joint LogLikelihood vs Q}','Interpreter','latex');    
+%               
+%         % Plot loglikelihood vs. R
+%         loglik_sum = 0;
+%         for t = 1:N
+%             loglik_sum = loglik_sum + zV(t)*zV(t)' - zV(t)*xV_smooth(t)'*H_old' - H_old*xV_smooth(t)*zV(t)' + H_old*EMParams.Pt{t}*H_old';
+%         end  
+%         Ri = R-abs(R):0.01:R+abs(R);
+%         loglik = [];
+%         for i = 1:numel(Ri)
+%             loglik(i) = -N*log(Ri(i)) + loglik_sum/Ri(i);
+%         end
+%         sp2 = subplot(2,4,6);                  
+%         plot(sp2,Ri,loglik);
+%         hold on;
+%         plot(R, loglik_sum*R-N*R^2/2,'r+');
+%         str = sprintf('(%0.5f,%0.5f)',R,loglik_sum*R-N*R^2/2);
+%         text(R+0.2, loglik_sum*R-N*R^2/2+abs(max(loglik)-min(loglik))*0.02, str);
+%         %plot(repmat(loglik_sum-N*R,1,numel(Ri)),'r--');
+%         %axis([R-abs(R) R+abs(R) max(loglik)-abs(max(loglik)*.05) max(loglik)+abs(max(loglik)*.05)]);
+%         xlabel(sp2,'\textbf{R}','Interpreter','latex');
+%         ylabel(sp2,'joint likelihood','Interpreter','latex');
+%         title(sp2,'\textbf{LogLikelihood vs R}','Interpreter','latex');                            
         
         sp3 = subplot(2,4,7);
-        x = -5*Q_true:0.01:5*Q_true;
+        x = -5*Q_true:0.0001:5*Q_true;
         y = mvnpdf(x',0,Q_true);
         plot(sp3,x,y);
         hold on;
@@ -272,7 +272,7 @@ for EMIter = 1:nEMIter
         x = -5*R_true:0.01:5*R_true;
         y = mvnpdf(x',0,R_true);
         plot(sp4,x,y);
-        hold on;
+        hold on;    
         y = mvnpdf(x',0,KFilter.ObsModel.Params.R());
         plot(sp4,x,y);
         xlabel(sp4,'\textbf{Measurement noise $v_k \sim \mathcal{N}(0,R)$}','Interpreter','latex');

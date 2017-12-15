@@ -4,17 +4,17 @@ function [xPred, PPred, yPred, S, Pxy] = KalmanFilterX_Predict(x,P,F,Q,H,R,u,B,O
 %
 %INPUTS:    x   The (xDim x 1) state estimate at the previous time-step.
 %           P   The (xDim x xDim) state covariance matrix at the previous
-%                   time-step.
-%           F       An (xDim x xDim) state transition matrix.
-%           Q       The (xDim x xDim) process noise covariance matrix.
-%           H       An (xDim x yDim) measurement matrix.
-%           R       The (yDim x yDim) measurement noise covariance matrix.
-%           u       An optional (xDim x 1) control input.
-%                   If omitted, no control input is used.
-%           B       An optional (xDim x xDim) control gain matrix.
-%                   If omitted, B is assumed to be 1.
-%           O       An optional (xDim x xDim) control noise covariance
-%                   matrix. If omitted, Q is assumed to be 0.
+%               time-step.
+%           F   An (xDim x xDim) state transition matrix.
+%           Q   The (xDim x xDim) process noise covariance matrix.
+%           H   A (xDim x yDim) measurement matrix.
+%           R   The (yDim x yDim) measurement noise covariance matrix.
+%           u   A optional (xDim x 1) control input.
+%               If omitted, no control input is used.
+%           B   An optional (xDim x xDim) control gain matrix.
+%               If omitted, B is assumed to be 1.
+%           O   An optional (xDim x xDim) control noise covariance
+%               matrix. If omitted, Q is assumed to be 0.
 %
 %OUTPUTS:   xPred   The (xDim x 1) predicted state estimate.
 %           PPred   The (xDim x xDim) predicted state covariance matrix.

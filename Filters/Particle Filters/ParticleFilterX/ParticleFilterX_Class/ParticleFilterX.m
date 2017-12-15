@@ -274,7 +274,7 @@ classdef ParticleFilterX < matlab.mixin.Copyable
         %       smoothed_estimates: a copy of the input (1 x N) cell array filtered_estimates, where the .x and .P fields have been replaced with the smoothed estimates   
         %
         %   (Virtual inputs at each iteration)        
-        %           -> filtered_estimates{k}.x          : Filtered state mean estimate at timestep k
+        %           -> filtered_estimates{k}.particles          : Filtered state mean estimate at timestep k
         %           -> filtered_estimates{k}.P          : Filtered state covariance estimate at each timestep
         %           -> filtered_estimates{k+1}.x_pred   : Predicted state at timestep k+1
         %           -> filtered_estimates{k+1}.P_pred   : Predicted covariance at timestep k+1
@@ -298,17 +298,12 @@ classdef ParticleFilterX < matlab.mixin.Copyable
             
             % Perform Rauch–Tung–Striebel Backward Recursion
             for k = N-1:-1:1
-                summ = zeros(this.Params.Np,this.Params.Np);
-                for i = 1:this.Params.Np
-                    summ(i,:) = this.DynModel.eval(filtered_estimates{k}.k, filtered_estimates{k+1}.particles, filtered_estimates{k}.particles(:,i))';    
-                    smoothed_estimates{k}.w(1,i) = filtered_estimates{k}.w(1,i) * sum(smoothed_estimates{k+1}.w .* summ(i,:),2);%/sum(filtered_estimates{k}.w(1,i).*p',2);
-                end
-                for j = 1:this.Params.Np
-                    smoothed_estimates{k}.w(1,i) = smoothed_estimates{k}.w(1,i)/sum(filtered_estimates{k}.w(1,:).*summ(i,:),2);
-                end
-                %smoothed_estimates{k}.w = smoothed_estimates{k}.w./summ;
-                smoothed_estimates{k}.w = smoothed_estimates{k}.w./sum(smoothed_estimates{k}.w);
-                smoothed_estimates{k}.x = sum(repmat(smoothed_estimates{k}.w,size(filtered_estimates{k}.particles,1),1).*filtered_estimates{k}.particles,2);
+                disp(k);
+                lik = this.DynModel.eval(filtered_estimates{k}.k, filtered_estimates{k+1}.particles, filtered_estimates{k}.particles);
+                denom = sum(filtered_estimates{k}.w(ones(this.Params.Np,1),:).*lik,2)'; % denom(1,j)
+                smoothed_estimates{k}.w = filtered_estimates{k}.w(1,:) .* sum(smoothed_estimates{k+1}.w(ones(this.Params.Np,1),:).*lik'./denom(ones(this.Params.Np,1),:),2)';
+                smoothed_estimates{k}.particles =  filtered_estimates{k}.particles;
+                smoothed_estimates{k}.x = sum(smoothed_estimates{k}.w.*smoothed_estimates{k}.particles,2);
             end
         end        
         
