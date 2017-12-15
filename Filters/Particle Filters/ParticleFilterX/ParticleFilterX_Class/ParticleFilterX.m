@@ -298,7 +298,6 @@ classdef ParticleFilterX < matlab.mixin.Copyable
             
             % Perform Rauch–Tung–Striebel Backward Recursion
             for k = N-1:-1:1
-                disp(k);
                 lik = this.DynModel.eval(filtered_estimates{k}.k, filtered_estimates{k+1}.particles, filtered_estimates{k}.particles);
                 denom = sum(filtered_estimates{k}.w(ones(this.Params.Np,1),:).*lik,2)'; % denom(1,j)
                 smoothed_estimates{k}.w = filtered_estimates{k}.w(1,:) .* sum(smoothed_estimates{k+1}.w(ones(this.Params.Np,1),:).*lik'./denom(ones(this.Params.Np,1),:),2)';

@@ -158,7 +158,16 @@ classdef ConstantHeadingModelX <  DynamicModelX % Handle class with copy functio
         % See also CONSTANTHEADINGMODELX, SYS, SYS_COV, SYS_NOISE.
         
             xk_km1 = this.sys(k,xkm1);
-            ProbabilityMatrix = gauss_pdf(xk_km1, xk, this.Params.Q(k));
+            ProbabilityMatrix = zeros(size(xk,2), size(xkm1,2));
+            if(size(xkm1,2)>size(xk,2))
+                for i=1:size(xk,2)
+                    ProbabilityMatrix(i,:) = gauss_pdf(xk(:,i), xk_km1, this.Params.Q(k));
+                end
+            else
+                for i=1:size(xkm1,2)
+                    ProbabilityMatrix(:,i) = gauss_pdf(xk, xk_km1(:,i), this.Params.Q(k))';  
+                end
+            end
         end
     end
 end

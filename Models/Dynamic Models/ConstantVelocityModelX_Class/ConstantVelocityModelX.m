@@ -205,7 +205,7 @@ classdef ConstantVelocityModelX <  DynamicModelX % Handle class with copy functi
                 for i=1:size(xkm1,2)
                     ProbabilityMatrix(:,i) = gauss_pdf(xk, xk_km1(:,i), this.Params.Q(k))';  
                 end
-             end
+            end
                         
         end
         

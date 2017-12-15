@@ -12,7 +12,7 @@ CVmodel = ConstantVelocityModelX(Params_cv);
 
 % Constant Heading Model
 Params.q_vel = 0.01;
-Params.q_head = 0.3;
+Params.q_head = 0.16;
 CHmodel = ConstantHeadingModelX(Params);
 
 % Positional Observation Model
@@ -30,7 +30,7 @@ obs_model = PositionalObsModelX(Params_meas);
 Params_pf.k = 1;
 Params_pf.Np = 1000;
 Params_pf.gen_x0 = @(Np) mvnrnd(repmat([x_true(2,1); y_true(2,1); x_true(2,1)-x_true(1,1); y_true(2,1)-y_true(2,1)]', Np,1), CVmodel.Params.Q(1));
-Params_pf.DynModel = CVmodel;
+Params_pf.DynModel = CHmodel;
 Params_pf.ObsModel = obs_model;
 pf = ParticleFilterX(Params_pf);
 
@@ -141,22 +141,22 @@ for k = 1:N
 end
 
 %% Particle Filter Backward Simulation Smoother
-% tic;
-% pSmooth = ParticleFilterX_SmoothBS(pFilt,wFilt,@(x)pf.DynModel.sys(1,x),@(xk,xkm1)pf.DynModel.eval(1,xk,xkm1),10000);
-% toc;
-% xV_smooth = squeeze(mean(pSmooth,2));
+tic;
+pSmooth = ParticleFilterX_SmoothBS(pFilt,wFilt,@(xk,xkm1)pf.DynModel.eval(1,xk,xkm1),1000);
+toc;
+xV_smooth1 = squeeze(mean(pSmooth,2));
 
 %% Particle Filter Forward-Backward Smoother (Backward Step)
 tic;
 wSmooth = ParticleFilterX_SmoothFB(pFilt,wFilt,@(xk,xkm1)pf.DynModel.eval(1,xk,xkm1));
 toc;
 for i=1:N
-      xV_smooth(:,i) = sum(wSmooth(1,:,i).*filtered_estimates{i}.particles,2);%smoothed_estimates{i}.x;          %estmate        % allocate memory
+      xV_smooth2(:,i) = sum(wSmooth(1,:,i).*filtered_estimates{i}.particles,2);%smoothed_estimates{i}.x;          %estmate        % allocate memory
 end
 
-
-% smoothed_estimates = pf.Smooth(filtered_estimates);
-toc;
+%tic;
+%smoothed_estimates = pf.Smooth(filtered_estimates);
+%toc;
 % END OF SIMULATION
 % ===================>
 
@@ -196,10 +196,12 @@ if(ShowPlots)
     end
     h2 = plot(ax(1),sV(1,k),sV(2,k),'bo','MarkerSize', 10);
     set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off'); % Exclude line from legend
-    plot(xV(1,k), xV(2,k), 'ro', 'MarkerSize', 10);
-    plot(xV(1,1:k), xV(2,1:k), 'r.-', 'MarkerSize', 10);
-    plot(xV_smooth(1,k), xV_smooth(2,k), 'go', 'MarkerSize', 10);
-    plot(xV_smooth(1,1:k), xV_smooth(2,1:k), 'g.-', 'MarkerSize', 10);
+    %plot(xV(1,k), xV(2,k), 'ro', 'MarkerSize', 10);
+    %plot(xV(1,1:k), xV(2,1:k), 'r.-', 'MarkerSize', 10);
+    plot(xV_smooth1(1,k), xV_smooth1(2,k), 'go', 'MarkerSize', 10);
+    plot(xV_smooth1(1,1:k), xV_smooth1(2,1:k), 'g.-', 'MarkerSize', 10);
+    plot(xV_smooth2(1,k), xV_smooth2(2,k), 'ro', 'MarkerSize', 10);
+    plot(xV_smooth2(1,1:k), xV_smooth2(2,1:k), 'r.-', 'MarkerSize', 10);
     % set the y-axis back to normal.
     set(ax(1),'ydir','normal');
     str = sprintf('Robot positions (Update)');

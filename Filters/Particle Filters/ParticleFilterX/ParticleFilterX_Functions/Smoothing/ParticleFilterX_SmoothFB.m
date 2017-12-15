@@ -18,11 +18,17 @@ function [wSmooth] = ParticleFilterX_SmoothFB(pFilt,wFilt,f_eval)
     [xDim,Np,N] = size(pFilt); 
     wSmooth = zeros(1,Np,N);
     wSmooth(1,:,N) = wFilt(1,:,N);
+    
     % Perform Backward Recursion
     for k = N-1:-1:1
-        disp(k);
-        lik = f_eval(pFilt(:,:,k+1), pFilt(:,:,k));
-        denom = sum(wFilt(ones(Np,1),:,k).*lik,2)'; % denom(1,j)
+        % Compute enumerator of Eq. (1) of [1] 
+        % -> lik(j,i) = p(x_{k+1}^j | x_{k}^i) for all particles j=1:Np, i=1:Np
+        lik = f_eval(pFilt(:,:,k+1), pFilt(:,:,k)); 
+        
+        % Compute denominator of Eq. (1) of [1]
+        denom = sum(wFilt(ones(Np,1),:,k).*lik,2)';
+        
+        % Evaluate Eq. (1) of [1] for all particles i=1:Np 
         wSmooth(1,:,k) = wFilt(1,:,k) .* sum(wSmooth(ones(Np,1),:,k+1).*lik'./denom(ones(Np,1),:),2)';   
     end
     
