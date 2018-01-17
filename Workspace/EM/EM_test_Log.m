@@ -8,17 +8,17 @@ nEMIter = 50000;            % Number of EM iterations
 % Desired parameters
 F_pre = @(~) 1;
 H_pre = @(~) 1;
-Q_pre = @(~) 0.1;
+Q_pre = @(~) .1;
 R_pre = @(~) 1;
-B_pre = @(~) -0.004;
-c     = 10^(-4);
+B_pre = @(~) -.002;
+c     = 10^(-6);
 
 % Recording Settings
 Record = 0;                 % Enable|Disable recording
 clear Frames                % Clear stored frames from previous simulations
 
 % Simulation Settings
-N = 1000;                   % Number of timesteps
+N = 2733;                   % Number of timesteps
 
 % Results Log Container
 Log.xFilt = zeros(1,N);     % Log to store filtered state vectors (for each EM iteration)             
@@ -58,22 +58,21 @@ Q_old = DynModel.Params.Q(1);
 F_old = DynModel.Params.F(1);
 R_old = ObsModel.Params.R(1);
 
-% Generate ground truth and measurements
-sV = 5;
-zV = ObsModel.sample(0, sV(1),1);
-%uV = 2*rand()-1;
-uV = [uV(2:end) 0];
-clear pErr mErr;
-mErr = zV - sV;
-for k = 2:N
-    % Generate new measurement from ground truth
-    %uV(:,k) = 2*rand()-1;
-    pErr(k) = DynModel.sys_noise(1,1);
-    sV(:,k) = DynModel.sys(1,sV(:,k-1),pErr(k)) + CtrModel.ctr(1,uV(:,k));     % save ground truth
-    zV(:,k) = ObsModel.sample(0, sV(:,k),1);     % generate noisy measurment
-    mErr(k) = zV(k) - ObsModel.obs(0,sV(k));
-    
-end
+% % Generate ground truth and measurements
+% sV = 5;
+% zV = ObsModel.sample(0, sV(1),1);
+% %uV = 2*rand()-1;
+% clear pErr mErr;
+% mErr = zV - sV;
+% for k = 2:N
+%     % Generate new measurement from ground truth
+%     %uV(:,k) = 2*rand()-1;
+%     pErr(k) = DynModel.sys_noise(1,1);
+%     sV(:,k) = DynModel.sys(1,sV(:,k-1),pErr(k)) + CtrModel.ctr(1,uV(:,k));     % save ground truth
+%     zV(:,k) = ObsModel.sample(0, sV(:,k),1);     % generate noisy measurment
+%     mErr(k) = zV(k) - ObsModel.obs(0,sV(k));
+%     
+% end
 
 % Comput initial estimates
 B_init = (tilde(zV,N-3)-tilde(zV,1))/(N-4);
@@ -83,22 +82,22 @@ for k = 1:N-3
 end
 
 F_init = 1;
-H_init = 1;
-Q_init = (1/3 *(var(z_tilde(5:end) - z_tilde(1:end-4)) - var(z_tilde(2:end)-z_tilde(1:end-1))));
-R_init = (1/2*(var(z_tilde(2:end)-z_tilde(1:end-1))-Q_init));
+H_init = H_pre();
+Q_init = 1/3 *(var(z_tilde(5:end) - z_tilde(1:end-4)) - var(z_tilde(2:end)-z_tilde(1:end-1)));
+R_init = 1/2*(var(z_tilde(2:end)-z_tilde(1:end-1))-Q_init);
 if(Q_init<0)
-    Q_init = 0.1;
+    Q_init = 0.0001;
 end
 if(R_init<0)
-    R_init = 0.1;
+    R_init = 0.0001;
 end
 %F_init = mean( (H_init*B_init*(uV(2:end)-uV(1:end-1))-(zV(2:end)-zV(1:end)))*(H_init*
 %F_init = mean((zV(:,2:end)-B_init*uV(:,2:end)-(zV(:,1:end-1)-B_init*uV(:,1:end-1)))/H);
 
 
 % Calculate and store the true process and measurement noise covariances
-Q_true = var(pErr);
-R_true = std(mErr)^2;
+% Q_true = var(pErr);
+% R_true = std(mErr)^2;
 
 % Corrupt the model parameters
 DynModel.Params.F = @(~) F_init;
@@ -109,8 +108,8 @@ CtrModel.Params.B = @() B_init;
 
 % Initiate Kalman Filter
 Params_kf.k        = 1;
-Params_kf.x_init   = sV(1)-DynModel.sys_noise(1,1);
-Params_kf.P_init   = DynModel.Params.Q(1);
+Params_kf.x_init   = zV(1);
+Params_kf.P_init   = 0.1;
 Params_kf.DynModel = DynModel;
 Params_kf.ObsModel = ObsModel;
 Params_kf.CtrModel = CtrModel;
@@ -152,7 +151,6 @@ for EMIter = 1:nEMIter
             xlabel(sp1,'Time (s)','Interpreter','latex')
             ylabel(sp1,'x (m)','Interpreter','latex')
             legend(sp1,[h2 h4], 'Measurements', 'Filtered state', 'Interpreter','latex');
-            %legend(sp1,[h2 h3 h4], 'Measurements', 'Ground truth', 'Filtered state', 'Interpreter','latex');
             pause(0.01);
         end
     end
@@ -181,8 +179,7 @@ for EMIter = 1:nEMIter
     
     % Update KF instance with optimised parameters
     KFilter = KalmanFilterX(Params_kf);
-    KFilter.Params.x = xV_smooth(:,1);
-    %KFilter.DynModel.Params.F = @(~)F;
+    KFilter.DynModel.Params.F = @(~)F;
     KFilter.DynModel.Params.Q = @(~)Q;
     %KFilter.ObsModel.Params.H = @(~)H;
     KFilter.ObsModel.Params.R = @(~)R; %diag(diag(R));
@@ -220,8 +217,8 @@ for EMIter = 1:nEMIter
         hold on;
         h6 = errorbar(sp1,1:k,xV_smooth,PV_smooth);
         h2 = plot(sp1,1:k,zV(1:k),'k*','MarkerSize', 10);
-        h3 = plot(sp1,1:k,sV(1:k),'b.-','LineWidth',1);
-        plot(sp1,k,sV(k),'bo','MarkerSize', 10);
+        %h3 = plot(sp1,1:k,sV(1:k),'b.-','LineWidth',1);
+        %plot(sp1,k,sV(k),'bo','MarkerSize', 10);
         plot(sp1,k, Log.xV(k), 'ro', 'MarkerSize', 10);
         h4 = plot(sp1,1:k, Log.xV(1:k), 'r.-', 'MarkerSize', 10);
         plot(sp1,k, xV_smooth(k), 'go', 'MarkerSize', 10);
@@ -229,12 +226,11 @@ for EMIter = 1:nEMIter
         title(sp1,'\textbf{State evolution}','Interpreter','latex')
         xlabel(sp1,'Time (s)','Interpreter','latex')
         ylabel(sp1,'x (m)','Interpreter','latex')
-        %legend(sp1,[h2 h4 h5 h6], 'Measurements', 'Filtered state', 'Smoothed state', 'Smoothed variance');
-        legend(sp1,[h2 h3 h4 h5 h6], 'Measurements', 'Ground truth', 'Filtered state', 'Smoothed state', 'Smoothed variance');                           
+        legend(sp1,[h2 h4 h5 h6], 'Measurements', 'Filtered state', 'Smoothed state', 'Smoothed variance');                           
         
         sp3 = subplot(2,4,[5 6]);
-        x = -5*sqrt(Q_true):10*sqrt(Q_true)/1000:5*sqrt(Q_true);
-        y = mvnpdf(x',0,Q_true);
+        x = -5*sqrt(Q):10*sqrt(Q)/1000:5*sqrt(Q);
+        y = mvnpdf(x',0,Q);
         plot(sp3,x,y);
         hold on;
         y = mvnpdf(x',0,KFilter.DynModel.Params.Q());
@@ -244,8 +240,8 @@ for EMIter = 1:nEMIter
         title(sp3,'\textbf{True vs Estimated process noise pdf}','Interpreter','latex');
         
         sp4 = subplot(2,4,[7 8]);
-        x = -5*sqrt(R_true):10*sqrt(R_true)/1000:5*sqrt(R_true);
-        y = mvnpdf(x',0,R_true);
+        x = -5*sqrt(R):10*sqrt(R)/1000:5*sqrt(R);
+        y = mvnpdf(x',0,R);
         plot(sp4,x,y);
         hold on;    
         y = mvnpdf(x',0,KFilter.ObsModel.Params.R());

@@ -216,7 +216,7 @@ classdef GenericObservationModelX < ObservationModelX
             if(~exist('Ns', 'var'))
                 Ns = 1;
             end
-            samples = mvnrnd(mu', this.Params.R(), Ns)';
+            samples = mvnrnd(this.obs(1,mu)', this.Params.R(), Ns)';
         end
     end
 end

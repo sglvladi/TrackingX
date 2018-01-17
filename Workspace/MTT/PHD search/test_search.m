@@ -14,8 +14,8 @@ clear M
 %lambda_count = lambda_count + 1;
 lambdaV = 100; %lambdas(lambda_count); % mean number of clutter points 
 fprintf('STARTING NEW CYCLE for lambda = %d',lambdaV);
-%V_bounds = [0 10 0 10];
-V_bounds = [-1800 2400 -1500 1700];
+V_bounds = [0 10 0 10];
+%V_bounds = [-1800 2400 -1500 1700];
 %V_bounds = [-2000 2500 -1000 1700]; %[-700 -400 -700 400]; %[-2500 200 -3000 3000]; %[-2.5 .2 -3 3]; [-2 -.800 2 3] [-.700 -.400 -.700 .400]; % [x_min x_max y_min y_max]
 V = (abs(V_bounds(2)-V_bounds(1))*abs(V_bounds(4)-V_bounds(3)));
 
@@ -36,28 +36,29 @@ Params_po.r = .1;
 POmodel = PositionalObsModelX(Params_po);
 
 %% Polar2Cart Observation Model
-Params_meas.xDim = 4;
-Params_meas.R = [0.000304617419786709,0;0,25];%[0.00121846967914683, 0; 0, 100]; %[pi/3600 0 ; 0 0.05];
-POmodel = Polar2CartGaussModelX(Params_meas);
+% Params_meas.xDim = 4;
+% Params_meas.R = [0.000304617419786709,0;0,25];%[0.00121846967914683, 0; 0, 100]; %[pi/3600 0 ; 0 0.05];
+% POmodel = Polar2CartGaussModelX(Params_meas);
 
 %% Assign PF parameter values
 Params_pf.k               = 1;                   % initial iteration number
 Params_pf.Np              = 5000;                 % number of particles
 Params_pf.resampling_strategy = 'systematic_resampling';
-Params_pf.DynModel = CHmodel;
+Params_pf.DynModel = CVmodel;
 Params_pf.ObsModel = POmodel;
 Params_pf.particles_init = zeros(Params_pf.DynModel.Params.xDim, Params_pf.Np);
-Params_pf.gen_x0 = @(x,Np) [mvnrnd(repmat(x',Np,1),diag([CHmodel.Params.q_vel^2, CHmodel.Params.q_vel^2, 0, 0])), 10*rand(Np,1), 2*pi*rand(Np,1)]';
+Params_pf.gen_x0 = @(x,Np) [mvnrnd(repmat(x',Np,1),CVmodel.Params.Q)]';
+% Params_pf.gen_x0 = @(x,Np) [mvnrnd(repmat(x',Np,1),diag([CHmodel.Params.q_vel^2, CHmodel.Params.q_vel^2, 0, 0])), 10*rand(Np,1), 2*pi*rand(Np,1)]';
 initFilter = ParticleFilterX(Params_pf);
 
 %% Set TrackNum
-TrackNum = 10;
-TrueTracks = 10;
+TrackNum = 3;
+TrueTracks = 3;
 TrackIds = [];
 
 %% Generate DataList                       (TrackNum, x_true, y_true, R, R_clutter, lambdaV, Iter) 
 %[DataList,x1,y1] = gen_obs_cluttered_multi2(TrueTracks, x_true, y_true, POmodel.Params.r, V_bounds, lambdaV, 1);
-%[DataList, newGroundTruth] = dataGen(POmodel, GroundTruth, TrueTracks, lambdaV, V_bounds, [], 1);
+[DataList, newGroundTruth] = dataGen(POmodel, GroundTruth, TrueTracks, lambdaV, V_bounds, [], 1);
 % 
 % %% Get GroundTruth
 % for i=1:TrueTracks
@@ -67,7 +68,7 @@ TrackIds = [];
 %% Initiate PDAF parameters
 Params_jpdaf.DataList = DataList{1}(:,:);  
 Params_jpdaf.TrackList = [];
-Params_jpdaf.pDetect = 0.7;
+Params_jpdaf.pDetect = 0.9;
 Params_jpdaf.pGate = 0.998; %0.999;
 Params_jpdaf.gateLevel = chi2inv(Params_jpdaf.pGate,2);%14;
 
@@ -80,18 +81,19 @@ jpdaf.Params.DataList = DataList{1}(:,:);
 Params.k               = 1;                   % initial iteration number
 Params.Np              = 50000;              % number of particles
 Params.resampling_strategy = 'systematic_resampling'; % resampling strategy
-Params.DynModel = CHmodel;
+Params.DynModel = CVmodel;
 Params.ObsModel = POmodel;
-Params.gen_x0 = @(Np)[abs(V_bounds(2)-V_bounds(1))*rand(Np,1)+V_bounds(1),abs(V_bounds(4)-V_bounds(3))*rand(Np,1)+V_bounds(3), mvnrnd(zeros(Np,1),10), 2*pi*rand(Np,1)]; % Uniform position and heading, Gaussian speed
+Params.gen_x0 = @(Np)[abs(V_bounds(2)-V_bounds(1))*rand(Np,1)+V_bounds(1),abs(V_bounds(4)-V_bounds(3))*rand(Np,1)+V_bounds(3), zeros(Np,1), zeros(Np,1)] + mvnrnd(zeros(Np,4),CVmodel.Params.Q); % Uniform position and heading, Gaussian speedCVmodel.Params.Q)
+%Params.gen_x0 = @(Np)[abs(V_bounds(2)-V_bounds(1))*rand(Np,1)+V_bounds(1),abs(V_bounds(4)-V_bounds(3))*rand(Np,1)+V_bounds(3), mvnrnd(zeros(Np,1),10), 2*pi*rand(Np,1)]; % Uniform position and heading, Gaussian speed
 %Params.gen_x0 = @(Np) [(V_bounds(2)-V_bounds(1))*rand(Np,1),(V_bounds(4)-V_bounds(3))*rand(Np,1), mvnrnd(zeros(Np,1), CVmodel.Params.q^2), 2*pi*rand(Np,1)]; % Uniform position and heading, Gaussian speed
 Params.particles_init = Params.gen_x0(Params.Np)'; % Generate inital particles as per gen_x0
 Params.w_init = repmat(1/Params.Np, Params.Np, 1)'; % Uniform weights
 Params.pBirth = 0.05;
 Params.pDeath = 0.005;
 Params.Jk = 500;
-Params.pDetect = 0.6;
+Params.pDetect = 0.9;
 Params.lambda = lambdaV/V;
-Params.pConf = 0.8;
+Params.pConf = 0.95;
 Params.NpConf = Params_pf.Np;
 Params.type = 'search';
 Params.birth_strategy = 'mixture';

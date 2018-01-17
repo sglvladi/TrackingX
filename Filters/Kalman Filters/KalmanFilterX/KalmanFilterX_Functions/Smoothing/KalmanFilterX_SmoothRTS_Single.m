@@ -25,6 +25,6 @@ function [xSmooth_km1, PSmooth_km1, C_km1] = KalmanFilterX_SmoothRTS_Single(xFil
 
     % Perform Rauch–Tung–Striebel Backward Iteration
     C_km1           = PFilt_km1 * F_k' / PPred_k;
-    xSmooth_km1     = xFilt_km1 + C_km1 * (xSmooth_k - xPred_k - B_km1*u_km1);
+    xSmooth_km1     = xFilt_km1 + C_km1 * (xSmooth_k - xPred_k);
     PSmooth_km1     = PFilt_km1 + C_km1 * (PSmooth_k - PPred_k) * C_km1';                            
 end
