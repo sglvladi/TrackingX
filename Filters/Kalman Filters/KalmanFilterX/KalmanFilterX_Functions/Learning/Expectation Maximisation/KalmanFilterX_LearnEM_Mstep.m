@@ -1,4 +1,4 @@
-function [Fnew,Qnew,Hnew,Rnew,Bnew,Params] = KalmanFilterX_LearnEM_Mstep(est_f,est_s,F,H,B)
+function [Fnew,Qnew,Hnew,Rnew,Bnew,Params] = KalmanFilterX_LearnEM_Mstep(est_f,est_s,F,H,B,Q,R)
     
     if(nargin<5)
         Bnew = 0;
@@ -22,7 +22,10 @@ function [Fnew,Qnew,Hnew,Rnew,Bnew,Params] = KalmanFilterX_LearnEM_Mstep(est_f,e
     Vt_tm1{N} = F*V_f{N-1} - K{N}*H*F*V_f{N-1} ;
     Pt_tm1{N} = Vt_tm1{N} + x_s{N}*x_s{N-1}';
     Pt{N}     = V_s{N} + x_s{N}*x_s{N}';
-    Pt{N-1}   = V_s{N-1} + x_s{N-1}*x_s{N-1}';
+    Pt{N-1}   = V_s{N-1} + x_s{N-1}*x_s{N-1}';    
+    
+    Params.loglik = computeEMLoglik(est_f{1}.x, est_f{1}.P, cell2mat(x_s),cell2mat(y),F,H,Q,R,B,cell2mat(u));
+
 
     % Sum components required to compute optimal F
     %  - sumF{1} = sum(P_{t,t-1})
@@ -80,4 +83,8 @@ function [Fnew,Qnew,Hnew,Rnew,Bnew,Params] = KalmanFilterX_LearnEM_Mstep(est_f,e
     Params.Vt_tm1 = Vt_tm1;
     Params.Pt_tm1 = Pt_tm1;
     Params.Pt = Pt;
+    
+%     Params.loglike = -sum((y-H_new*xhat).^2)/(2*R_new) - T/2*log(abs(R_new))...
+%     -1/2*sum((xhat(2:T)-F*xhat(1:T-1)-B*u(1:T-1)).^2)/(2*Q) - (T-1)/2*log(abs(Q))...
+%     -sum((xhat(1)-pi1).^2)/(2*V1) - 0.5*log(abs(V1)) - T*log(2*pi);
 end

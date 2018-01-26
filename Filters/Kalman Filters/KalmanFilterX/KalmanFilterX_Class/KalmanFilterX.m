@@ -1,4 +1,4 @@
-classdef KalmanFilterX < matlab.mixin.Copyable % Handle class with copy functionality
+classdef KalmanFilterX < FilterX % Handle class with copy functionality
 % KalmanFilterX class
 %
 % Summary of KalmanFilterX:
@@ -36,11 +36,7 @@ classdef KalmanFilterX < matlab.mixin.Copyable % Handle class with copy function
 % 
 % See also DynamicModelX, ObservationModelX and ControlModelX template classes
     
-     properties
-        Params
-        DynModel
-        ObsModel
-        CtrModel
+    properties
     end
     methods
         function this = KalmanFilterX(Init)
@@ -69,24 +65,27 @@ classdef KalmanFilterX < matlab.mixin.Copyable % Handle class with copy function
         %
         %   See also Predict, Update, Iterate, Smooth.
             
-            % Add DynModel
-            if(~isfield(Init,'DynModel'))
-                error('[KF] No DynModel provided!');
-            else
-                this.DynModel = Init.DynModel;
-            end
+            % Call SuperClass method
+            this@FilterX(Init);
             
-            % Add ObsModel
-            if(~isfield(Init,'ObsModel'))
-                error('[KF] No ObsModel provided!');
-            else
-                this.ObsModel = Init.ObsModel;
-            end
-            
-            % Validate CtrModel
-            if(isfield(Init,'CtrModel'))
-                this.CtrModel = Init.CtrModel;
-            end
+%             % Add DynModel
+%             if(~isfield(Init,'DynModel'))
+%                 error('[KF] No DynModel provided!');
+%             else
+%                 this.DynModel = Init.DynModel;
+%             end
+%             
+%             % Add ObsModel
+%             if(~isfield(Init,'ObsModel'))
+%                 error('[KF] No ObsModel provided!');
+%             else
+%                 this.ObsModel = Init.ObsModel;
+%             end
+%             
+%             % Validate CtrModel
+%             if(isfield(Init,'CtrModel'))
+%                 this.CtrModel = Init.CtrModel;
+%             end
             
             % Validate u_init
             if isfield(Init,'u_init')&&isfield(this,'CtrModel')

@@ -74,6 +74,14 @@ R_old = ObsModel.Params.R(1);
 %     
 % end
 
+for i = 1:size(uV,2)
+    if uV(i) > 100
+        uV(i) = 100;
+    elseif uV(i) < -100
+        uV(i) = -100;
+    end
+end
+
 % Comput initial estimates
 B_init = (tilde(zV,N-3)-tilde(zV,1))/(N-4);
 z_tilde = zeros(1,N-3);
@@ -86,10 +94,10 @@ H_init = H_pre();
 Q_init = 1/3 *(var(z_tilde(5:end) - z_tilde(1:end-4)) - var(z_tilde(2:end)-z_tilde(1:end-1)));
 R_init = 1/2*(var(z_tilde(2:end)-z_tilde(1:end-1))-Q_init);
 if(Q_init<0)
-    Q_init = 0.0001;
+    Q_init = 0.1;
 end
 if(R_init<0)
-    R_init = 0.0001;
+    R_init = 0.1;
 end
 %F_init = mean( (H_init*B_init*(uV(2:end)-uV(1:end-1))-(zV(2:end)-zV(1:end)))*(H_init*
 %F_init = mean((zV(:,2:end)-B_init*uV(:,2:end)-(zV(:,1:end-1)-B_init*uV(:,1:end-1)))/H);
@@ -129,10 +137,18 @@ for EMIter = 1:nEMIter
         % Update KF measurement vector
         KFilter.Params.y = zV(:,k);
         KFilter.Params.u = uV(:,k);
-
-        % Iterate Kalman Filter
-        KFilter.Iterate();
-
+        
+        if(k == 1)
+            KFilter.Params.xPred = KFilter.Params.x;
+            KFilter.Params.PPred = KFilter.Params.P;
+            [KFilter.Params.yPred,KFilter.Params.S,KFilter.Params.Pxy] = ...
+                KalmanFilterX_PredictObs(KFilter.Params.xPred,KFilter.Params.PPred,...
+                            KFilter.ObsModel.obs(), KFilter.ObsModel.obs_cov());
+            KFilter.Update();
+        else
+            % Iterate Kalman Filter
+            KFilter.Iterate();
+        end
         % Store Logs
         Log.xV(:,k)     = KFilter.Params.x;
         Log.estFilt{k}  = KFilter.Params;
@@ -179,7 +195,7 @@ for EMIter = 1:nEMIter
     
     % Update KF instance with optimised parameters
     KFilter = KalmanFilterX(Params_kf);
-    KFilter.DynModel.Params.F = @(~)F;
+    %KFilter.DynModel.Params.F = @(~)F;
     KFilter.DynModel.Params.Q = @(~)Q;
     %KFilter.ObsModel.Params.H = @(~)H;
     KFilter.ObsModel.Params.R = @(~)R; %diag(diag(R));

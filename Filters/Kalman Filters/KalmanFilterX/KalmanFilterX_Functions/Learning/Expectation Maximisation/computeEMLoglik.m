@@ -22,18 +22,26 @@ function loglik = computeEMLoglik(xInit,PInit,xSmooth,y,F,H,Q,R,B,u)
     [xDim, N] = size(xSmooth);
     yDim = size(y,1);
     
-    loglik = cell(1,3);
-    loglik{1} = -.5*(xSmooth(:,1) - xInit)/PInit*(xSmooth(:,1) - xInit)' ...
-                  -.5*log(abs(PInit)) - .5*(N-1)*log(abs(Q)) - .5*log(abs(R)) ...
-                  -.5*N*(xDim+yDim)*log(2*pi);
-    loglik{2} = 0;
-    loglik{3} = 0;
-    for k = 1:N
-        if(k>1)
-            loglik{2} = loglik{2} + .5*(xSmooth(:,k) ...
-                          - F*xSmooth(:,k-1) - B*u(:,k))/Q*(xSmooth(:,k) - F*xSmooth(:,k-1) - B*u(:,k))';
-        end
-        loglik{3} = loglik{3} + .5*(y(:,k) - H*xSmooth(:,k))/R*(y(:,k) - H*xSmooth(:,k))';
-    end
-    loglik = loglik{1} - loglik{2} - loglik{3};
+    loglik = -sum((y-H*xSmooth).^2)/(2*R) - N/2*log(abs(R))...
+        -1/2*sum((xSmooth(2:N)-F*xSmooth(1:N-1)-B*u(2:N)).^2)/(Q) - (N-1)/2*log(abs(Q))...
+        -sum((xSmooth(1)-xInit).^2)/(2*PInit) - 0.5*log(abs(PInit)) - N*log(2*pi);
+    
+%     loglik = -.5*(y-H*xSmooth)/R*(y-H*xSmooth)' - N/2*log(abs(R))...
+%         -1/2*(xSmooth(:,2:N)-F*xSmooth(1:N-1)-B*u(2:N))/Q - (N-1)/2*log(abs(Q))...
+%         -sum((xSmooth(1)-xInit).^2)/(2*PInit) - 0.5*log(abs(PInit)) - N*log(2*pi);
+    
+%     loglik = cell(1,3);
+%     loglik{1} = -.5*(xSmooth(:,1) - xInit)/PInit*(xSmooth(:,1) - xInit)' ...
+%                   -.5*log(abs(PInit)) - .5*(N-1)*log(abs(Q)) - .5*N*log(abs(R)) ...
+%                   -.5*N*(xDim+yDim)*log(2*pi);
+%     loglik{2} = 0;
+%     loglik{3} = 0;
+%     for k = 1:N
+%         if(k>1)
+%             loglik{2} = loglik{2} + .5*(xSmooth(:,k) ...
+%                           - F*xSmooth(:,k-1) - B*u(:,k))/Q*(xSmooth(:,k) - F*xSmooth(:,k-1) - B*u(:,k))';
+%         end
+%         loglik{3} = loglik{3} + .5*(y(:,k) - H*xSmooth(:,k))/R*(y(:,k) - H*xSmooth(:,k))';
+%     end
+%     loglik = loglik{1} - loglik{2} - loglik{3};
 end

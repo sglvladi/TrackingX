@@ -8,7 +8,7 @@ V_bounds = [0 25 0 15];
 
 % Instantiate a Tracklist to store each filter
 FilterList = [];
-FilterNum = 3;
+FilterNum = 4;
 
 % Containers
 Logs = cell(1, 3); % 4 tracks
@@ -63,23 +63,23 @@ for SimIter = 1:SimNum
 %     CHmodel2 = ConstantHeadingModel2X(Params_ch2);
 
     % Positional Observation Model
-%     Params_meas.xDim = 4;
-%     Params_meas.yDim = 2;
-%     Params_meas.r = 0.3;
-%     obs_model = PositionalObsModelX(Params_meas);
+    Params_meas.xDim = 4;
+    Params_meas.yDim = 2;
+    Params_meas.r = 0.3;
+    obs_model = PositionalObsModelX(Params_meas);
     
     % Polar2Cart Observation Model
-    Params_meas.xDim = 4;
-    Params_meas.R = [0.0001 0 ; 0 0.0001];
-    obs_model = Polar2CartGaussModelX(Params_meas);
+%     Params_meas.xDim = 4;
+%     Params_meas.R = [0.0001 0 ; 0 0.0001];
+%     obs_model = Polar2CartGaussModelX(Params_meas);
 
     % Initiate Kalman Filter
-%     Params_kf.k = 1;
-%     Params_kf.x_init = [x_true(2,1); y_true(2,1); x_true(2,1)-x_true(1,1); y_true(2,1)-y_true(1,1)];
-%     Params_kf.P_init = CVmodel.Params.Q(1);
-%     Params_kf.DynModel = CVmodel;
-%     Params_kf.ObsModel = obs_model;
-%     FilterList{1}.Filter = KalmanFilterX(Params_kf);
+    Params_kf.k = 1;
+    Params_kf.x_init = [x_true(2,1); y_true(2,1); x_true(2,1)-x_true(1,1); y_true(2,1)-y_true(1,1)];
+    Params_kf.P_init = CVmodel.Params.Q(1);
+    Params_kf.DynModel = CVmodel;
+    Params_kf.ObsModel = obs_model;
+    FilterList{1}.Filter = KalmanFilterX(Params_kf);
 
     % Initiate Extended Kalman Filter
 %     Params_ekf.k = 1;
@@ -178,7 +178,8 @@ for SimIter = 1:SimNum
 
             % NOTE: if your image is RGB, you should use flipdim(img, 1) instead of flipud.
             hold on;
-            h2 = plot(ax(1),zV(2,k)*sin(zV(1,k)),zV(2,k)*cos(zV(1,k)),'k*','MarkerSize', 10);
+            h2 = plot(ax(1),zV(1,k),zV(2,k),'k*','MarkerSize', 10);
+%            h2 = plot(ax(1),zV(2,k)*sin(zV(1,k)),zV(2,k)*cos(zV(1,k)),'k*','MarkerSize', 10);
             set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off'); % Exclude line from legend
             h2 = plot(ax(1),sV(1,1:k),sV(2,1:k),'b.-','LineWidth',1);
             set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off'); % Exclude line from legend
@@ -191,7 +192,7 @@ for SimIter = 1:SimNum
                 %plot(pf.Params.particles(1,:), pf.Params.particles(2,:), 'b.', 'MarkerSize', 10);
                 plot(Logs{i}.xV(1,1:k), Logs{i}.xV(2,1:k), '.-', 'MarkerSize', 10);
             end
-            legend('UKF', 'PF', 'UPF')
+            legend('KF','UKF', 'PF', 'UPF')
             %legend('KF','EKF', 'UKF', 'PF', 'EPF', 'UPF')
 
             if(ShowArena)
