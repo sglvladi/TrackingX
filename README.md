@@ -7,7 +7,6 @@ The class architecture and interfaces of TrackingX are being designed such that 
 Here is a temporary and partial class diagram of the intended TrackingX architecture. The full diagram should be ready soon...
 
 ![Class Diagram so far...](https://github.com/sglvladi/TrackingX/blob/dev/_docs/TrackingX%20Class%20diagram%20(draft).png)
-Format: ![Alt Text](url)
 
 
-NOTE: Development is still in progress
+NOTE: Development is still in progress.. 
