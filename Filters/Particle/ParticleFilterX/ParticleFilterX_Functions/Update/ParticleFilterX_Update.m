@@ -1,4 +1,4 @@
-function [newParts,newWeights,x] = ParticleFilterX_Update(lik,y,parts,weights,resampling_strategy)
+function [newWeights,x] = ParticleFilterX_Update(lik,y,parts,weights)
 % PARTICLEFILTERX_UPDATE Perform the discrete-time PF weight update
 % step, under the assumption of additive process noise.
 %
@@ -16,11 +16,8 @@ function [newParts,newWeights,x] = ParticleFilterX_Update(lik,y,parts,weights,re
     
    % Update particle weights
     newWeights = ParticleFilterX_UpdateWeights(lik,y,parts,weights);
-
-    % Resample
-    [newParts, newWeights] = ParticleFilterX_Resample(parts, newWeights, resampling_strategy);
     
-    if nargout==3
+    if nargout==2
         % Compute estimated state
         x = sum(newWeights.*newParts,2);      
     end

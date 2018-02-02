@@ -48,7 +48,7 @@ classdef ConstantVelocityModelX_1D < DynamicModelX
         %   coefficient q (scalar). 
         % * ConstantVelocityModelX_1D(config) instantiates an object handle 
         %   configured with the provided process noise diffusion
-        %   coefficient q (scalar).
+        %   coefficient config.VelocityErrVariance (scalar).
         % * ConstantVelocityModelX_1D(___,Name,Value) instantiates an object 
         %   handle, configured with additional options specified by one or
         %   more Name,Value pair arguments.

@@ -1,28 +1,45 @@
-function [xPred,XPred,PPred,P1] = UnscentedTransform(f,X,Wm,Wc,Q)
+function [xTrans,PTrans,PCross,XTrans] = unscentedTransform(f,X,Wm,Wc,OOM)
 % UNSCENTEDTRANSFORM Compute the Unscented Tranform of a set of sigma
 % points.
 %
-% INPUTS:    f     - The (non-linear) state transition function.
-%            X     - The (xDim x nSigma) sigma point matrix.
-%            Wm    - The (1 x nSigma) mean weights vector.
-%            Wc    - The (1 x nSigma) covariance weights vector.
-%            Q     - The (xDim x xDim) noise covariance matrix.
+% INPUTS:    f      - The (non-linear) state transition function.
+%            X      - The (xDim x nSigma) sigma point matrix.
+%            Wm     - The (1 x nSigma) mean weights vector.
+%            Wc     - The (1 x nSigma) covariance weights vector.
+%            OOM    - Order of magnitude associated with Wm and Wc
 %
-% OUTPUTS:   xPred - The (xDim x 1) state estimate at the current time-step.
-%            XPred - The (xDim x nSigma) predicted sigma point matrix.
-%            PPred - The (xDim x xDim) predicted state covariance matrix at 
-%                    the current time-step.
-%            P1    - The (xDim x xDim) unweighted sigma point variance
-%                    matrix
+% OUTPUTS:   xTrans - The (xTDim x 1) transformed mean vector.
+%            PTrans - The (xTim x xDim) transformed state covariance matrix
+%            XTrans - The (xTim x nSigma) transformed sigma points matrix.
+%            PCross - The (xDim x xTDim) unweighted cross-variance matrix
 %
-% October 2017 Lyudmil Vladimirov, University of Liverpool.                  
-    % Propagate sigma points
-    XPred = f(X) + Q;
+% October 2017 Lyudmil Vladimirov, University of Liverpool.
 
-    % Transformed mean
-    xPred = sum(Wm.*XPred,2); % Weighted average
+    % Transform the sigma points
+    XTrans = f(X);
+    
+    xDim = size(X,1);
+    Wm = [Wm(1) Wm(2,ones(1,2*xDim))];
+    Wc = [Wc(1) Wc(2,ones(1,2*xDim))];
+    
+    % Calculate transformed mean and covariance
+    xTrans = sum(Wm.*XTrans,2);
+    % Rescale to the correct order of magnitude
+    xTrans = xTrans * OOM;
+    
+    % Calculate transformed covariance
+    PCross = XTrans-xTrans;
+    PTrans = Wc(1)*(PCross(:,1)*PCross(:,1)') + Wc(2)*(PCross(:,2:end)*PCross(:,2:end)');
+    % Rescale to the correct order of magnitude
+    PTrans = OOM * PTrans; 
 
-    % Transformed variance and covariance
-    P1 = (XPred-xPred);       % Variance
-    PPred = P1*diag(Wc)*P1';   % Weighted covariance
+    if nargout>=3
+        
+        % Calculate the cross covariance
+        X = X(:,2:end) - X(:,1);
+        PCross = X * XTrans(:,2:end)';
+        
+        % Rescale to the correct order of magnitude
+        PCross = PCross * (Wc(2) * OOM);
+    end
 end

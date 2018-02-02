@@ -56,7 +56,8 @@ function C = weightedcov(Y, w)
 %
 % % ======================================================================
 %
-
+Y = Y';
+w = w';
 % Check input
 ctrl = isvector(w) & isreal(w) & ~any(isnan(w)) & ~any(isinf(w)) & all(w > 0);
 if ctrl
