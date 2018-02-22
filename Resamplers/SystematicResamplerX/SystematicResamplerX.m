@@ -1,4 +1,4 @@
-classdef SystematicResamplerX < ResamplerX
+classdef SystematicResamplerX < ResamplerX & matlabshared.tracking.internal.SystematicResampler
 % SYSTEMATICRESAMPLERX Class 
 %
 % Summary of SystematicResamplerX:
@@ -32,7 +32,7 @@ classdef SystematicResamplerX < ResamplerX
             
         end
         
-        function [newSamples, newWeights] = resample(this, samples, weights)
+        function [newSamples, newWeights, idx] = resample(this, samples, weights, Nnew)
         % RESAMPLE Perform systematic resampling
         %   
         % DESCRIPTION: 
@@ -41,15 +41,18 @@ classdef SystematicResamplerX < ResamplerX
         %   resampling based on the vector weights.
         %
         % See also MultinomialResamplerX/resample
-        
+            
             N = numel(weights);
-            edges = min([0 cumsum(weights)],1);
-            edges(end) = 1;                
-            u1 = rand/N;
-            [~, ~, idx] = histcounts(u1:1/N:1, edges);
+            if(nargin<4)
+                Nnew = N;
+            end
+            
+            idx = resample@matlabshared.tracking.internal.SystematicResampler(this,weights,Nnew);
             newSamples = samples(:,idx);           
-            newWeights = repmat(1/N, 1, N); 
+            newWeights = repmat(1/Nnew, 1, Nnew); 
         end
+
+
     end
 end
 

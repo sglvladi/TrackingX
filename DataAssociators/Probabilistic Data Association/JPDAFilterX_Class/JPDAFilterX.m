@@ -1,5 +1,76 @@
 classdef JPDAFilterX < handle
-    % JPDAFilterX class
+% JPDAFilterX class
+%
+% Summary of JPDAFilterX:
+% This is a class implementation of a Sequential Monte Carlo (SMC) Probabilistic
+% Hypothesis Density (PHD) Filter.
+%
+% SMC_PHDFilterX Properties:
+%   + NumParticles      The number of particles employed by the PHD Filter
+%   + Particles         A (NumStateDims x NumParticles) matrix used to store 
+%                       the last computed/set filtered particles  
+%   + Weights           A (1 x NumParticles) vector used to store the weights
+%                       of the last computed/set filtered particles
+%   + PredParticles     A (NumStateDims x NumParticles) matrix used to store 
+%                       the last computed/set predicted particles  
+%   + PredWeights       A (1 x NumParticles) vector used to store the weights
+%                       of the last computed/set predicted particles
+%   + MeasurementList   A (NumObsDims x NumObs) matrix used to store the received 
+%                       measurements
+%   + ResamplingScheme  Method used for particle resampling, specified as 
+%                       'multinomial', 'systematic'. Default = 'systematic'
+%   + ResamplingPolicy  A (1 x 2) cell array, specifying the resampling trigger
+%                       conditions. ReamplingPolicy{1} should be a string
+%                       which can be either "TimeInterval", in which case 
+%                       ReamplingPolicy{2} should specify the number of 
+%                       iterations after which resampling should be done,
+%                       or "EffectiveRatio", in which case Resampling{2}
+%                       should specify the minimum ratio of effective particles
+%                       which when reached will trigger the resampling process.
+%                       Default ResamplingPolicy = {"TimeInterval",1}, meaning
+%                       that resampling is performed on every iteration of
+%                       the Particle Filter (upon update).                       
+%   + Resampler         An object handle to a ResamplerX subclass. If a 
+%                       Resampler is provided, then it will override any choice
+%                       specified within the ResamplingScheme. ResamplingPolicy
+%                       will not be affected.
+%   + BirthScheme       A (1 x 3) cell array, specifying the particle birth
+%                       scheme. BirthScheme{1} should be a string which can be
+%                       set to either "Mixture", in which case BirthScheme{2}
+%                       should specify the probability of birth of new particles,
+%                       or "Expansion", in which case BirthScheme{2} should
+%                       specify the number of particles to be "birthed" at
+%                       each iteration of the filter.
+%                       Default BirthScheme = {"Mixture",0.5} meaning that
+%                       particles are birthed using the mixture scheme, with
+%                       a birth probability of 50%.
+%   + BirthIntFcn       A function handle, which when called generates a set 
+%                       of initial particles and weights.
+%   + ProbOfDeath       The probability that a target may cease to exist
+%                       between consecutive iterations of the filter.
+%   + ProbOfDetection   The probablity that a target will be detected in
+%                       a given measurement scan.
+%   + NumTargets        The estimated number of targets following an update step.
+%   + Model             An object handle to StateSpaceModelX object
+%       + Dyn = Object handle to DynamicModelX SubClass      
+%       + Obs = Object handle to ObservationModelX SubClass 
+%       + Ctr = Object handle to ControlModelX SubClass 
+%
+% SMC_PHDFilterX Methods:
+%   + SMC_PHDFilterX  - Constructor method
+%   + predict         - Performs SMC_PHD prediction step
+%   + update          - Performs SMC_PHD update step
+%
+% (+) denotes puplic properties/methods
+% (¬) denotes dependent properties
+%
+% [1]  B. N. Vo, S. Singh and A. Doucet, "Sequential Monte Carlo methods for multitarget filtering with random finite sets," in IEEE Transactions on Aerospace and Electronic Systems, vol. 41, no. 4, pp. 1224-1245, Oct. 2005.
+% [2]  P. Horridge and S. Maskell,  “Using a probabilistic hypothesis density filter to confirm tracks in a multi-target environment,” in2011 Jahrestagung der Gesellschaft fr Informatik, October 2011.
+% [3]  B. ngu Vo and S. Singh, “Sequential monte carlo implementation of the phd filter for multi-targettracking,” inIn Proceedings of the Sixth International Conference on Information Fusion, pp. 792–799, 2003.
+%
+% See also ParticleFilterX, KalmanFilerX.
+    
+
     %
     % Summary of JPDAFX:
     % This is a class implementation of a Joint Probabilistic Data Association Filter.

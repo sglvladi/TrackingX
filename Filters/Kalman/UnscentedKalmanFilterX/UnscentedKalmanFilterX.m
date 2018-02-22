@@ -5,32 +5,33 @@ classdef UnscentedKalmanFilterX < KalmanFilterX
 % This is a class implementation of an Unscented Kalman Filter.
 %
 % UnscentedKalmanFilterX Properties: (*)
-%   - StateMean         A (xDim x 1) vector used to store the last computed/set filtered state mean  
-%   - StateCovar        A (xDim x xDim) matrix used to store the last computed/set filtered state covariance
-%   - PredStateMean     A (xDim x 1) vector used to store the last computed prediicted state mean  
-%   - PredStateCovar    A (xDim x xDim) matrix used to store the last computed/set predicted state covariance
-%   - PredMeasMean      A (yDim x 1) vector used to store the last computed predicted measurement mean
-%   - InnovErrCovar     A (yDim x yDim) matrix used to store the last computed innovation error covariance
-%   - CrossCovar        A (xDim x yDim) matrix used to store the last computed cross-covariance Cov(X,Y)
-%   - KalmanGain        A (xDim x yDim) matrix used to store the last computed Kalman gain%   
-%   - Measurement       A (yDim x 1) matrix used to store the received measurement
-%   - ControlInput      A (uDim x 1) matrix used to store the last received control input
-%   - Alpha             ||
-%   - Kappa             || UKF scaling parameters, as described in [1]
-%   - Beta              || 
-%   - Model             An object handle to StateSpaceModelX object
-%       - Dyn = Object handle to DynamicModelX SubClass     | (TO DO: LinearGaussDynModelX) 
-%       - Obs = Object handle to ObservationModelX SubClass | (TO DO: LinearGaussObsModelX)
-%       - Ctr = Object handle to ControlModelX SubClass     | (TO DO: LinearCtrModelX)
+%   + StateMean         A (xDim x 1) vector used to store the last computed/set filtered state mean  
+%   + StateCovar        A (xDim x xDim) matrix used to store the last computed/set filtered state covariance
+%   + PredStateMean     A (xDim x 1) vector used to store the last computed prediicted state mean  
+%   + PredStateCovar    A (xDim x xDim) matrix used to store the last computed/set predicted state covariance
+%   + PredMeasMean      A (yDim x 1) vector used to store the last computed predicted measurement mean
+%   + InnovErrCovar     A (yDim x yDim) matrix used to store the last computed innovation error covariance
+%   + CrossCovar        A (xDim x yDim) matrix used to store the last computed cross-covariance Cov(X,Y)
+%   + KalmanGain        A (xDim x yDim) matrix used to store the last computed Kalman gain%   
+%   + Measurement       A (yDim x 1) matrix used to store the received measurement
+%   + ControlInput      A (uDim x 1) matrix used to store the last received control input
+%   + Alpha             ||
+%   + Kappa             || UKF scaling parameters, as described in [1]
+%   + Beta              || 
+%   + Model             An object handle to StateSpaceModelX object
+%       + Dyn = Object handle to DynamicModelX SubClass     | (TO DO: LinearGaussDynModelX) 
+%       + Obs = Object handle to ObservationModelX SubClass | (TO DO: LinearGaussObsModelX)
+%       + Ctr = Object handle to ControlModelX SubClass     | (TO DO: LinearCtrModelX)
 %
 %   (*) xDim, yDim and uDim denote the dimentionality of the state, measurement
 %       and control vectors respectively.
 %
 % UnscentedKalmanFilterX Methods:
-%    UnscentedKalmanFilterX  - Constructor method
-%    predict        - Performs UKF prediction step
-%    update         - Performs UKF update step
-%    smooth         - Performs UKF smoothing on a provided set of estimates
+%   + UnscentedKalmanFilterX  - Constructor method
+%   + predict        - Performs UKF prediction step
+%   + update         - Performs UKF update step
+%
+% (+) denotes puplic properties/methods
 %
 % [1] E. A. Wan and R. Van Der Merwe, "The unscented Kalman filter for nonlinear estimation," 
 %     Proceedings of the IEEE 2000 Adaptive Systems for Signal Processing, Communications, and 
@@ -200,26 +201,21 @@ classdef UnscentedKalmanFilterX < KalmanFilterX
         
         end
         
-        function UpdatePDA(this, assocWeights)
-        % UpdatePDA - Performs UKF update step, for multiple measurements
+        function updatePDA(this, assocWeights)
+        % UPDATEPDA - Performs UKF update step, for multiple measurements
         %             Update is performed according to the generic (J)PDAF equations [1] 
-        %   
-        %   Inputs:
-        %       assoc_weights: a (1 x Nm+1) association weights matrix. The first index corresponds to the dummy measurement and
-        %                       indices (2:Nm+1) correspond to measurements. Default = [0, ones(1,ObsNum)/ObsNum];
+        % 
+        % DESCRIPTION:
+        %  * updatePDA(assocWeights) Performs UKF-PDA update step for multiple 
+        %    measurements based on the provided (1-by-Nm+1) association weights 
+        %    matrix assocWeights.
         %
-        %   (NOTE: The measurement "this.Params.y" needs to be updated, when necessary, before calling this method) 
-        %   
-        %   Usage:
-        %       (ukf.Params.y = y_new; % y_new is the new measurement)
-        %       ukf.UpdateMulti(assocWeights);
+        %   [1] Y. Bar-Shalom, F. Daum and J. Huang, "The probabilistic data association filter," in IEEE Control Models, vol. 29, no. 6, pp. 82-100, Dec. 2009.
         %
-        %   [1] Y. Bar-Shalom, F. Daum and J. Huang, "The probabilistic data association filter," in IEEE Control Systems, vol. 29, no. 6, pp. 82-100, Dec. 2009.
-        %
-        %   See also UnscentedKalmanFilterX, Predict, Iterate, Smooth, resample.
+        %   See also KalmanFilterX, Predict, Iterate, Smooth, resample.
         
             % Call SuperClass method
-            UpdatePDA@KalmanFilterX(this, assocWeights);
+            updatePDA@KalmanFilterX(this, assocWeights);
         end
         
         function smoothedEstimates = Smooth(this, filteredEstimates)

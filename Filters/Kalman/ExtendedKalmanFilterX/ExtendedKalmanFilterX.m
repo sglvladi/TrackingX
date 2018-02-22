@@ -145,23 +145,18 @@ classdef ExtendedKalmanFilterX<KalmanFilterX
         
         end
         
-        function UpdatePDA(this, assocWeights)
-        % UpdateMulti - Performs EKF update step, for multiple measurements
-        %               Update is performed according to the generic (J)PDAF equations [1] 
-        %   
-        %   Inputs:
-        %       assoc_weights: a (1 x Nm+1) association weights matrix. The first index corresponds to the dummy measurement and
-        %                       indices (2:Nm+1) correspond to measurements. Default = [0, ones(1,ObsNum)/ObsNum];
+        function updatePDA(this, assocWeights)
+        % UPDATEPDA - Performs EKF-PDAF update step, for multiple measurements
+        %             Update is performed according to the generic (J)PDAF equations [1] 
+        % 
+        % DESCRIPTION:
+        %  * updatePDA(assocWeights) Performs KF-PDA update step for multiple 
+        %    measurements based on the provided (1-by-Nm+1) association weights 
+        %    matrix assocWeights.
         %
-        %   (NOTE: The measurement "this.Params.y" needs to be updated, when necessary, before calling this method) 
-        %   
-        %   Usage:
-        %       (ekf.Params.y = y_new; % y_new is the new measurement)
-        %       ekf.UpdateMulti(assocWeights);
+        %   [1] Y. Bar-Shalom, F. Daum and J. Huang, "The probabilistic data association filter," in IEEE Control Models, vol. 29, no. 6, pp. 82-100, Dec. 2009.
         %
-        %   [1] Y. Bar-Shalom, F. Daum and J. Huang, "The probabilistic data association filter," in IEEE Control Systems, vol. 29, no. 6, pp. 82-100, Dec. 2009.
-        %
-        %   See also ExtendedKalmanFilterX, Predict, Iterate, Smooth, resample.
+        %   See also KalmanFilterX, Predict, Iterate, Smooth, resample.
         
 %             ObsNum = size(this.Params.y,2);  
 %             ObsDim = size(this.Params.y,1); 
@@ -190,7 +185,7 @@ classdef ExtendedKalmanFilterX<KalmanFilterX
 %             this.Params.x    = this.Params.x_pred + this.Params.K*tot_innov_err;  
 %             this.Params.P    = assocWeights(1)*this.Params.P_pred + (1-assocWeights(1))*Pc + Pgag;
             % Call SuperClass method
-            UpdatePDA@KalmanFilterX(this, assocWeights);
+            updatePDA@KalmanFilterX(this, assocWeights);
         end
         
         function smoothedEstimates = Smooth(this, filteredEstimates, interval)

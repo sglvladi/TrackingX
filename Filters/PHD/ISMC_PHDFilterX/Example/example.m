@@ -8,37 +8,28 @@
 %  * The "gen_obs_cluttered_multi3" function takes as an input the ground truth data, including information about the measurement noise and clutter rate
 %     and then produces 1xNk cell array of corrupted and cluttered measurements, Nk being the total number of timesteps
 
+load('example.mat');
+
 % Plot settings
 ShowPlots = 1;              % Set to 0 to hide plots
 ShowPrediction = 0;         % Set to 0 to skip showing prediction
 ShowUpdate = 1;             % Set to 0 to skip showing update
 TrackNum = size(x_true,2);
 
-% Simulation parameters
-% Constant Velocity Model
-CVmodel = ConstantVelocityModelX(4,'q',0.0001,'smartArgs',false);
+% Instantiate a Dynamic model
+dyn = ConstantVelocityModelX_2D('VelocityErrVariance',0.0001);
 
-% % Constant Heading Model
-Params.q_vel = 0.01;
-Params.q_head = 0.3;
-CHmodel = ConstantHeadingModelX('q_vel',0.01,'q_head',0.3,'smartArgs',false);
-% 
-% % Constant Heading Model
-% Params.q_vel = 0.01;
-% Params.q_head = 0.3;
-% CHmodel2 = ConstantHeadingModel2X('q_vel',0.01,'q_head',0.16,'smartArgs',false);
+% Instantiate an Observation model
+obs = LinGaussObsModelX_2D('NumStateDims',4,'ObsErrVariance',0.01,'Mapping',[1 3]);
 
-% Positional Observation Model
-Params_meas.xDim = 4;
-Params_meas.yDim = 2;
-Params_meas.r = .1;
-obs_model = PositionalObsModelX('xDim',4,'yDim',2,'r',0.1,'smartArgs', false);
+% Compile the State-Space model
+ssm = StateSpaceModelX(dyn,obs);
 
 % n_x = 4;      % state dimensions
 % q = 0.01;     % std of process noise 
 % n_y = 2;      % measurement dimensions
 % r = 0.1;      % std of measurement noise
-lambdaV = 50; % Expected number of clutter measurements over entire surveillance region
+lambdaV = 100; % Expected number of clutter measurements over entire surveillance region
 V = 10^2;     % Volume of surveillance region (10x10 2D-grid)
 V_bounds = [0 10 0 10]; % [x_min x_max y_min y_max]
 
@@ -46,49 +37,36 @@ V_bounds = [0 10 0 10]; % [x_min x_max y_min y_max]
 [DataList,x1,y1] = gen_obs_cluttered_multi3(TrackNum, x_true, y_true, 0.1, lambdaV, 1); 
 N=size(DataList,2); % timesteps 
 
-% % Constant Heading (CH) dynamic model
-% F_ch = @(k,xkm1) [xkm1(1,:)+k*xkm1(3,:).*cos(xkm1(4,:)); xkm1(2,:)+k*xkm1(3,:).*sin(xkm1(4,:)); xkm1(3,:); xkm1(4,:)];
-% Q_ch = diag([0,0,q^2,0.16^2]);
-% gen_sys_noise_ch = @(Np) mvnrnd(zeros(Np, n_x), Q_ch)';
-% sys_ch = @(k, xkm1, uk) F_ch(k,xkm1) + uk; 
-% 
-% % Constant Velocity (CV) dynamic model
-% F_cv = @(k,xkm1) [xkm1(1,:)+k*xkm1(3,:); xkm1(2,:)+k*xkm1(4,:); xkm1(3,:); xkm1(4,:)];
-% Q_cv = [1^3/3, 0, 1^2/2, 0;  0, 1^3/3, 0, 1^2/2; 1^2/2, 0, 1, 0; 0, 1^2/2, 0, 1]*q^2;
-% sys_cv = @(k, xkm1, uk) F_cv(k,xkm1) + uk;
-% gen_sys_noise_cv = @(Np) mvnrnd(zeros(Np, n_x), Q_cv)';
-% 
-% % Linear Observation model
-% H = @(xk) [xk(1,:); xk(2,:)];
-% R = [r^2 0; 0 r^2];
-% likelihood = @(k, yk, xk) mvnpdf(yk', H(xk)', R); % p(y_k|x_k)
-
 % Assign PHD parameter values
-config.k               = 1;                   % initial iteration number
-config.Np              = 100000;              % number of particles
-config.resampling_strategy = 'systematic_resampling'; % resampling strategy
-config.DynModel = CVmodel;
-config.ObsModel = obs_model;
-%config.sys = sys_ch; 
-%config.sys_noise = gen_sys_noise_ch; 
-config.gen_x0 = @(Np) [(V_bounds(2)-V_bounds(1))*rand(Np,1),(V_bounds(4)-V_bounds(3))*rand(Np,1), mvnrnd(zeros(Np,2), eye(2)*CVmodel.Params.q^2')]; % Uniform position and heading, Gaussian speed
-%config.gen_x0 = @(Np) [(V_bounds(2)-V_bounds(1))*rand(Np,1),(V_bounds(4)-V_bounds(3))*rand(Np,1), mvnrnd(zeros(Np,1), CVmodel.Params.q^2), 2*pi*rand(Np,1)]; % Uniform position and heading, Gaussian speed
-config.particles_init = config.gen_x0(config.Np)'; % Generate inital particles as per gen_x0
-config.w_init = repmat(1/config.Np, config.Np, 1)'; % Uniform weights
-%config.likelihood = likelihood;
-%config.obs_model = H;
-config.pBirth = 0.1;
-config.pDeath = 0.005;
-config.Jk = 500;
-config.pDetect = 0.9;
-config.lambda = lambdaV/V;
-config.pConf = 0.9;
-config.NpConf = 1000;
-config.type = 'search';
-config.birth_strategy = 'mixture';
+config.NumParticles = 0;              % number of particles
+config.priorParticles = [];
+config.priorWeights = [];
+config.Model = ssm;
+q = dyn.covariance();
+transformM = @(x) [x(1,:);zeros(1,size(x,2));x(2,:);zeros(1,size(x,2))];
+%BirthIntFcn = @(Np) [(V_bounds(2)-V_bounds(1))*rand(Np,1), mvnrnd(zeros(Np,1), q(3,3)'),(V_bounds(4)-V_bounds(3))*rand(Np,1),mvnrnd(zeros(Np,1), q(4,4)')]'; % Uniform position and heading, Gaussian speed
+config.BirthIntFcn = @(Np,z) [transformM(z(:,ones(1,Np))+config.Model.Obs.random(Np)) + mvnrnd(zeros(Np,4), q)']; % Uniform position and heading, Gaussian speed
+%config.PriorDistFcn = @ (Np) deal(BirthIntFcn(Np), repmat(1/Np, Np, 1)');
+config.BirthScheme = {'Mixture', 0.1};
+%config.BirthScheme = {'Expansion', 5000};
+config.ProbOfDeath = 0.005;
+config.ProbOfDetection = 0.9;
+config.ClutterRate = lambdaV/V;
+config.NumParticlesPerTarget = 10000;
+config.NumParticlesPerMeasurement = 100;
+config.ExpectedNumBornTargets = .1;
+
+% config.particles_init = config.gen_x0(config.Np)'; % Generate inital particles as per gen_x0
+% config.w_init = repmat(1/config.Np, config.Np, 1)'; % Uniform weights
+% config.gen_x0 = @(Np) [(V_bounds(2)-V_bounds(1))*rand(Np,1),(V_bounds(4)-V_bounds(3))*rand(Np,1), mvnrnd(zeros(Np,1), CVmodel.Params.q^2), 2*pi*rand(Np,1)]; % Uniform position and heading, Gaussian speed
+% config.Jk = 500;
+% config.pConf = 0.9;
+% config.NpConf = 1000;
+% config.type = 'search';
+% config.birth_strategy = 'mixture';
 
 % Instantiate PHD filter
-myphd = SMC_PHDFilterX(config);
+myphd = ISMC_PHDFilterX(config);
 
 % Create figure windows
 if(ShowPlots)
@@ -121,12 +99,11 @@ for k=1:N
     tempDataList( :, ~any(tempDataList,1) ) = [];       
     
     % Change PHD filter parameters
-    myphd.Params.k = 1; % Time index
-    myphd.Params.y = tempDataList; % New observations
-    %myphd.config.lambda = size(tempDataList,2)/V;
+    myphd.MeasurementList = tempDataList; % New observations
+    %myphd.ClutterRate = (size(tempDataList,2)-myphd.NumTargets)/V;
     
     % Predict PHD filter
-    myphd.Predict();
+    myphd.predict();
     
     % Plot prediction step results
     if(ShowPlots && ShowPrediction)
@@ -157,16 +134,16 @@ for k=1:N
             
         % Plot PHD
         cla(ax(2), 'reset');
-        [bandwidth,density,X,Y]=kde2d(myphd.Params.particles(1:2,:)');
+        [bandwidth,density,X,Y]=kde2d(myphd.PredParticles([1,3],:)');
         %contour3(X,Y,density,50);
         h = surf(ax(2),X,Y,density);
         shading interp
         colormap(ax(2), jet(3000))
         set(h, 'edgecolor','none')
         hold on;
-        plot(ax(2), myphd.Params.particles(1,:), myphd.Params.particles(2,:), '.')
+        plot(ax(2), myphd.PredParticles(1,:), myphd.PredParticles(3,:), '.')
         hold on;
-        plot(ax(2), myphd.Params.y(1,:), myphd.Params.y(2,:), 'y*');
+        plot(ax(2), myphd.MeasurementList(1,:), myphd.MeasurementList(2,:), 'y*');
         axis(ax(2), [V_bounds 0 10]);
         str = sprintf('PHD intensity (Prediction)');
         xlabel(ax(2),'X position (m)')
@@ -177,8 +154,8 @@ for k=1:N
     end
         
     % Update PHD filter
-    myphd.Update();
-    fprintf("Estimated number of targets: %f\n\n", myphd.Params.Nk);
+    myphd.update();
+    fprintf("Estimated number of targets: %f\n\n", myphd.NumTargets);
     
     % Plot update step results
     if(ShowPlots && ShowUpdate)
@@ -196,7 +173,11 @@ for k=1:N
                 set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
             end
             h2 = plot(ax(1), x_true(k,j),y_true(k,j),'bo','MarkerSize', 10);
-            set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off'); % Exclude line from legend
+            set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
+            if(myphd.NumParticles>0)
+                plot(ax(1), myphd.Particles(1,:), myphd.Particles(3,:), '.')
+            end
+             % Exclude line from legend
         end
         % set the y-axis back to normal.
         set(ax(1),'ydir','normal');
@@ -206,24 +187,27 @@ for k=1:N
         ylabel('Y position (m)')
         axis(ax(1),V_bounds)
             
-        % Plot PHD
-        cla(ax(2), 'reset');
-        [bandwidth,density,X,Y]=kde2d(myphd.Params.particles(1:2,:)');
-        %contour3(X,Y,density,50);
-        h = surf(ax(2),X,Y,density);        
-        shading interp
-        colormap(ax(2), jet(3000))
-        %set(h, 'edgecolor','none')
-        hold on;
-        plot(ax(2), myphd.Params.particles(1,:), myphd.Params.particles(2,:), '.')
-        hold on;
-        plot(ax(2), myphd.Params.y(1,:), myphd.Params.y(2,:), 'y*');
-        axis(ax(2), [V_bounds 0 20]);
-        str = sprintf('PHD intensity (Update)');
-        xlabel(ax(2),'X position (m)')
-        ylabel(ax(2),'Y position (m)')
-        zlabel(ax(2),'Intensity')
-        title(ax(2),str)
-        pause(0.01)
+        if(myphd.NumParticles>0)
+            % Plot PHD
+            cla(ax(2), 'reset');
+            [bandwidth,density,X,Y]=kde2d(myphd.Particles([1,3],:)');
+            %contour3(X,Y,density,50);
+            h = surf(ax(2),X,Y,density);        
+            shading interp
+            colormap(ax(2), jet(3000))
+            %set(h, 'edgecolor','none')
+            hold on;
+            plot(ax(2), myphd.Particles(1,:), myphd.Particles(3,:), '.')
+            hold on;
+            plot(ax(2), myphd.BornParticles(1,:), myphd.BornParticles(3,:), 'r.')
+            plot(ax(2), myphd.MeasurementList(1,:), myphd.MeasurementList(2,:), 'y*');
+            axis(ax(2), [V_bounds]);
+            str = sprintf('PHD intensity (Update)');
+            xlabel(ax(2),'X position (m)')
+            ylabel(ax(2),'Y position (m)')
+            zlabel(ax(2),'Intensity')
+            title(ax(2),str)
+            pause(0.01)
+        end
     end
 end

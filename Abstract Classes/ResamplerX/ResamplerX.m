@@ -1,4 +1,4 @@
-classdef (Abstract) ResamplerX < BaseX  % Extends trackingX.BaseX
+classdef (Abstract) ResamplerX < BaseX & matlabshared.tracking.internal.Resampler  % Extends trackingX.BaseX
 % ResamplerX Abstract class
 %
 % Summary of ResamplerX:
@@ -9,16 +9,15 @@ classdef (Abstract) ResamplerX < BaseX  % Extends trackingX.BaseX
 %   None
 %
 % ResamplerX Methods:
-%    ResamplerX - Constructor method
+%   + ResamplerX - Constructor method
+%
+% (+) denotes puplic properties/methods
 %
 % February 2018 Lyudmil Vladimirov, University of Liverpool.
     
     properties
     end
     
-    methods (Abstract)
-        resample(this);
-    end
     methods
         function this = ResamplerX(varargin)
         % RESAMPLERX Constructor method

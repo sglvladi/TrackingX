@@ -183,11 +183,11 @@ classdef LinGaussObsModelX_2D < ObservationModelX
             % Increase speed by iterating over the smallest matrix 
             if(size(xk,2)>size(yk,2))
                 for i=1:size(yk,2)
-                    prob(i,:) = mvnpdf(yk(:,i)', this.heval(xk)', this.R)';
+                    prob(i,:) = gauss_pdf(yk(:,i), this.heval(xk), this.R);
                 end
             else
                 for i=1:size(xk,2)
-                    prob(:,i) = mvnpdf(yk', this.heval(xk(:,i))', this.R)';  
+                    prob(:,i) = gauss_pdf(yk, this.heval(xk(:,i)), this.R);  
                 end
             end
         end

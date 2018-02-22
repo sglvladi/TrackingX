@@ -59,6 +59,7 @@ function NetObj = buildEHMnet_trans(ValidationMatrix, Li)
     % Define Net Object
     NetObj.NodeList = [];
     NetObj.EdgeList = [];
+    NetObj.NodesPerTrack = cell(1,TrackNum);
     NetObj.ValidationMatrix = ValidationMatrix;
     NetObj.Li = Li;
 
@@ -73,7 +74,7 @@ function NetObj = buildEHMnet_trans(ValidationMatrix, Li)
         % Get index list (L_jm1_Ind) of nodes in previous layer (j-1)
         L_jm1_Ind = find(cell2mat(cellfun(@(sas)sas.TrackInd, NetObj.NodeList, 'uni', false))==j-1);
 
-        % Get indeces of all associated measurements for track j
+        % Get indices of all associated measurements for track j
         M_j = [find(ValidationMatrix(j,:))]; % i=0 for false alarm
 
         % For every node in L_jm1
@@ -94,11 +95,11 @@ function NetObj = buildEHMnet_trans(ValidationMatrix, Li)
                 % Init Match flag
                 match_flag = 0;
 
-                dfg = cellfun(@(sas)sas.TrackInd, NetObj.NodeList, 'uni', false );
-                dfg = cell2mat(dfg);
+%                 dfg = cellfun(@(sas)sas.TrackInd, NetObj.NodeList, 'uni', false );
+%                 dfg = cell2mat(dfg);
 
                 % Get index list L_j of nodes in current layer (j)
-                L_j_Ind = find(dfg==j);
+                L_j_Ind = NetObj.NodesPerTrack{j};%find(dfg==j);
 
                 % if current Layer is empty
                 if isempty(L_j_Ind)
@@ -122,6 +123,7 @@ function NetObj = buildEHMnet_trans(ValidationMatrix, Li)
                         M_rem_j = union(M_rem_j, find(ValidationMatrix(j_sub,:))');
                     end
                     NetObj.NodeList{ChildInd}.Remainders = setdiff(M_rem_j,setdiff(NetObj.NodeList{ChildInd}.MeasIndList,1)); 
+                    NetObj.NodesPerTrack{j} = [NetObj.NodesPerTrack{j} ChildInd];
                 else
 
                     % Compute remainders (j-1)
@@ -186,6 +188,7 @@ function NetObj = buildEHMnet_trans(ValidationMatrix, Li)
                         end
                         R_j = setdiff(M_rem_j,setdiff(NetObj.NodeList{ChildInd}.MeasIndList,1));
                         NetObj.NodeList{ChildInd}.Remainders = R_j; 
+                        NetObj.NodesPerTrack{j} = [NetObj.NodesPerTrack{j} ChildInd];
                     end
                 end
 
@@ -288,14 +291,11 @@ function NetObj = buildEHMnet_trans(ValidationMatrix, Li)
             L_j_Ind = find(cell2mat(cellfun(@(sas)sas.TrackInd, NetObj.NodeList, 'uni', false ))==TrackInd);
             for j = 1:size(L_j_Ind, 2)
                 NodeInd = L_j_Ind(j);
-                betta(TrackInd, MeasInd) = betta(TrackInd, MeasInd) + p_T(MeasInd,NodeInd);%p_U(NodeInd)*Li(TrackInd, TrackInd)*p_DT(TrackInd, NodeInd);
-                xsad=2;
+                betta(TrackInd, MeasInd) = betta(TrackInd, MeasInd) + p_T(MeasInd,NodeInd);
             end
         end
     end
     
-    %if(betta==
-
     % Normalise
     for j = 1:TrackNum
         betta(j,:) = betta(j,:)/sum(betta(j,:),2);

@@ -5,21 +5,21 @@ classdef ParticleFilterX < FilterX
 % This is a class implementation of a SIR Particle Filter. (Alg. 4 of [1])
 %
 % ParticleFilterX Properties: (*)
-%   - NumParticles      The number of particles employed by the Particle Filter
-%   - Particles         A (NumStateDims x NumParticles) matrix used to store 
+%   + NumParticles      The number of particles employed by the Particle Filter
+%   + Particles         A (NumStateDims x NumParticles) matrix used to store 
 %                       the last computed/set filtered particles  
-%   - Weights           A (1 x NumParticles) vector used to store the weights
+%   + Weights           A (1 x NumParticles) vector used to store the weights
 %                       of the last computed/set filtered particles
-%   - PredParticles     A (NumStateDims x NumParticles) matrix used to store 
+%   + PredParticles     A (NumStateDims x NumParticles) matrix used to store 
 %                       the last computed/set predicted particles  
-%   - PredWeights       A (1 x NumParticles) vector used to store the weights
+%   + PredWeights       A (1 x NumParticles) vector used to store the weights
 %                       of the last computed/set predicted particles
-%   - Measurement       A (NumObsDims x 1) matrix used to store the received measurement
-%   - ControlInput      A (NumCtrDims x 1) matrix used to store the last received 
+%   + Measurement       A (NumObsDims x 1) matrix used to store the received measurement
+%   + ControlInput      A (NumCtrDims x 1) matrix used to store the last received 
 %                       control input
-%   - ResamplingScheme  Method used for particle resampling, specified as 
+%   + ResamplingScheme  Method used for particle resampling, specified as 
 %                       'multinomial', 'systematic'. Default = 'systematic'
-%   - ResamplingPolicy  A (1 x 2) cell array, specifying the resampling trigger
+%   + ResamplingPolicy  A (1 x 2) cell array, specifying the resampling trigger
 %                       conditions. ReamplingPolicy{1} should be a string
 %                       which can be either "TimeInterval", in which case 
 %                       ReamplingPolicy{2} should specify the number of 
@@ -30,39 +30,39 @@ classdef ParticleFilterX < FilterX
 %                       Default ResamplingPolicy = {"TimeInterval",1}, meaning
 %                       that resampling is performed on every iteration of
 %                       the Particle Filter (upon update).                       
-%   - Resampler         An object handle to a ResamplerX subclass. If a 
+%   + Resampler         An object handle to a ResamplerX subclass. If a 
 %                       Resampler is provided, then it will override any choice
 %                       specified within the ResamplingScheme. ResamplingPolicy
 %                       will not be affected.
-%   - StateMean(+)      A (NumStateDims x 1) vector used to store the last 
+%   ¬ StateMean         A (NumStateDims x 1) vector used to store the last 
 %                       computed filtered state mean.  
-%   - StateCovar(+)     A (NumStateDims x NumStateDims) matrix used to store
+%   ¬ StateCovar        A (NumStateDims x NumStateDims) matrix used to store
 %                       the last computed filtered state covariance
-%   - PredStateMean(+)  A (NumStateDims x 1) vector used to store the last 
+%   ¬ PredStateMean     A (NumStateDims x 1) vector used to store the last 
 %                       computed prediicted state mean  
-%   - PredStateCovar(+) A (NumStateDims x NumStateDims) matrix used to store
+%   ¬ PredStateCovar    A (NumStateDims x NumStateDims) matrix used to store
 %                       the last computed/set predicted state covariance
-%   - PredMeasMean(+)   A (NumObsDims x 1) vector used to store the last 
+%   ¬ PredMeasMean      A (NumObsDims x 1) vector used to store the last 
 %                       computed predicted measurement mean
-%   - InnovErrCovar(+)  A (NumObsDims x NumObsDims) matrix used to store the
+%   ¬ InnovErrCovar     A (NumObsDims x NumObsDims) matrix used to store the
 %                       last computed innovation error covariance
-%   - CrossCovar(+)     A (NumStateDims x NumObsDims) matrix used to store 
+%   ¬ CrossCovar        A (NumStateDims x NumObsDims) matrix used to store 
 %                       the last computed cross-covariance Cov(X,Y)  
-%   - Model             An object handle to StateSpaceModelX object
-%       - Dyn = Object handle to DynamicModelX SubClass      
-%       - Obs = Object handle to ObservationModelX SubClass 
-%       - Ctr = Object handle to ControlModelX SubClass    
+%   + Model             An object handle to StateSpaceModelX object
+%       + Dyn = Object handle to DynamicModelX SubClass      
+%       + Obs = Object handle to ObservationModelX SubClass 
+%       + Ctr = Object handle to ControlModelX SubClass    
 %
 %   (*) NumStateDims, NumObsDims and NumCtrDims denote the dimentionality of 
 %       the state, measurement and control vectors respectively.
-%   (+) For the benefit of performance, these properties are defined as
-%       Dependent, i.e. they are read-only and computed on demand.
 %
 % ParticleFilterX Methods:
-%    ParticleFilterX  - Constructor method
-%    predict        - Performs UKF prediction step
-%    update         - Performs UKF update step
-%    smooth         - Performs UKF smoothing on a provided set of estimates
+%   + ParticleFilterX  - Constructor method
+%   + predict        - Performs UKF prediction step
+%   + update         - Performs UKF update step
+%
+% (+) denotes puplic properties/methods
+% (¬) denotes dependent properties
 %
 % [1] M. S. Arulampalam, S. Maskell, N. Gordon and T. Clapp, "A tutorial on 
 %     particle filters for online nonlinear/non-Gaussian Bayesian tracking,"
@@ -197,7 +197,7 @@ classdef ParticleFilterX < FilterX
             parser = inputParser;
             parser.KeepUnmatched = true;
             parser.parse(varargin{:});
-            config = parser.Results;
+            config = parser.Unmatched;
             if (isfield(config,'NumParticles'))
                 this.NumParticles  = config.NumParticles;
             end
@@ -225,7 +225,7 @@ classdef ParticleFilterX < FilterX
         end
         
         function initialise(this,varargin)
-        % INITIALISE Initialise the KalmanFilter with a certain set of
+        % INITIALISE Initialise the Particle Filter with a certain set of
         % parameters.  
         %   
         % DESCRIPTION: 
@@ -280,10 +280,15 @@ classdef ParticleFilterX < FilterX
         %
         %  See also predict, update, smooth. 
                     
+            initialise@FilterX(this);
+            
             % First check to see if a structure was received
             if(nargin==1)
                 if(isstruct(varargin{1}))
                     config = varargin{1};
+                    if (isfield(config,'Model'))
+                        this.Model = config.Model;
+                    end
                     if (isfield(config,'NumParticles'))
                         this.NumParticles  = config.NumParticles;
                     end
@@ -317,6 +322,9 @@ classdef ParticleFilterX < FilterX
             parser.KeepUnmatched = true;
             parser.parse(varargin{:});
             config = parser.Unmatched;
+            if (isfield(config,'Model'))
+                this.Model = config.Model;
+            end
             if (isfield(config,'NumParticles'))
                 this.NumParticles  = config.NumParticles;
             end
@@ -375,6 +383,8 @@ classdef ParticleFilterX < FilterX
             % Propagate particles through the dynamic model
             this.PredParticles = ParticleFilterX_Predict(f,this.Particles,wk);
             this.PredWeights = this.Weights;
+            
+            predict@FilterX(this);
         end
         
         function update(this)
@@ -384,7 +394,7 @@ classdef ParticleFilterX < FilterX
         % * update(this) calculates the corrected sytem state and the 
         %   associated uncertainty covariance.
         %
-        %   See also KalmanFilterX, predict, iterate, smooth.
+        %   See also ParticleFilterX, predict, smooth.
         
             if(size(this.Measurement,2)>1)
                 error('[PF] More than one measurement have been provided for update. Use ParticleFilterX.UpdateMulti() function instead!');
@@ -401,6 +411,8 @@ classdef ParticleFilterX < FilterX
                 [this.Particles,this.Weights] = ...
                     this.Resampler.resample(this.PredParticles,this.Weights);
             end
+            
+            update@FilterX(this);
         end
         
         function UpdatePDA(this, assocWeights, LikelihoodMatrix)
@@ -489,12 +501,67 @@ classdef ParticleFilterX < FilterX
         % ===============================>
         
         function StateMean = get.StateMean(this)
-            StateMean = sum(this.Weights.*this.Particles,2);
+            StateMean = getStateMean(this);
         end
         
         function StateCovar = get.StateCovar(this)
+            StateCovar = getStateCovar(this);
+        end
+        
+        function PredStateMean = get.PredStateMean(this)
+            PredStateMean = getPredStateMean(this);
+        end
+        
+        function PredStateCovar = get.PredStateCovar(this)
+            PredStateCovar = getPredStateCovar(this);
+        end
+        
+        function PredMeasMean = get.PredMeasMean(this)
+            PredMeasMean = getPredMeasMean(this);
+        end
+        
+        function InnovErrCovar = get.InnovErrCovar(this)
+            InnovErrCovar = getInnovErrCovar(this);
+        end
+
+        function set.Measurement(this,newMeasurement)
+            setMeasurement(this,newMeasurement);
+        end
+    end
+    
+    methods (Access = protected)
+        
+        % ===============================>
+        % ACCESS METHOD HANDLES
+        % ===============================>
+        
+        function StateMean = getStateMean(this)
+            StateMean = sum(this.Weights.*this.Particles,2);
+        end
+        
+        function StateCovar = getStateCovar(this)
             StateCovar = weightedcov(this.Particles,this.Weights);
         end
         
+        function PredStateMean = getPredStateMean(this)
+            PredStateMean = sum(this.PredWeights.*this.PredParticles,2);
+        end
+        
+        function PredStateCovar = getPredStateCovar(this)
+            PredStateCovar = weightedcov(this.PredParticles,this.PredWeights);
+        end
+        
+        function PredMeasMean = getPredMeasMean(this)
+            PredMeasMean = this.Model.Obs.heval(this.PredStateMean);
+        end
+        
+        function InnovErrCovar = getInnovErrCovar(this)
+            transParticles = this.Model.Obs.heval(this.PredParticles);
+            InnovErrCovar = weightedcov(transParticles,this.PredWeights);
+        end
+        
+        function setMeasurement(this,newMeasurement)
+            this.Measurement = newMeasurement;
+        end
     end
 end

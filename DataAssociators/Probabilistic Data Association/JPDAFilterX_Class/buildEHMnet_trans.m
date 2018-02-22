@@ -102,6 +102,7 @@ function NetObj = buildEHMnet_trans(ValidationMatrix, Li)
 
                 % if current Layer is empty
                 if isempty(L_j_Ind)
+                    
                     % Index of child node
                     ChildInd = size(NetObj.NodeList,2)+1;
 
@@ -138,10 +139,6 @@ function NetObj = buildEHMnet_trans(ValidationMatrix, Li)
                         ChildInd = L_j_Ind(i_j);
 
                         % Compute remainders (j)
-                        %T_rem_j = []; % T_j+1:mk[N^(j)_(i_j)]
-                        %for j_sub = j+1:LayerNum
-                        %    T_rem_j = find(ValidationMatrix(j+1:LayerNum,:))';
-                        %end
                         R_j = NetObj.NodeList{ChildInd}.Remainders;
 
                         % If the node's list of remainders (R_j) is equal to R_jm1
@@ -289,7 +286,6 @@ function NetObj = buildEHMnet_trans(ValidationMatrix, Li)
             for j = 1:size(L_j_Ind, 2)
                 NodeInd = L_j_Ind(j);
                 betta(TrackInd, MeasInd) = betta(TrackInd, MeasInd) + p_T(MeasInd,NodeInd);%p_U(NodeInd)*Li(TrackInd, TrackInd)*p_DT(TrackInd, NodeInd);
-                xsad=2;
             end
         end
     end

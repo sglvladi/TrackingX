@@ -6,17 +6,16 @@ classdef (Abstract) FilterX < BaseX  % Extends trackingX.BaseX
 % Any custom defined Filters should be derived from this FilterX base class. 
 %
 % FilterX Properties:
-%   - State   = Object handle to a TrackingX.State
-%   - Model   = Object handle to StateSpaceModelX Sub/class
+%   + Model   = Object handle to StateSpaceModelX Sub/class
 %
 %   (*) Signifies properties necessary to instantiate a class object
 %
 % FilterX Methods:
-%    FilterX    - Constructor method
-%    predict    - Performs filter prediction step
-%    update     - Performs filter update/correction step
-%    iterate    - Performs a complete filter iteration (Predict & Update)
-%    smooth     - Performs smoothing on a provided set of estimates
+%   + FilterX    - Constructor method
+%   + predict    - Performs filter prediction step
+%   + update     - Performs filter update/correction step
+%
+% (+) denotes puplic properties/methods
 % 
 % See also DynamicModel, ObservationModel and ControlModel
 %
@@ -26,11 +25,14 @@ classdef (Abstract) FilterX < BaseX  % Extends trackingX.BaseX
         Model
     end
     
-    methods (Abstract)
-        initialise(this);
-        predict(this);
-        update(this);
+    properties (Access = protected, Hidden)
+        %FilterState - Current execution state of filter
+        %   0: Filter Initialised
+        %   1: Filter Predicted
+        %   2: Filter Updated
+        FilterState = 0
     end
+      
     methods
         function this = FilterX(varargin)
         % FILTER Constructor method
@@ -66,6 +68,34 @@ classdef (Abstract) FilterX < BaseX  % Extends trackingX.BaseX
             if(~isempty(parser.Results.Model))
                 this.Model = parser.Results.Model;
             end         
+        end
+        
+        function initialise(this,varargin)
+            this.FilterState = 0;
+        end
+        
+        function predict(this,varargin)
+            this.FilterState = 1;
+        end
+        
+        function update(this,varargin)
+            this.FilterState = 2;
+        end
+        
+        % ===============================>
+        % ACCESS METHODS
+        % ===============================>
+        function set.Model(this,newModel)
+            this.Model = setModel(this,newModel);
+        end
+    end
+
+    methods (Access = private)
+        % ===============================>
+        % ACCESS METHOD HANDLES
+        % ===============================>
+        function Model = setModel(this,newModel)
+            Model = newModel;
         end
     end
 end

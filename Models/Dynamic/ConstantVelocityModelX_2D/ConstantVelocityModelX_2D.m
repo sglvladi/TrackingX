@@ -184,7 +184,7 @@ classdef ConstantVelocityModelX_2D < DynamicModelX
                     Dt = this.TimeVariant;
             end
               
-            wk = mvnrnd(zeros(this.NumStateDims,Ns)',this.Q(Dt,this.VelocityErrVariance))';
+            wk = gauss_rnd(zeros(this.NumStateDims,1),this.Q(Dt,this.VelocityErrVariance),Ns);
         end
         
         function prob = pdf(this, xk, xkm1, Dt)

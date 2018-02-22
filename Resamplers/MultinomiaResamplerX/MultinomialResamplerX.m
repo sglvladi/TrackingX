@@ -1,4 +1,4 @@
-classdef MultinomialResamplerX < ResamplerX
+classdef MultinomialResamplerX < ResamplerX & matlabshared.tracking.internal.MultinomialResampler
 % MULTINOMIALRESAMPLERX Class 
 %
 % Summary of MultinomialResamplerX:
@@ -10,10 +10,6 @@ classdef MultinomialResamplerX < ResamplerX
 % MultinomialResamplerX Methods:
 %    MultinomialResamplerX  - Constructor method
 %    resample - Perform multinomial resampling 
-%
-% [1] E. A. Wan and R. Van Der Merwe, "The unscented Kalman filter for nonlinear estimation," 
-%     Proceedings of the IEEE 2000 Adaptive Systems for Signal Processing, Communications, and 
-%     Control Symposium (Cat. No.00EX373), Lake Louise, Alta., 2000, pp. 153-158.
 % 
 % See also SystematicResamplerX
     properties
@@ -31,7 +27,7 @@ classdef MultinomialResamplerX < ResamplerX
             
         end
         
-        function [newSamples, newWeights] = resample(this,samples,weights)
+        function [newSamples, newWeights,idx] = resample(this,samples,weights,Nnew)
         % RESAMPLE Perform multinomial resampling
         %   
         % DESCRIPTION: 
@@ -42,9 +38,13 @@ classdef MultinomialResamplerX < ResamplerX
         % See also SystematicResamplerX/resample
         
             N = numel(weights);
-            idx = randsample(1:N, N, true, weights);
+            if(nargin<4)
+                Nnew = N;
+            end
+            % idx = randsample(1:N, Nnew, true, weights);
+            idx = resample@matlabshared.tracking.internal.MultinomialResampler(this,weights,Nnew);
             newSamples = samples(:,idx);           
-            newWeights = repmat(1/N, 1, N); 
+            newWeights = repmat(1/Nnew, 1, Nnew); 
         end
     end
 end
