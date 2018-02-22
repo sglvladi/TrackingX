@@ -1,22 +1,22 @@
-classdef TargetX < BaseX & dynamicprops
-% TargetX class
+classdef TrackX < BaseX & dynamicprops
+% TrackX class
 %
-% Summary of TargetX:
-% This is a class implementation of a target object. TargetX objects can be 
+% Summary of TrackX:
+% This is a class implementation of a target object. TrackX objects can be 
 % used to store the trajectories, as well as other relevant information, of 
 % targets when developing/implementing MTT algorithms within TrackingX. 
 %
-% TargetX Properties:
+% TrackX Properties:
 %   - Trajectory = A (xDim x N) matrix representing the trajectory of a 
 %     target 
 %
 % Notes:
-% * TargetX is derived from the dynamicprops MATLAB class, meaning that
-%   new class properties can be added to any TargetX instance as and when
+% * TrackX is derived from the dynamicprops MATLAB class, meaning that
+%   new class properties can be added to any TrackX instance as and when
 %   needed. Type "help dynamicprops.addprop" for details on how to add new
 %   properties.
 % * Deleting a dynamic property can be achieved by calling the function
-%   delete(findprop(t,'PropName')), where t is a TargetX object handle.
+%   delete(findprop(t,'PropName')), where t is a TrackX object handle.
 % 
 % See also dynamicprops
 %
@@ -27,21 +27,21 @@ classdef TargetX < BaseX & dynamicprops
     end
     
     methods
-        function this = TargetX(varargin)
+        function this = TrackX(varargin)
         % TARGETX Constructor method
         %   
         % DESCRIPTION: 
-        % * t = TargetX() returns an unconfigured object handle.
-        % * t = TargetX(traj) returns an object handle, who's "Trajectory"
+        % * t = TrackX() returns an unconfigured object handle.
+        % * t = TrackX(traj) returns an object handle, who's "Trajectory"
         %   property contains the trajectory stored in the matrix traj.
         %   traj should be a (xDim x N) matrix, where xDim denotes the
         %   number of state dimensions and N denotes the length of the
         %   trajectory.
-        % * t = TargetX(___,Name,Value,___) returns an object handle, with
+        % * t = TrackX(___,Name,Value,___) returns an object handle, with
         %   properties created for each Name,Value pair arguments. Since the 
         %   "Trajectory" property already exists by default, any Value
         %   passed to the constructor will be stored within the property.
-        % * t = TargetX(config) returns an object handle, with
+        % * t = TrackX(config) returns an object handle, with
         %   properties created for each field of the config structure,
         %   using the field name as the name of the property and the field
         %   value as the value to be stored within that property. Since the 
