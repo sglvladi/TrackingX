@@ -7,7 +7,7 @@ SkipFrames = 0;
 dyn = ConstantVelocityModelX_2D('VelocityErrVariance',0.0001);
 
 % Instantiate an Observation model
-obs = LinGaussObsModelX_2D('NumStateDims',4,'ObsErrVariance',0.04,'Mapping',[1 3]);
+obs = LinGaussObsModelX_2D('NumStateDims',4,'ObsErrVariance',0.05,'Mapping',[1 3]);
 
 % Compile the State-Space model
 ssm = StateSpaceModelX(dyn,obs);
@@ -16,14 +16,14 @@ ssm = StateSpaceModelX(dyn,obs);
 kf = KalmanFilterX(ssm);
 
 % Extract the ground truth data from the example workspace
-load('example.mat');
+%load('example.mat');
 NumIter = size(GroundTruth,2);
 
 % Set NumTracks
 NumTracks = 3;
 
 % Generate DataList
-[DataList,x1,y1] = gen_obs_cluttered_multi2(NumTracks, x_true, y_true, sqrt(obs.ObsErrVariance), [0 10 0 10], 50, 1);
+[DataList,x1,y1] = gen_obs_cluttered_multi2(NumTracks, x_true, y_true, sqrt(obs.ObsErrVariance), [0 10 0 10], 10, 1);
 
 % Initiate TrackList
 for i=1:NumTracks
@@ -118,28 +118,6 @@ for i = 1:N
                 h4=plot_gaussian_ellipsoid(Logs{j}.Estimates.StateMean([1 3],i), Logs{j}.Estimates.StateCovar([1 3],[1 3],i));
             end
             h2 = plot(DataList{i}(1,:),DataList{i}(2,:),'k*','MarkerSize', 10);
-%             for j=1:NumTracks
-%                 colour = 'r';
-%                 if(j==2)
-%                    colour = 'c';
-%                 elseif (j==3)
-%                    colour = 'm';
-%                 end
-%                 h4 = plot(Logs{j}.xV_ekf(1,:),Logs{j}.xV_ekf(2,:),strcat(colour,'.-'),'LineWidth',1);
-%                 %h4 = plot(Logs{j}.xV_ekf(1,i),Logs{j}.xV_ekf(2,i),strcat(colour,'o'),'MarkerSize', 10);
-%                 if(isa(jpdaf.Params.TrackList{j}.TrackObj,'ParticleFilterX'))
-%                     c_mean = sum(repmat(jpdaf.Params.TrackList{j}.TrackObj.Params.w,size(jpdaf.Params.TrackList{j}.TrackObj.Params.particles,1),1).*jpdaf.Params.TrackList{j}.TrackObj.Params.particles,2);
-%                     c_cov = [std(jpdaf.Params.TrackList{j}.TrackObj.Params.particles(1,:),jpdaf.Params.TrackList{j}.TrackObj.Params.w)^2,0;0,std(jpdaf.Params.TrackList{j}.TrackObj.Params.particles(2,:),jpdaf.Params.TrackList{j}.TrackObj.Params.w)^2];
-%                 else
-%                     c_mean = jpdaf.Params.TrackList{j}.TrackObj.Params.x;
-%                     c_cov = jpdaf.Params.TrackList{j}.TrackObj.Params.P(1:2,1:2);
-%                 end
-%                 h2=plot_gaussian_ellipsoid(c_mean(1:2), c_cov);
-%                 set(h2,'color',colour);
-%                 set(h2,'LineWidth',1);
-%                 %plot(jpdaf.Params.TrackList{j}.TrackObj.pf.particles(1,:),jpdaf.Params.TrackList{j}.TrackObj.pf.particles(2,:),strcat(colour,'.'),'MarkerSize', 3);
-%                 set(get(get(h4,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
-%             end
                 % set the y-axis back to normal.
             set(gca,'ydir','normal');
             str = sprintf('Estimated state x_{1,k} vs. x_{2,k}');

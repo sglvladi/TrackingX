@@ -1,19 +1,19 @@
-classdef JointProbabilisticDataAssocX < handle
-% JointProbabilisticDataAssocX class
+classdef ProbabilisticDataAssocX < DataAssociatorX
+% ProbabilisticDataAssocX class
 %
-% Summary of JointProbabilisticDataAssocX:
+% Summary of ProbabilisticDataAssocX:
 % This is a class implementation of a Joint Probabilistic Data Association Filter.
 %
-% JointProbabilisticDataAssocX Properties:
+% ProbabilisticDataAssocX Properties:
 %   + TrackList        A (1-by-NumTracks) vector of TrackX objects
-%   + MeasurementList           A (1-by-NumObs) vector of observations/measurements
+%   + MeasurementList           A (1-by-NumMeas) vector of observations/measurements
 %   + Gater             A GaterX object used to perform gating
 %   + Clusterer         A ClustererX object used to perform clustering of
 %                       tracks
 %   + ClutterDensity    
 %
-% JointProbabilisticDataAssocX Methods:
-%   + JointProbabilisticDataAssocX  - Constructor method
+% ProbabilisticDataAssocX Methods:
+%   + ProbabilisticDataAssocX  - Constructor method
 %   + associate                     - Performs JPDAF association step
 %   + updateTracks                 - Performs JPDAF update step
 %
@@ -24,33 +24,30 @@ classdef JointProbabilisticDataAssocX < handle
 
     properties
         NumTracks
-        NumObs
-        TrackList
-        MeasurementList
+        NumMeas
         ValidationMatrix
+        GateVolumes
         LikelihoodMatrix
+        AssocLikelihoodMatrix
         AssocWeightsMatrix
-        Gater = []
-        Clusterer = []
         ClutterDensity
         ProbOfDetect = 1
         ClusterList = []
         UnassocTrackInds = []
-        NetList = []
     end
     
     methods
-        function this = JointProbabilisticDataAssocX(varargin)
-        % JointProbabilisticDataAssocX - Constructor method
+        function this = ProbabilisticDataAssocX(varargin)
+        % ProbabilisticDataAssocX - Constructor method
         %   
         % DESCRIPTION: 
-        % * jpda = JointProbabilisticDataAssocX() returns an unconfigured object 
+        % * jpda = ProbabilisticDataAssocX() returns an unconfigured object 
         %   handle. Note that the object will need to be configured at a 
         %   later instance before any call is made to it's methods.
-        % * jpda = JointProbabilisticDataAssocX(gater,clusterer) returns an 
+        % * jpda = ProbabilisticDataAssocX(gater,clusterer) returns an 
         %   object handle, preconfigured with the provided GaterX and ClustererX 
         %   object handles gater and clusterer.
-        % * jpda = JointProbabilisticDataAssocX(___,Name,Value,___) instantiates an  
+        % * jpda = ProbabilisticDataAssocX(___,Name,Value,___) instantiates an  
         %   object handle, configured with the options specified by one or 
         %   more Name,Value pair arguments.
         %
@@ -61,8 +58,10 @@ classdef JointProbabilisticDataAssocX < handle
         %                       perform clustering of tracks. Default = None
         % * ProbOfDetect        (scalar) The target detection probability
         %
-        %  See also JointProbabilisticDataAssocX/associate, JointProbabilisticDataAssocX/updateTracks.   
+        %  See also ProbabilisticDataAssocX/associate, ProbabilisticDataAssocX/updateTracks.   
                     
+            this.Hypothesiser = EfficientHypothesisManagementX();
+            
             % First check to see if a structure was received
             if(nargin==1)
                 if(isstruct(varargin{1}))
@@ -97,10 +96,10 @@ classdef JointProbabilisticDataAssocX < handle
         end
         
         function initialise(this,varargin)
-        % INITIALISE Initialise JPDA with a certain set of parameters. 
+        % INITIALISE Initialise PDA with a certain set of parameters. 
         %   
         % DESCRIPTION: 
-        % * initialise(jpda,gater,clusterer) initialises the JointProbabilisticDataAssocX
+        % * initialise(jpda,gater,clusterer) initialises the ProbabilisticDataAssocX
         %   object jpda with the provided GaterX and ClustererX object handles gater and clusterer.
         % * initialise(jpda,___,Name,Value,___) instantiates an  
         %   object handle, configured with the options specified by one or 
@@ -112,7 +111,7 @@ classdef JointProbabilisticDataAssocX < handle
         % * Clusterer           (ClustererX) A clusterer object which should be used to  
         %                       perform clustering of tracks. Default = None
         %
-        %  See also JointProbabilisticDataAssocX/associate, JointProbabilisticDataAssocX/updateTracks.   
+        %  See also ProbabilisticDataAssocX/associate, ProbabilisticDataAssocX/updateTracks.   
                     
             % First check to see if a structure was received
             if(nargin==1)
@@ -161,7 +160,7 @@ classdef JointProbabilisticDataAssocX < handle
         %       (jpdaf.Params.k = 1; % 1 sec)
         %       jpdaf.Predict();
         %
-        %   See also JointProbabilisticDataAssocX/initialise, JointProbabilisticDataAssocX/updateTracks.
+        %   See also ProbabilisticDataAssocX/initialise, ProbabilisticDataAssocX/updateTracks.
         
             if(nargin>1)
                 this.TrackList = TrackList;
@@ -169,85 +168,12 @@ classdef JointProbabilisticDataAssocX < handle
             end
             % Get number of available tracks and observations
             this.NumTracks = size(this.TrackList,2);
-            this.NumObs   = size(this.MeasurementList,2);
+            this.NumMeas   = size(this.MeasurementList,2);
             
             if(~isempty(this.TrackList))
-                % Validation matix and volume
-                [this.ValidationMatrix, GateVolumes] = this.Gater.gate(this.TrackList,this.MeasurementList);
-                this.LikelihoodMatrix = zeros(this.NumTracks, this.NumObs);
-
-                % Compute Likelihood matrix
-                for trackInd = 1:this.NumTracks          
-                    % Extract valid measurements
-                    ValidObsInds = find(this.ValidationMatrix(trackInd,:));
-                    ValidObs = this.MeasurementList(:,ValidObsInds);
-                    this.TrackList{trackInd}.Filter.Measurement = ValidObs;
-
-                    if(isa(this.TrackList{trackInd}.Filter,'KalmanFilterX')...
-                       ||isa(this.TrackList{trackInd}.Filter,'UnscentedParticleFilterX')...
-                       ||isa(this.TrackList{trackInd}.Filter,'ExtendedParticleFilterX'))
-
-                        % Extract predicted measurement and innovation covariance from filter
-                        predMeasMean = this.TrackList{trackInd}.Filter.PredMeasMean;
-                        innovCovar = this.TrackList{trackInd}.Filter.InnovErrCovar;
-
-                        % Compute likelihood matrix
-                        this.LikelihoodMatrix(trackInd, ValidObsInds) = ...
-                            gauss_pdf(ValidObs, predMeasMean,innovCovar);
-
-                    elseif(isa(this.TrackList{trackInd}.Filter,'ParticleFilterX'))    
-                        % Compute likelihood matrix via expected likelihood
-                        this.LikelihoodMatrix(trackInd, ValidObsInds) = ...
-                            mean(this.TrackList{trackInd}.Filter.ObsModel.eval(...
-                                ValidObs, this.TrackList{trackInd}.Filter.PredParticles),2)';
-                    end
-                end
-
-                if(isempty(this.Clusterer))
-                    % If no clusterer has been supplied
-                    Cluster.TrackIndList = [];
-                    Cluster.ObsIndList = [];
-                    UnassocTrackInds = [];
-                    for trackInd=1:this.NumTracks
-                        ValidObs = find(this.ValidationMatrix(trackInd,:));
-                        if(~isempty(ValidObs))
-                            Cluster.TrackIndList = union(Cluster.TrackIndList,trackInd);
-                            Cluster.ObsIndList = union(Cluster.ObsIndList,ValidObs);
-                        else
-                            UnassocTrackInds = union(UnassocTrackInds,trackInd); %#ok<*PROPLC>
-                        end
-                    end
-                    this.UnassocTrackInds = UnassocTrackInds;
-                    this.ClusterList(1) = Cluster;
-                else
-                    % Get all clusters
-                    [this.ClusterList, this.UnassocTrackInds] = this.Clusterer.cluster(this.ValidationMatrix);
-                end
-
-                % Allocate memory for association weights and fill in weights for unassociated tracks
-                this.AssocWeightsMatrix = zeros(this.NumTracks, this.NumObs+1); % Dummy measurement weights at index 1
-                this.AssocWeightsMatrix(this.UnassocTrackInds,1) = 1;
-
-                % Create Hypothesis net for each cluster and populate association weights matrix
-                NumClusters = numel(this.ClusterList);
-                this.NetList = cell(1,NumClusters);
-                for clusterInd=1:NumClusters
-                    Cluster = this.ClusterList{clusterInd};
-                    ClustObsIndList = Cluster.ObsIndList;
-                    ClustTrackIndList = Cluster.TrackIndList;
-                    % Compute New Track/False Alarm density for the cluster
-                    Cluster.ClutterDensity = ...
-                        sum(sum(this.ValidationMatrix(ClustTrackIndList,:)))...
-                        /sum(GateVolumes(ClustTrackIndList));
-                    if(Cluster.ClutterDensity==0)
-                        Cluster.ClutterDensity = 1;
-                    end
-                    ClustLi = [ones(numel(ClustTrackIndList),1)*Cluster.ClutterDensity*(1-this.ProbOfDetect*this.Gater.ProbOfGating), ...
-                        this.ProbOfDetect*this.Gater.ProbOfGating*this.LikelihoodMatrix(ClustTrackIndList,ClustObsIndList)];
-                    ClustVm = [ones(numel(ClustTrackIndList),1),  this.ValidationMatrix(ClustTrackIndList, ClustObsIndList)];
-                    this.NetList{clusterInd} = buildEHMnet_trans(ClustVm, ClustLi);
-                    this.AssocWeightsMatrix(ClustTrackIndList, [1, ClustObsIndList+1]) = this.NetList{clusterInd}.betta;
-                end                   
+                
+                associate@DataAssociatorX(this);
+                                    
             else
                 fprintf('No tracks where found. Skipping JPDAF association step...\n');
                 this.ValidationMatrix = zeros(1, size(this.Params.DataList,2));
@@ -265,7 +191,7 @@ classdef JointProbabilisticDataAssocX < handle
         % * predictTracks(jpda) performs JPDAF update on all tracks contained
         %   in jpda.TrackList.
         %
-        %   See also JointProbabilisticDataAssocX/initialise, JointProbabilisticDataAssocX/updateTracks.
+        %   See also ProbabilisticDataAssocX/initialise, ProbabilisticDataAssocX/updateTracks.
         
             if(~isempty(this.TrackList))
                 % Compute weights and update each track
@@ -284,7 +210,7 @@ classdef JointProbabilisticDataAssocX < handle
         % * updateTracks(jpda) performs JPDAF update on all tracks contained
         %   in jpda.TrackList.
         %
-        %   See also JointProbabilisticDataAssocX/initialise, JointProbabilisticDataAssocX/updateTracks.
+        %   See also ProbabilisticDataAssocX/initialise, ProbabilisticDataAssocX/updateTracks.
         
             if(~isempty(this.TrackList))
                 % Compute weights and update each track
@@ -298,5 +224,78 @@ classdef JointProbabilisticDataAssocX < handle
             end
         end
         
+    end
+    
+    methods (Access = protected)
+        
+        function performGating(this)
+            % Validation matix and volume
+            [this.ValidationMatrix, this.GateVolumes] = this.Gater.gate(this.TrackList,this.MeasurementList);
+        end
+        
+        function computeLikelihoods(this)
+            this.LikelihoodMatrix = zeros(this.NumTracks, this.NumMeas);
+            % Compute Likelihood matrix
+            for trackInd = 1:this.NumTracks          
+                % Extract valid measurements
+                ValidObsInds = find(this.ValidationMatrix(trackInd,:));
+                ValidObs = this.MeasurementList(:,ValidObsInds);
+                this.TrackList{trackInd}.Filter.Measurement = ValidObs;
+
+                if(isa(this.TrackList{trackInd}.Filter,'KalmanFilterX')...
+                   ||isa(this.TrackList{trackInd}.Filter,'UnscentedParticleFilterX')...
+                   ||isa(this.TrackList{trackInd}.Filter,'ExtendedParticleFilterX'))
+
+                    % Extract predicted measurement and innovation covariance from filter
+                    predMeasMean = this.TrackList{trackInd}.Filter.PredMeasMean;
+                    innovCovar = this.TrackList{trackInd}.Filter.InnovErrCovar;
+
+                    % Compute likelihood matrix
+                    this.LikelihoodMatrix(trackInd, ValidObsInds) = ...
+                        gauss_pdf(ValidObs, predMeasMean,innovCovar);
+
+                elseif(isa(this.TrackList{trackInd}.Filter,'ParticleFilterX'))    
+                    % Compute likelihood matrix via expected likelihood
+                    this.LikelihoodMatrix(trackInd, ValidObsInds) = ...
+                        mean(this.TrackList{trackInd}.Filter.ObsModel.eval(...
+                            ValidObs, this.TrackList{trackInd}.Filter.PredParticles),2)';
+                end
+            end
+        end
+        
+        function performClustering(this)
+            % Do nothing. PDAF does not perform clustering
+        end
+        
+        function evaluateAssociations(this)
+
+            % Allocate memory for association weights and fill in weights for unassociated tracks
+            this.AssocLikelihoodMatrix = zeros(this.NumTracks, this.NumMeas+1);
+            this.AssocWeightsMatrix = zeros(this.NumTracks, this.NumMeas+1); % Dummy measurement weights at index 1
+
+            %this.NetList = cell(1,NumClusters);
+            for trackInd=1:this.NumTracks
+                
+                % Extract valid measurements
+                obsIndList = find(this.ValidationMatrix(trackInd,:));
+                
+                if(isempty(obsIndList))
+                    this.AssocLikelihoodMatrix(trackInd,:) = [1 zeros(1,this.NumMeas)];
+                    this.AssocWeightsMatrix(trackInd,:) = [1 zeros(1,this.NumMeas)];
+                    continue;
+                else
+                    % Compute New Track/False Alarm density for the cluster
+                    if(isempty(this.ClutterDensity))
+                        clutterDensity = numel(obsIndList)/this.GateVolumes(trackInd);
+                    else
+                        clutterDensity = this.ClutterDensity*this.GateVolumes(trackInd);
+                    end
+                    this.AssocLikelihoodMatrix(trackInd,:) = ...
+                        [clutterDensity*(1-this.ProbOfDetect*this.Gater.ProbOfGating), ...
+                        this.ProbOfDetect*this.LikelihoodMatrix(trackInd,:)];
+                    this.AssocWeightsMatrix(trackInd,:) = this.Hypothesiser.hypothesise(this.AssocLikelihoodMatrix(trackInd,:));
+                end
+            end          
+        end
     end
 end

@@ -16,6 +16,10 @@ classdef (Abstract) GaterX < BaseX  % Extends trackingX.BaseX
 % February 2018 Lyudmil Vladimirov, University of Liverpool.
     
     properties
+        TrackList
+        MeasurementList
+        ValidationMatrix
+        GateVolumes
     end
     
     methods (Abstract)

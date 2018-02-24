@@ -149,6 +149,8 @@ classdef EllipsoidalGaterX <GaterX
                 GateVolumes(trackInd) = C*this.GateLevel^(NumObsDims/2)*det(InnovErrCovar)^(1/2);    
                 ValidationMatrix(trackInd,:) = this.mahalDist(MeasurementList, PredMeasMean, InnovErrCovar, 2) < this.GateLevel;
             end
+            this.ValidationMatrix = ValidationMatrix;
+            this.GateVolumes = GateVolumes;
         end
     end
     
