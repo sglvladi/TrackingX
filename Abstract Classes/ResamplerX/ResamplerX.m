@@ -25,6 +25,7 @@ classdef (Abstract) ResamplerX < BaseX & matlabshared.tracking.internal.Resample
         % DESCRIPTION: 
         % * ResamplerX() returns a "ResamplerX" object handle
             
+            this@BaseX();
         end
     end
 end

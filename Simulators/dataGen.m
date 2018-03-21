@@ -24,8 +24,8 @@ function [DataList,newGroundTruth] = dataGen(ObsModel, GroundTruth, nTracks, lam
         nClutter = poissrnd(lambda);
         
         % Initialise measurement list for k-th timestep
-        DataList{ki} = NaN(ObsModel.Params.yDim,nTracks+nClutter);
-        newGroundTruth{ki} = NaN(ObsModel.Params.yDim,nTracks);
+        DataList{ki} = NaN(ObsModel.NumObsDims,nTracks+nClutter);
+        newGroundTruth{ki} = NaN(ObsModel.NumObsDims,nTracks);
         
         % Generate true measurements
         for j=1:nTracks
@@ -37,7 +37,12 @@ function [DataList,newGroundTruth] = dataGen(ObsModel, GroundTruth, nTracks, lam
                 end
             end
             if (~obscurred)
-                DataList{ki}(:,j) = ObsModel.sample(1,[GroundTruth{k}(1,j); GroundTruth{k}(2,j)]);
+                state = zeros(ObsModel.NumStateDims,1);
+                mapping = ObsModel.Mapping;
+                for i=1:numel(mapping)
+                    state(ObsModel.Mapping(i)) = GroundTruth{k}(i,j);
+                end
+                DataList{ki}(:,j) = ObsModel.heval(state,true);
                 newGroundTruth{ki}(:,j) = GroundTruth{k}(:,j);
             end
         end

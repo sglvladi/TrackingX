@@ -70,10 +70,6 @@ classdef ISMC_PHDFilterX < SMC_PHDFilterX
 %
 % See also ParticleFilterX, KalmanFilerX.
 
-    properties (Access = private, Hidden)
-        NumParticlesTotal
-        NumMeasurements
-    end
     properties
         Detections = [];
         NumBornParticles = 0;
@@ -405,7 +401,8 @@ classdef ISMC_PHDFilterX < SMC_PHDFilterX
                 for j = 1:this.NumMeasurements
                     w_nj(j,:) = (this.ProbOfDetection*g(j,:)/Lk(j)).*this.PredWeights;
                 end
-
+                
+                p_i = sum(w_nj,2)'
                 for j = 1:this.NumMeasurements
                     ExistProb = sum(w_nj(j,:),2);
                     if(ExistProb>0.8)

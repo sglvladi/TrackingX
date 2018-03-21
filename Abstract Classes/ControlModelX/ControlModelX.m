@@ -7,14 +7,13 @@ classdef ControlModelX < BaseX
 %
 % ControlModelX Properties:
 %   + NumStateDims   The number of state dimensions.
-%   + NumControlDims     The number of observation dimensions.
+%   + NumControlDims     The number of control input dimensions.
 %
 % ControlModelX Methods:
-%   + feval(~)   Equivalent to applying the model transition function 
-%   + random(~)  Process noise sample generator function, i.e. w_k ~ noise(~)
-%   + pdf(~)     Function to evaluate the probability p(x_t|x_{t-1}) of 
-%                 a set of new states, given a set of (particle) state vectors
-%                   e.g. eval = @(xt,xtm1) mvnpdf(xt,xtm1,Q);
+%   + beval(~)   Equivalent to applying the model control function 
+%   + random(~)  Process noise sample generator function, i.e. w_k ~ random(~)
+%   + pdf(~)     Function to evaluate the probability p(x_t|u_t) of 
+%                 a (set of) state(s), given a (set of) control input(s)
 %
 %  (+) denotes puplic properties/methods
 %
@@ -22,7 +21,7 @@ classdef ControlModelX < BaseX
 % existing TrackingX library components and are COMPULSORY to guarantee 
 % compatibility of any custom ControlModelX with TrackingX.
 %       
-% For examples see also the source of See also LINEARNOISELESSCTRMODEL_1D
+% For examples see also the source of See also LINEARNOISELESSCTRMODELX_1D
     
     properties
     end

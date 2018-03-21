@@ -235,6 +235,9 @@ classdef UnscentedParticleFilterX < ParticleFilterX
         %   - Model.Obs.covariance(): Returns the measurement noise covariance
         %
         %  See also update, smooth.
+            
+            % reset measLikelihood matrix
+            this.pmeasLikelihood_ = [];
                                 
             % Compute UKF prior mean and covariance
             this.ukf.StateMean  = this.StateMean;
@@ -255,9 +258,6 @@ classdef UnscentedParticleFilterX < ParticleFilterX
         %
         %   See also UnscentedParticleFilterX, predict, smooth.
             
-            % Update UKF measurement
-            this.ukf.Measurement = this.Measurement;
-            
             % Perform UKF update to obtain Optimal Proposal
             this.ukf.update();
             
@@ -269,36 +269,42 @@ classdef UnscentedParticleFilterX < ParticleFilterX
             update@ParticleFilterX(this);             
         end
         
-        function UpdatePDA(this, assocWeights, LikelihoodMatrix)
-        % UpdatePDA - Performs UPF update step, for multiple measurements
-        %   
-        %   Inputs:
-        %       assoc_weights: a (1 x Nm+1) association weights matrix. The first index corresponds to the dummy measurement and
-        %                       indices (2:Nm+1) correspond to
-        %                       measurements. Default = [0, ones(1,ObsNum)/ObsNum];
-        %       LikelihoodMatrix: a (Nm x Np) likelihood matrix, where Nm is the number of measurements and Np is the number of particles.
+        function updatePDA(this, assocWeights, MeasLikelihood)
+        % UPDATEPDA - Performs EPF update step, for multiple measurements
+        %             Update is performed according to the generic (J)PDAF equations [1] 
+        % 
+        % DESCRIPTION:
+        %  * updatePDA(assocWeights) Performs EPF-PDA update step for multiple 
+        %    measurements based on the provided (1-by-Nm+1) association weights 
+        %    matrix assocWeights.
         %
-        %   (NOTE: The measurement "this.Params.y" needs to be updated, when necessary, before calling this method) 
-        %   
-        %   Usage:
-        %       (pf.Params.y = y_new; % y_new is the new measurement)
-        %       upf.UpdateMulti(assocWeights, LikelihoodMatrix); 
+        %   [1] Y. Bar-Shalom, F. Daum and J. Huang, "The probabilistic data association filter," in IEEE Control Models, vol. 29, no. 6, pp. 82-100, Dec. 2009.
         %
-        %   See also UParticleFilterX, Predict, Iterate, Smooth, resample.
-        
-            % Update EKF measurement
-            this.ukf.Params.y = this.Params.y;
+        %   See also KalmanFilterX, Predict, Iterate, Smooth, resample.
+            
+            NumMeasurements = size(this.Measurement,2);  
+            if(~NumMeasurements)
+                warning('[PF] No measurements have been supplied to update track! Skipping Update step...');
+                this.Particles = this.Model.Dyn.feval(this.Particles,true);
+                %this.Weights = this.PredWeights;
+                return;
+            end
+            
+            if(~exist('assocWeights','var'))
+                assocWeights = [0, ones(1,ObsNum)/ObsNum]; % (1 x Nm+1)
+            end
             
             % Perform EKF update to obtain Optimal Proposal
-            this.ukf.UpdatePDA(assocWeights);
+            this.ukf.updatePDA(assocWeights);
             
             % Sample from EKF proposal
-            this.Params.particles = mvnrnd(this.ukf.Params.x', this.ukf.Params.P,this.Params.Np)'; % Sample from optimal proposal
+            this.PredParticles = mvnrnd(this.ukf.StateMean', this.ukf.StateCovar,this.NumParticles)'; 
+            this.PredWeights = this.Weights;
             
-            if(exist('LikelihoodMatrix','var'))
-                UpdatePDA@ParticleFilterX(this, assocWeights, LikelihoodMatrix); 
+            if(exist('MeasLikelihood','var'))
+                updatePDA@ParticleFilterX(this, assocWeights, MeasLikelihood); 
             else
-                UpdatePDA@ParticleFilterX(this, assocWeights);
+                updatePDA@ParticleFilterX(this, assocWeights);
             end
         end
     end
@@ -333,13 +339,13 @@ classdef UnscentedParticleFilterX < ParticleFilterX
             InnovErrCovar = this.ukf.InnovErrCovar;
         end
         
-        function setModel(this,newModel)
-            this.Model = newModel;
+        function Model = setModel(this,newModel)
+            Model = newModel;
             this.ukf.Model = newModel;
         end
         
-        function setMeasurement(this,newMeasurement)
-            this.Measurement = newMeasurement;
+        function Measurement = setMeasurement(this,newMeasurement)
+            Measurement = newMeasurement;
             this.ukf.Measurement = newMeasurement;
         end
     end

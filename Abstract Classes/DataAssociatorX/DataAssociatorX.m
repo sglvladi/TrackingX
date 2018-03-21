@@ -43,9 +43,9 @@ classdef (Abstract) DataAssociatorX < BaseX
         % ASSOCIATE Parforms data association
         %
         % A generic template for the operation of a data associator is
-        % drawn. By doing so, subclasses can be defined by simply
+        % drawn. Subclasses can optionally be defined by simply
         % implementing the class abstract methods. If this is not desired,
-        % the method can simply be overriden.
+        % the method can also be overriden.
         
             % Perform Gating
             this.performGating();

@@ -1,4 +1,4 @@
-function [newParts,newWeights,x] = ParticleFilterX_UpdatePDA(lik,y,parts,weights,resampling_strategy,W,LikelihoodMatrix)
+function [newWeights] = ParticleFilterX_UpdatePDA(lik,y,parts,weights,W,LikelihoodMatrix)
 % PARTICLEFILTERX_UPDATE Perform the discrete-time PF weight update
 % step, under the assumption of additive process noise.
 %
@@ -24,7 +24,7 @@ function [newParts,newWeights,x] = ParticleFilterX_UpdatePDA(lik,y,parts,weights
 %
 % October 2017 Lyudmil Vladimirov, University of Liverpool.
     
-    if(nargin<7)
+    if(nargin<6)
         LikelihoodMatrix = lik(y, parts);
     end
     
@@ -42,12 +42,4 @@ function [newParts,newWeights,x] = ParticleFilterX_UpdatePDA(lik,y,parts,weights
 
     % Normalize weight vector
     newWeights = newWeights./sum(newWeights,2);
-
-    % Resampling
-    [newParts, newWeights] = ParticleFilterX_Resample(parts, newWeights, resampling_strategy);
-    
-    if nargout==3
-        % Compute estimated state
-        x = sum(newWeights.*newParts,2);      
-    end
 end

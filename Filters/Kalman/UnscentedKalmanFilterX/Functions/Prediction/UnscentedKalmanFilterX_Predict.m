@@ -1,4 +1,4 @@
-function [xPred, PPred, yPred, S, Pxy] = UKalmanFilterX_Predict(alpha,kappa,beta,x,P,f,Q,h,R,u,b,Qu)
+function [xPred, PPred, yPred, S, Pxy] = UnscentedKalmanFilterX_Predict(alpha,kappa,beta,x,P,f,Q,h,R,u,b,Qu)
 % UKALMANFILTERX_PREDICT Perform the discrete-time UKF state and measurement
 % prediction steps, under the assumption of additive process noise.
 % 

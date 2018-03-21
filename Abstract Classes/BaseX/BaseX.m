@@ -2,7 +2,7 @@ classdef (Abstract) BaseX < matlab.mixin.Copyable & matlab.mixin.SetGetExactName
 % BaseX class
 %
 % SUMMARY:
-% BaseX class for all components of the TrackingX framework. 
+% Base class for all components of the TrackingX framework. 
 % 
 %  February 2018 Lyudmil Vladimirov, University of Liverpool
     
@@ -20,12 +20,15 @@ classdef (Abstract) BaseX < matlab.mixin.Copyable & matlab.mixin.SetGetExactName
             % Proceed to recursively deep copy all handles
             props = properties(this); 
             for i = 1: length(props) 
-                tmp = this.(props{i}); 
-                if(isa(tmp,'handle')) 
-                    cp.(props{i}) = copy(tmp); 
-                else 
-                    cp.(props{i}) = tmp ; 
-                end 
+                prop = findprop(this,props{i});
+                if(~prop.Dependent&&~strcmp(prop.SetAccess,'immutable'))
+                    tmp = this.(props{i});
+                    if(isa(tmp,'handle')) 
+                        cp.(props{i}) = copy(tmp); 
+                    else
+                        cp.(props{i}) = tmp ; 
+                    end 
+                end
             end  
         end
     end

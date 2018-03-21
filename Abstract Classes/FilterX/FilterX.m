@@ -7,6 +7,7 @@ classdef (Abstract) FilterX < BaseX  % Extends trackingX.BaseX
 %
 % FilterX Properties:
 %   + Model   = Object handle to StateSpaceModelX Sub/class
+%   - FilterState = Current execution state of filter (Currently unused)
 %
 %   (*) Signifies properties necessary to instantiate a class object
 %
@@ -17,12 +18,13 @@ classdef (Abstract) FilterX < BaseX  % Extends trackingX.BaseX
 %
 % (+) denotes puplic properties/methods
 % 
-% See also DynamicModel, ObservationModel and ControlModel
+% See also DynamicModelX, ObservationModelX and ControlModelX
 %
 % January 2018 Lyudmil Vladimirov, University of Liverpool.
     
     properties
-        Model
+        Measurement;
+        Model;
     end
     
     properties (Access = protected, Hidden)
@@ -67,7 +69,9 @@ classdef (Abstract) FilterX < BaseX  % Extends trackingX.BaseX
             
             if(~isempty(parser.Results.Model))
                 this.Model = parser.Results.Model;
-            end         
+            end 
+            
+            this.FilterState = 0;
         end
         
         function initialise(this,varargin)
@@ -88,14 +92,20 @@ classdef (Abstract) FilterX < BaseX  % Extends trackingX.BaseX
         function set.Model(this,newModel)
             this.Model = setModel(this,newModel);
         end
+        function set.Measurement(this,newMeasurement)
+            this.Measurement = setMeasurement(this,newMeasurement);
+        end
     end
 
-    methods (Access = private)
+    methods (Access = protected)
         % ===============================>
         % ACCESS METHOD HANDLES
         % ===============================>
         function Model = setModel(this,newModel)
             Model = newModel;
+        end
+        function Measurement = setMeasurement(this,newMeasurement)
+            Measurement = newMeasurement;
         end
     end
 end

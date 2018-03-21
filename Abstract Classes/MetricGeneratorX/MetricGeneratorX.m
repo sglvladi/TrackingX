@@ -2,8 +2,9 @@ classdef (Abstract) MetricGeneratorX < BaseX
 % MetricGeneratorX Abstract class
 %
 % Summary of MetricGeneratorX:
-% This is the base class for all TrackingX resamplers.
-% Any custom defined Resampler should be derived from this ResamplerX base class. 
+% This is the base class for all TrackingX metric generators.
+% Any custom defined metric generator should be derived from this MetricGeneratorX
+% base class. 
 %
 % MetricGeneratorX Properties:
 %   None

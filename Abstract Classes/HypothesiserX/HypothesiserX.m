@@ -28,6 +28,7 @@ classdef (Abstract) HypothesiserX < BaseX
         % DESCRIPTION: 
         % * HypothesiserX() returns a "HypothesiserX" object handle
             
+            this@BaseX();
         end
     end
 end

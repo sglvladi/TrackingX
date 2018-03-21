@@ -8,9 +8,9 @@ function [xT,Jac] = ExtendedKalmanFilterX_computeJac(fun,x)
 %
 % OUTPUTS:  xT   - The transformed vector
 %           Jac  - The computed Jacobian
-
+    
     xT   = fun(x);
     xDim    = numel(x);
     h       = xDim*eps;
-    Jac     = imag(fun(repmat(x,1,xDim)+eye(xDim)*h*1i))./h;
+    Jac     = imag(fun(x(:,ones(1,xDim))+eye(xDim)*h*1i))./h;
 end

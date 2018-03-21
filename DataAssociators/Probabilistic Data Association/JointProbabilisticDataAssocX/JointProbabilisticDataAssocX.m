@@ -248,12 +248,19 @@ classdef JointProbabilisticDataAssocX < ProbabilisticDataAssocX
                         this.ClusterList{clusterInd}.ClutterDensity = ...
                             sum(sum(this.ValidationMatrix(TrackIndList,:)))...
                             /sum(this.GateVolumes(TrackIndList));
+                        for t = 1:numel(TrackIndList)
+                            trackInd = TrackIndList(t);
+                            if(~isprop(this.TrackList{trackInd},'ClutterDensity'))
+                               this.TrackList{trackInd}.addprop('ClutterDensity');
+                            end
+                            this.TrackList{trackInd}.ClutterDensity = this.ClusterList{clusterInd}.ClutterDensity; 
+                        end
                         if(this.ClusterList{clusterInd}.ClutterDensity==0)
                             this.ClusterList{clusterInd}.ClutterDensity = 1;
                         end
                         this.ClusterList{clusterInd}.AssocLikelihoodMatrix = ...
                             [ones(numel(TrackIndList),1)*this.ClusterList{clusterInd}.ClutterDensity*(1-this.ProbOfDetect*this.Gater.ProbOfGating), ...
-                            this.ProbOfDetect*this.LikelihoodMatrix(TrackIndList,ObsIndList)];
+                            this.ProbOfDetect*this.Gater.ProbOfGating*this.LikelihoodMatrix(TrackIndList,ObsIndList)];
                         this.AssocLikelihoodMatrix(TrackIndList,[1 ObsIndList+1]) = ...
                             this.ClusterList{clusterInd}.AssocLikelihoodMatrix;
                         this.ClusterList{clusterInd}.AssocWeightsMatrix =...

@@ -10,7 +10,6 @@ ssm = StateSpaceModelX(dyn,obs);
 
 % Instantiate a Particle Filter object
 upf = UnscentedParticleFilterX(ssm);
-%ukf = UnscentedKalmanFilterX(ssm);
 
 % Extract the ground truth data from the example workspace
 load('example.mat');
@@ -53,7 +52,7 @@ for t = 1:NumIter
     
     clf;
     hold on;
-    plot(truth(1,1:t),truth(3,1:t),'.-k', Log.Estimates.StateMean(1,1:t), Log.Estimates.StateMean(3,1:t), 'b-o', measurements(1,1:t), measurements(2,1:t), 'rx');
+    plot(truth(1,1:t),truth(3,1:t),'.-k', Log.Estimates.StateMean(1,1:t), Log.Estimates.StateMean(3,1:t), 'b-', measurements(1,1:t), measurements(2,1:t), 'rx');
     plot_gaussian_ellipsoid(Log.Estimates.StateMean([1,3],t), Log.Estimates.StateCovar([1,3],[1,3],t));
     legend('GroundTrouth','Estimated Mean','Measurements', 'Estimated Covariance');
     xlabel("x coordinate (m)");

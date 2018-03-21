@@ -3,7 +3,7 @@
 dyn = ConstantVelocityModelX_2D('VelocityErrVariance',0.0001);
 
 % Instantiate an Observation model
-obs = LinGaussObsModelX_2D('NumStateDims',4,'ObsErrVariance',1,'Mapping',[1 3]);
+obs = LinGaussObsModelX_2D('NumStateDims',4,'ObsErrVariance',0.04,'Mapping',[1 3]);
 
 % Compile the State-Space model
 ssm = StateSpaceModelX(dyn,obs);
@@ -53,14 +53,11 @@ for t = 1:NumIter
     
     clf;
     hold on;
-    plot(truth(1,1:t),truth(3,1:t),'.-k', Log.Estimates.StateMean(1,1:t), Log.Estimates.StateMean(3,1:t), 'b-o', measurements(1,1:t), measurements(2,1:t), 'rx');
+    plot(truth(1,1:t),truth(3,1:t),'.-k', Log.Estimates.StateMean(1,1:t), Log.Estimates.StateMean(3,1:t), 'b-', measurements(1,1:t), measurements(2,1:t), 'rx');
     plot_gaussian_ellipsoid(Log.Estimates.StateMean([1,3],t), Log.Estimates.StateCovar([1,3],[1,3],t));
     legend('GroundTrouth','Estimated Mean','Measurements', 'Estimated Covariance');
     xlabel("x coordinate (m)");
     ylabel("y coordinate (m)");
     axis([2 9 1 9]);
     pause(0.1);
-end
-
-
-    
+end    

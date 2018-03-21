@@ -71,10 +71,11 @@ classdef SMC_PHDFilterX < FilterX
 % See also ParticleFilterX, KalmanFilerX.
 
     properties (Access = private, Hidden)
-        NumParticlesTotal
+        
     end
     properties
         NumParticles = 10000
+        NumParticlesTotal
         NumMeasurements
         NumTargets = 0
         Particles     
@@ -90,7 +91,14 @@ classdef SMC_PHDFilterX < FilterX
         ProbOfDeath  
         ProbOfDetection 
         ClutterRate 
+        MeasLikelihood
+        MeasWeights = 1;
+        WeightsPerMeasurement
         e_k
+    end
+    
+    properties (Access=protected)
+        pmeasLikelihood_ = []
     end
     
     methods
@@ -463,6 +471,9 @@ classdef SMC_PHDFilterX < FilterX
         %   - Model.Obs.covariance(): Returns the measurement noise covariance
         %
         %  See also update, smooth.
+            
+            % reset measLikelihood matrix
+            this.pmeasLikelihood_ = [];
         
             % Propagate old (k-1) particles and generate new birth particles
             if(strcmp(this.BirthScheme(1), 'Expansion')) 
@@ -530,10 +541,11 @@ classdef SMC_PHDFilterX < FilterX
         % Performs the relevant SMC PHD update algo, based on the selected .type
         function update(this)
             
-            % Compute g(z|x) matrix as in [1] 
-            g = this.Model.Obs.pdf(this.MeasurementList, this.PredParticles);
-            
             this.NumMeasurements = size(this.MeasurementList,2);
+            
+            % Compute g(z|x) matrix as in [1] 
+            g = this.MeasLikelihood;
+                        
             % Compute C_k(z) Eq. (27) of [1]  
             Ck = zeros(1,this.NumMeasurements);
             for i = 1:this.NumMeasurements   % for all measurements
@@ -541,38 +553,42 @@ classdef SMC_PHDFilterX < FilterX
             end
             
             % Calculate w^{n,i} Eq. (21) of [2]
-            w_ni = zeros(this.NumMeasurements, this.NumParticlesTotal);
+            this.WeightsPerMeasurement = zeros(this.NumMeasurements, this.NumParticlesTotal);
             for i = 1:this.NumMeasurements
-                w_ni(i,:) = (this.ProbOfDetection*g(i,:)/(this.ClutterRate+Ck(i))).*this.PredWeights;
+                this.WeightsPerMeasurement(i,:) = (this.ProbOfDetection*g(i,:)/(this.ClutterRate+Ck(i))).*this.PredWeights;
             end
+            this.WeightsPerMeasurement = this.MeasWeights'.*this.WeightsPerMeasurement;
             
-            % Update weights Eq. (28) of [1]
-            this.Weights = (1-this.ProbOfDetection)*this.PredWeights + sum(w_ni,1);
-                 
             betta = zeros(this.NumMeasurements+1,this.NumParticlesTotal);
-            betta(1,:) = (1-this.ProbOfDetection)*this.ClutterRate/this.NumParticlesTotal;
+            betta(1,:) = (1-this.ProbOfDetection)/this.NumParticlesTotal;
             for j = 1:this.NumMeasurements
-                betta(j+1,:) = this.ProbOfDetection*g(j,:);
+                betta(j+1,:) = this.ProbOfDetection*g(j,:)/this.ClutterRate;
             end
-            betta = betta./(sum(betta,1));
-            lambda = betta(1,:)/this.NumMeasurements;
-            e_ij = (lambda+betta(2:end,:)).*this.e_k./(this.e_k + betta(1,:).*(1-this.e_k)/(1-this.ProbOfDetection));
-            m_ij = mean(e_ij,2);
-            this.e_k = this.e_k./(this.e_k + betta(1,:).*(1-this.e_k)/(1-this.ProbOfDetection));
-            
+            Lj = 1 + (1-this.ProbOfDetection) + sum(betta(2:end,:),1);
+%             betta = betta./(sum(betta,1));
+%             lambda = betta(1,:)/this.NumMeasurements;
+%             e_ij = (lambda+betta(2:end,:)).*this.e_k./(this.e_k + betta(1,:).*(1-this.e_k)/(1-this.ProbOfDetection));
+%             m_ij = mean(e_ij,2);      
+            try
+                this.e_k = this.e_k./(this.e_k + (1-this.e_k)./Lj);
+            catch
+                
+            end
             % Calculate pi Eq. (21) of [2]
             p_i = zeros(1,this.NumMeasurements);
             for i = 1:this.NumMeasurements
-                p_i(i)= sum(w_ni(i,:),2);
+                p_i(i)= sum(this.WeightsPerMeasurement(i,:),2);
                 if(p_i(i)>0.8)
-                    warning('Detected target %d! %f - %f = %f %%',i,p_i(i),sum(w_ni(i,:).*this.e_k), (p_i(i)-sum(w_ni(i,:).*this.e_k))/p_i(i)*100);
+                    %warning('Detected target %d! %f - %f = %f %%',i,p_i(i),sum(this.WeightsPerMeasurement(i,:).*this.e_k), (p_i(i)-sum(this.WeightsPerMeasurement(i,:).*this.e_k))/p_i(i)*100);
                 end
             end
             
-             
-            %this.e_k = ((1-this.ProbOfDetection)*this.ClutterRate+sum(this.ProbOfDetection*g,1)).*this.e_k...
-            %            ./(((1-this.ProbOfDetection)*this.ClutterRate+sum(this.ProbOfDetection*g,1)).*this.e_k ...
-            %                + this.ClutterRate*(1-this.e_k));
+            % Update weights Eq. (28) of [1]
+            this.Weights = (1-this.ProbOfDetection)*this.PredWeights + sum(this.WeightsPerMeasurement,1);
+                 
+%             this.e_k = ((1-this.ProbOfDetection)*this.ClutterRate+sum(this.ProbOfDetection*g,1)).*this.e_k...
+%                        ./(((1-this.ProbOfDetection)*this.ClutterRate+sum(this.ProbOfDetection*g,1)).*this.e_k ...
+%                            + this.ClutterRate*(1-this.e_k));
             
             %e_i = p_i(ones(1,this.NumParticles),:)'.*g./(sum(g,2));
             
@@ -584,7 +600,25 @@ classdef SMC_PHDFilterX < FilterX
                 this.Resampler.resample(this.Particles, ...
                     (this.Weights/this.NumTargets),this.NumParticles); % Resample
             this.Weights = this.Weights*this.NumTargets; % Rescale
-            this.e_k = this.e_k(:,idx);
+%            this.e_k = this.e_k(:,idx);
+        end
+    
+        function MeasLikelihood = get.MeasLikelihood(this)
+            MeasLikelihood = getMeasLikelihood(this);
+        end
+    end
+    
+    methods (Access = protected)
+        
+        % ===============================>
+        % ACCESS METHOD HANDLES
+        % ===============================>
+        
+        function MeasLikelihood = getMeasLikelihood(this)
+            if(isempty(this.pmeasLikelihood_))
+                this.pmeasLikelihood_ = this.Model.Obs.pdf(this.MeasurementList, this.PredParticles);               
+            end
+            MeasLikelihood = this.pmeasLikelihood_;
         end
     end
 end

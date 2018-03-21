@@ -41,8 +41,7 @@ classdef KalmanFilterX < FilterX
         PredMeasMean         
         InnovErrCovar   
         CrossCovar 
-        KalmanGain        
-        Measurement    
+        KalmanGain       
         ControlInput     
     end
     
@@ -135,11 +134,11 @@ classdef KalmanFilterX < FilterX
                     if (isfield(varargin{1},'Model'))
                         this.Model = varargin{1}.Model;
                     end
-                    if (isfield(varargin{1},'priorStateMean'))
+                    if (isfield(varargin{1},'PriorStateMean'))
                         this.StateMean = varargin{1}.priorStateMean;
                         %this.filtStateMean  = this.priorStateMean;
                     end
-                    if (isfield(varargin{1},'priorStateCovar'))
+                    if (isfield(varargin{1},'PriorStateCovar'))
                         this.StateCovar  = varargin{1}.priorStateCovar;
                         %this.filtStateCov   = this.priorStateCovar;
                     end
@@ -151,20 +150,20 @@ classdef KalmanFilterX < FilterX
             parser = inputParser;
             parser.KeepUnmatched = true;
             parser.addParameter('Model',NaN);
-            parser.addParameter('priorStateMean',NaN);
-            parser.addParameter('priorStateCovar',NaN);
+            parser.addParameter('PriorStateMean',NaN);
+            parser.addParameter('PriorStateCovar',NaN);
             parser.parse(varargin{:});
             
             if(~isnan(parser.Results.Model))
                 this.Model = parser.Results.Model;
             end
             
-            if(~isnan(parser.Results.priorStateMean))
-                this.StateMean = parser.Results.priorStateMean;
+            if(~isnan(parser.Results.PriorStateMean))
+                this.StateMean = parser.Results.PriorStateMean;
             end
             
-            if(~isnan(parser.Results.priorStateCov))
-                this.StateCovar  = parser.Results.priorStateCovar;
+            if(~isnan(parser.Results.PriorStateCovar))
+                this.StateCovar  = parser.Results.PriorStateCovar;
             end
         end
         

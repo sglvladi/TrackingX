@@ -9,11 +9,11 @@ classdef (Abstract) DynamicModelX < BaseX
 %   + NumStateDims   The number of state dimensions.
 %
 % DynamicModelX Methods:
-%   + apply(~)   Equivalent to applying the model transition function 
-%   + rnd(~)     Process noise sample generator function, i.e. w_k ~ noise(~)
-%   + pdf(~)     Function to evaluate the probability p(x_t|x_{t-1}) of 
-%                 a set of new states, given a set of (particle) state vectors
-%                   e.g. eval = @(xt,xtm1) mvnpdf(xt,xtm1,Q);
+%   + feval(~)         Equivalent to applying the model transition equations 
+%   + random(~)        Process noise sample generator function
+%   + pdf(~)           Function to evaluate the probability p(x_k|x_{k-1}) of 
+%                       a set of new states, given a set of (particle) state vectors
+%                       e.g. eval = @(xk,xkm1) mvnpdf(xk,xkm1,Q);
 %
 % (+) denotes puplic properties/methods
 %

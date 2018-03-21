@@ -16,14 +16,14 @@ ssm = StateSpaceModelX(dyn,obs);
 kf = KalmanFilterX(ssm);
 
 % Extract the ground truth data from the example workspace
-load('example.mat');
+%load('example.mat');
 NumIter = size(GroundTruth,2);
 
 % Set NumTracks
-NumTracks = 3;
+NumTracks = 2;
 
 % Generate DataList
-[DataList,x1,y1] = gen_obs_cluttered_multi2(NumTracks, x_true, y_true, sqrt(obs.ObsErrVariance), [0 10 0 10], 50, 1);
+%[DataList,x1,y1] = gen_obs_cluttered_multi2(NumTracks, x_true, y_true, sqrt(obs.ObsErrVariance), [0 10 0 10], 50, 1);
 
 % Initiate TrackList
 for i=1:NumTracks
@@ -32,7 +32,10 @@ for i=1:NumTracks
     Params_kf.Model = ssm;
     TrackList{i} = TrackX();
     TrackList{i}.addprop('Filter');
-    TrackList{i}.Filter = UnscentedKalmanFilterX(Params_kf);
+    TrackList{i}.Filter = KalmanFilterX(Params_kf);
+    
+    %TrackList{i}.Filter = ExtendedParticleFilterX(ssm);
+    %TrackList{i}.Filter.initialise('NumParticles', 5000, 'PriorDistFcn',@(N)deal(mvnrnd(Params_kf.priorStateMean(:,ones(1,N))',Params_kf.priorStateCovar)',1/N*ones(1,N)));
     %TrackList{i}.TrackObj = ParticleFilterX(Params_pf);%UKalmanFilterX(Params_kf, CHmodel, POmodel);% 
 end
 
@@ -42,7 +45,7 @@ Params_pdaf.Gater = EllipsoidalGaterX(2,'GateLevel',10)';
 Params_pdaf.ProbOfDetect = 0.9;
 
 %% Instantiate PDAF
-pdaf = ProbabilisticDataAssocX(Params_pdaf);
+pdaf = JointProbabilisticDataAssocX(Params_pdaf);
 pdaf.TrackList = TrackList;
 pdaf.MeasurementList = DataList{1}(:,:); 
 
@@ -136,8 +139,8 @@ ospa_c= 1;
 ospa_p= 1;
 for k=1:N
     trueX = [x_true(k,:);y_true(k,:)];
-    estX = zeros(2,NumTracks-1);
-    for i=1:NumTracks-1
+    estX = zeros(2,NumTracks);
+    for i=1:NumTracks
         estX(:,i) = Logs{i}.Estimates.StateMean([1 3],k);
     end
     [ospa_vals(k,1), ospa_vals(k,2), ospa_vals(k,3)]= ospa_dist(trueX,estX,ospa_c,ospa_p);

@@ -20,21 +20,17 @@ TrackNum = size(x_true,2);
 dyn = ConstantVelocityModelX_2D('VelocityErrVariance',0.0001);
 
 % Instantiate an Observation model
-obs = LinGaussObsModelX_2D('NumStateDims',4,'ObsErrVariance',0.01,'Mapping',[1 3]);
+obs = LinGaussObsModelX_2D('NumStateDims',4,'ObsErrVariance',0.04,'Mapping',[1 3]);
 
 % Compile the State-Space model
 ssm = StateSpaceModelX(dyn,obs);
 
-% n_x = 4;      % state dimensions
-% q = 0.01;     % std of process noise 
-% n_y = 2;      % measurement dimensions
-% r = 0.1;      % std of measurement noise
-lambdaV = 100; % Expected number of clutter measurements over entire surveillance region
+lambdaV = 10; % Expected number of clutter measurements over entire surveillance region
 V = 10^2;     % Volume of surveillance region (10x10 2D-grid)
 V_bounds = [0 10 0 10]; % [x_min x_max y_min y_max]
 
 % Generate observations (Poisson number with rate of lambdaV, positions are uniform over surveillance region)
-[DataList,x1,y1] = gen_obs_cluttered_multi3(TrackNum, x_true, y_true, 0.1, lambdaV, 1); 
+[DataList,x1,y1] = gen_obs_cluttered_multi3(TrackNum, x_true, y_true, 0.2, lambdaV, 1); 
 N=size(DataList,2); % timesteps 
 
 % Assign PHD parameter values
@@ -44,26 +40,13 @@ config.priorWeights = [];
 config.Model = ssm;
 q = dyn.covariance();
 transformM = @(x) [x(1,:);zeros(1,size(x,2));x(2,:);zeros(1,size(x,2))];
-%BirthIntFcn = @(Np) [(V_bounds(2)-V_bounds(1))*rand(Np,1), mvnrnd(zeros(Np,1), q(3,3)'),(V_bounds(4)-V_bounds(3))*rand(Np,1),mvnrnd(zeros(Np,1), q(4,4)')]'; % Uniform position and heading, Gaussian speed
 config.BirthIntFcn = @(Np,z) [transformM(z(:,ones(1,Np))+config.Model.Obs.random(Np)) + mvnrnd(zeros(Np,4), q)']; % Uniform position and heading, Gaussian speed
-%config.PriorDistFcn = @ (Np) deal(BirthIntFcn(Np), repmat(1/Np, Np, 1)');
-config.BirthScheme = {'Mixture', 0.1};
-%config.BirthScheme = {'Expansion', 5000};
 config.ProbOfDeath = 0.005;
 config.ProbOfDetection = 0.9;
 config.ClutterRate = lambdaV/V;
-config.NumParticlesPerTarget = 10000;
-config.NumParticlesPerMeasurement = 100;
-config.ExpectedNumBornTargets = .1;
-
-% config.particles_init = config.gen_x0(config.Np)'; % Generate inital particles as per gen_x0
-% config.w_init = repmat(1/config.Np, config.Np, 1)'; % Uniform weights
-% config.gen_x0 = @(Np) [(V_bounds(2)-V_bounds(1))*rand(Np,1),(V_bounds(4)-V_bounds(3))*rand(Np,1), mvnrnd(zeros(Np,1), CVmodel.Params.q^2), 2*pi*rand(Np,1)]; % Uniform position and heading, Gaussian speed
-% config.Jk = 500;
-% config.pConf = 0.9;
-% config.NpConf = 1000;
-% config.type = 'search';
-% config.birth_strategy = 'mixture';
+config.NumParticlesPerTarget = 5000;
+config.NumParticlesPerMeasurement = 500;
+config.ExpectedNumBornTargets = 0.05;
 
 % Instantiate PHD filter
 myphd = ISMC_PHDFilterX(config);
@@ -166,7 +149,6 @@ for k=1:N
 
         % NOTE: if your image is RGB, you should use flipdim(img, 1) instead of flipud.
         hold on;
-        h2 = plot(ax(1), DataList{k}(1,:),DataList{k}(2,:),'k*','MarkerSize', 10);
         for j=1:TrackNum
             h2 = plot(ax(1), x_true(1:k,j),y_true(1:k,j),'b.-','LineWidth',1);
             if j==2
@@ -179,6 +161,7 @@ for k=1:N
             end
              % Exclude line from legend
         end
+        h2 = plot(ax(1), DataList{k}(1,:),DataList{k}(2,:),'k*','MarkerSize', 10);
         % set the y-axis back to normal.
         set(ax(1),'ydir','normal');
         str = sprintf('Robot positions (Update)');

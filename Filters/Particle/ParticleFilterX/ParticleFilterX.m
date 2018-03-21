@@ -75,12 +75,15 @@ classdef ParticleFilterX < FilterX
         Weights
         PredParticles
         PredWeights
-        Measurement
         ControlInput
         ResamplingScheme = 'Systematic'
         ResamplingPolicy = {'TimeInterval',1}
-        Resampler
+        Resampler = SystematicResamplerX();
         PriorDistFcn
+    end
+    
+    properties (Access=protected)
+        pmeasLikelihood_ = []
     end
     
     properties (Dependent)
@@ -91,6 +94,7 @@ classdef ParticleFilterX < FilterX
         PredMeasMean
         InnovErrCovar
         CrossCovar
+        MeasLikelihood
     end
     
     methods
@@ -375,7 +379,10 @@ classdef ParticleFilterX < FilterX
         %   - Model.Obs.covariance(): Returns the measurement noise covariance
         %
         %  See also update, smooth.
-        
+            
+            % reset measLikelihood matrix
+            this.pmeasLikelihood_ = [];
+            
             % Extract model parameters
             f  = @(x,wk) this.Model.Dyn.feval(x, wk); % Transition function
             wk = this.Model.Dyn.random(this.NumParticles); % Process noise
@@ -415,42 +422,43 @@ classdef ParticleFilterX < FilterX
             update@FilterX(this);
         end
         
-        function UpdatePDA(this, assocWeights, LikelihoodMatrix)
-        % UpdatePDA - Performs bootstrap PF update step, for multiple measurements
-        %   
-        %   Inputs:
-        %       assoc_weights: a (1 x Nm+1) association weights matrix. The first index corresponds to the dummy measurement and
-        %                       indices (2:Nm+1) correspond to
-        %                       measurements. Default = [0, ones(1,ObsNum)/ObsNum];
-        %       LikelihoodMatrix: a (Nm x Np) likelihood matrix, where Nm is the number of measurements and Np is the number of particles.
+        function updatePDA(this, assocWeights, MeasLikelihood)
+        % UPDATEPDA - Performs PF update step, for multiple measurements
+        %             Update is performed according to the generic (J)PDAF equations [1] 
+        % 
+        % DESCRIPTION:
+        %  * updatePDA(assocWeights) Performs KF-PDA update step for multiple 
+        %    measurements based on the provided (1-by-Nm+1) association weights 
+        %    matrix assocWeights.
         %
-        %   (NOTE: The measurement "this.Params.y" needs to be updated, when necessary, before calling this method) 
-        %   
-        %   Usage:
-        %       (pf.Params.y = y_new; % y_new is the new measurement)
-        %       pf.Update(); 
+        %   [1] Y. Bar-Shalom, F. Daum and J. Huang, "The probabilistic data association filter," in IEEE Control Models, vol. 29, no. 6, pp. 82-100, Dec. 2009.
         %
-        %   See also ParticleFilterX, Predict, Iterate, Smooth, resample.
-            ObsNum = size(this.Params.y,2);  
-            if(~ObsNum)
+        %   See also KalmanFilterX, Predict, Iterate, Smooth, resample.
+        
+            NumMeasurements = size(this.Measurement,2);  
+            if(~NumMeasurements)
                 warning('[PF] No measurements have been supplied to update track! Skipping Update step...');
+                this.Particles = this.PredParticles;
+                this.Weights = this.PredWeights;
                 return;
             end
             
             if(~exist('assocWeights','var'))
                 assocWeights = [0, ones(1,ObsNum)/ObsNum]; % (1 x Nm+1)
             end
-            if(~exist('LikelihoodMatrix','var') && isfield(this.Params, 'LikelihoodMatrix'))
-                LikelihoodMatrix = this.Params.LikelihoodMatrix;  
-            elseif ~exist('LikelihoodMatrix','var')
-                LikelihoodMatrix = this.ObsModel.eval(this.Params.k, this.Params.y , this.Params.particles);
+            if(nargin<3)
+                MeasLikelihood = this.MeasLikelihood;  
             end
             
             % Perform update
-            [this.Params.particles, this.Params.w, this.Params.x] = ...
-                ParticleFilterX_UpdatePDA(@(y,x) this.ObsModel.eval(this.Params.k,y,x),this.Params.y,this.Params.particles,...
-                                          this.Params.w, this.Params.resampling_strategy, assocWeights, LikelihoodMatrix);  
-            clear this.Params.LikelihoodMatrix;
+            this.Weights = ...
+                ParticleFilterX_UpdatePDA(@(y,x) this.Model.Obs.heval(y,x),this.Measurement,this.PredParticles,...
+                                          this.PredWeights, assocWeights, MeasLikelihood);
+            
+            if(strcmp(this.ResamplingPolicy(1),"TimeInterval"))
+                [this.Particles,this.Weights] = ...
+                    this.Resampler.resample(this.PredParticles,this.Weights);
+            end
         end
                 
         function smoothed_estimates = Smooth(this, filtered_estimates)
@@ -523,10 +531,14 @@ classdef ParticleFilterX < FilterX
         function InnovErrCovar = get.InnovErrCovar(this)
             InnovErrCovar = getInnovErrCovar(this);
         end
-
-        function set.Measurement(this,newMeasurement)
-            setMeasurement(this,newMeasurement);
+        
+        function MeasLikelihood = get.MeasLikelihood(this)
+            MeasLikelihood = getMeasLikelihood(this);
         end
+
+%         function set.Measurement(this,newMeasurement)
+%             setMeasurement(this,newMeasurement);
+%         end
     end
     
     methods (Access = protected)
@@ -556,12 +568,19 @@ classdef ParticleFilterX < FilterX
         end
         
         function InnovErrCovar = getInnovErrCovar(this)
-            transParticles = this.Model.Obs.heval(this.PredParticles);
+            transParticles = this.Model.Obs.heval(this.PredParticles,true);
             InnovErrCovar = weightedcov(transParticles,this.PredWeights);
         end
         
-        function setMeasurement(this,newMeasurement)
-            this.Measurement = newMeasurement;
+        function MeasLikelihood = getMeasLikelihood(this)
+            if(isempty(this.pmeasLikelihood_))
+                this.pmeasLikelihood_ = this.Model.Obs.pdf(this.Measurement,this.PredParticles);               
+            end
+            MeasLikelihood = this.pmeasLikelihood_;
         end
+        
+%         function setMeasurement(this,newMeasurement)
+%             this.Measurement = newMeasurement;
+%         end
     end
 end

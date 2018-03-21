@@ -40,26 +40,19 @@ V_bounds = [0 10 0 10]; % [x_min x_max y_min y_max]
 N=size(DataList,2); % timesteps 
 
 % Assign PHD parameter values
-config.NumParticles = 5000;              % number of particles
+config.NumParticles = 50000;              % number of particles
 config.Model = ssm;
 q = dyn.covariance();
-config.BirthIntFcn = @(Np) [(V_bounds(2)-V_bounds(1))*rand(Np,1), mvnrnd(zeros(Np,1), q(3,3)'),(V_bounds(4)-V_bounds(3))*rand(Np,1),mvnrnd(zeros(Np,1), q(4,4)')]'; % Uniform position and heading, Gaussian speed
+%config.BirthIntFcn = @(Np) [(V_bounds(2)-V_bounds(1))*rand(Np,1), mvnrnd(zeros(Np,1), q(3,3)'),(V_bounds(4)-V_bounds(3))*rand(Np,1),mvnrnd(zeros(Np,1), q(4,4)')]'; % Uniform position and heading, Gaussian speed
+config.BirthIntFcn = @(Np) [(V_bounds(2)-V_bounds(1))*rand(Np,1), mvnrnd(zeros(Np,1), 0.05'),(V_bounds(4)-V_bounds(3))*rand(Np,1),mvnrnd(zeros(Np,1), 0.05')]'; % Uniform position and heading, Gaussian speed
+
 config.PriorDistFcn = @ (Np) deal(config.BirthIntFcn(Np), repmat(1/Np, Np, 1)');
-config.BirthScheme = {'Mixture', 0.1};
-config.BirthScheme = {'Expansion', 500};
+config.BirthScheme = {'Mixture', 0.01};
+%config.BirthScheme = {'Expansion', 500};
 config.ProbOfDeath = 0.005;
 config.ProbOfDetection = 0.9;
 config.ClutterRate = lambdaV/V;
 config.ResamplingScheme = 'Multinomial';
-
-% config.particles_init = config.gen_x0(config.Np)'; % Generate inital particles as per gen_x0
-% config.w_init = repmat(1/config.Np, config.Np, 1)'; % Uniform weights
-% config.gen_x0 = @(Np) [(V_bounds(2)-V_bounds(1))*rand(Np,1),(V_bounds(4)-V_bounds(3))*rand(Np,1), mvnrnd(zeros(Np,1), CVmodel.Params.q^2), 2*pi*rand(Np,1)]; % Uniform position and heading, Gaussian speed
-% config.Jk = 500;
-% config.pConf = 0.9;
-% config.NpConf = 1000;
-% config.type = 'search';
-% config.birth_strategy = 'mixture';
 
 % Instantiate PHD filter
 myphd = SMC_PHDFilterX(config);

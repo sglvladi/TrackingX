@@ -2,10 +2,10 @@ classdef NaiveClustererX < ClustererX
 % NAIVECLUSTERERX Class 
 %
 % Summary of NaiveClustererX:
-% This is a class implementation of a multinomial resampler.
+% This is a class implementation of a naive clusterer.
 %
 % NaiveClustererX Properties:
-%   None
+%   + NumObsDims - The number of observation dimensions.
 %
 % NaiveClustererX Methods:
 %    NaiveClustererX  - Constructor method

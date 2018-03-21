@@ -10,11 +10,11 @@ classdef ObservationModelX < BaseX
 %   + NumObsDims     The number of observation dimensions.
 %
 % ObservationModelX Methods:
-%   + feval(~)   Equivalent to applying the model transition function 
-%   + random(~)  Process noise sample generator function, i.e. w_k ~ noise(~)
-%   + pdf(~)     Function to evaluate the probability p(x_t|x_{t-1}) of 
-%                 a set of new states, given a set of (particle) state vectors
-%                   e.g. eval = @(xt,xtm1) mvnpdf(xt,xtm1,Q);
+%   + heval(~)   Equivalent to applying the measurement model function 
+%   + random(~)  Measurement noise sample generator function, i.e. v_k ~ random(~)
+%   + pdf(~)     Function to evaluate the probability p(y_t|x_t) of 
+%                a (set of) measurements, given a (set of) state vector(s)
+%                   e.g. pdf = @(yt,xt) mvnpdf(yt,xt,R);
 %
 % (+) denotes puplic properties/methods
 %

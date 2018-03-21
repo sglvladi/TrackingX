@@ -176,10 +176,9 @@ classdef ProbabilisticDataAssocX < DataAssociatorX
                                     
             else
                 fprintf('No tracks where found. Skipping JPDAF association step...\n');
-                this.ValidationMatrix = zeros(1, size(this.Params.DataList,2));
+                this.ValidationMatrix = zeros(1, size(this.MeasurementList,2));
                 this.ClusterList = [];
                 this.UnassocTrackInds = [];
-                this.NetList = [];
                 this.AssocWeightsMatrix = -1; % Set betta to -1
             end
         end
@@ -231,6 +230,16 @@ classdef ProbabilisticDataAssocX < DataAssociatorX
         function performGating(this)
             % Validation matix and volume
             [this.ValidationMatrix, this.GateVolumes] = this.Gater.gate(this.TrackList,this.MeasurementList);
+            for trackInd = 1:this.NumTracks
+                if(~isprop(this.TrackList{trackInd},'GateVolume'))
+                    this.TrackList{trackInd}.addprop('GateVolume');
+                end
+                this.TrackList{trackInd}.GateVolume = this.GateVolumes(trackInd);
+                if(~isprop(this.TrackList{trackInd},'ValidationMatrix'))
+                    this.TrackList{trackInd}.addprop('ValidationMatrix');
+                end
+                this.TrackList{trackInd}.ValidationMatrix = this.ValidationMatrix(trackInd,:);
+            end
         end
         
         function computeLikelihoods(this)
@@ -238,27 +247,33 @@ classdef ProbabilisticDataAssocX < DataAssociatorX
             % Compute Likelihood matrix
             for trackInd = 1:this.NumTracks          
                 % Extract valid measurements
-                ValidObsInds = find(this.ValidationMatrix(trackInd,:));
+                ValidObsInds = find(this.TrackList{trackInd}.ValidationMatrix);
                 ValidObs = this.MeasurementList(:,ValidObsInds);
-                this.TrackList{trackInd}.Filter.Measurement = ValidObs;
+                this.TrackList{trackInd}.Filter.Measurement = this.MeasurementList(:,find(this.TrackList{trackInd}.ValidationMatrix));
+                
+                if(isempty(ValidObs))
+                    this.LikelihoodMatrix(trackInd, ValidObsInds) = 0;
+                else
+                    if(isa(this.TrackList{trackInd}.Filter,'KalmanFilterX')...
+                       ||isa(this.TrackList{trackInd}.Filter,'UnscentedParticleFilterX')...
+                       ||isa(this.TrackList{trackInd}.Filter,'ExtendedParticleFilterX'))
 
-                if(isa(this.TrackList{trackInd}.Filter,'KalmanFilterX')...
-                   ||isa(this.TrackList{trackInd}.Filter,'UnscentedParticleFilterX')...
-                   ||isa(this.TrackList{trackInd}.Filter,'ExtendedParticleFilterX'))
+                        % Extract predicted measurement and innovation covariance from filter
+                        predMeasMean = this.TrackList{trackInd}.Filter.PredMeasMean;
+                        innovCovar = this.TrackList{trackInd}.Filter.InnovErrCovar;
 
-                    % Extract predicted measurement and innovation covariance from filter
-                    predMeasMean = this.TrackList{trackInd}.Filter.PredMeasMean;
-                    innovCovar = this.TrackList{trackInd}.Filter.InnovErrCovar;
+                        % Compute likelihood matrix
+                        this.LikelihoodMatrix(trackInd, ValidObsInds) = ...
+                            this.TrackList{trackInd}.Filter.Model.Obs.pdf(ValidObs,this.TrackList{trackInd}.Filter.PredStateMean);
+                            %gauss_pdf(ValidObs, predMeasMean,innovCovar);
 
-                    % Compute likelihood matrix
-                    this.LikelihoodMatrix(trackInd, ValidObsInds) = ...
-                        gauss_pdf(ValidObs, predMeasMean,innovCovar);
-
-                elseif(isa(this.TrackList{trackInd}.Filter,'ParticleFilterX'))    
-                    % Compute likelihood matrix via expected likelihood
-                    this.LikelihoodMatrix(trackInd, ValidObsInds) = ...
-                        mean(this.TrackList{trackInd}.Filter.ObsModel.eval(...
-                            ValidObs, this.TrackList{trackInd}.Filter.PredParticles),2)';
+                    elseif(isa(this.TrackList{trackInd}.Filter,'ParticleFilterX'))    
+                        % Compute likelihood matrix via expected likelihood
+                        this.LikelihoodMatrix(trackInd, ValidObsInds) = ...
+                            mean(this.TrackList{trackInd}.Filter.MeasLikelihood,2)';
+    %                         mean(this.TrackList{trackInd}.Filter.ObsModel.eval(...
+    %                             ValidObs, this.TrackList{trackInd}.Filter.PredParticles),2)';
+                    end
                 end
             end
         end
@@ -292,7 +307,7 @@ classdef ProbabilisticDataAssocX < DataAssociatorX
                     end
                     this.AssocLikelihoodMatrix(trackInd,:) = ...
                         [clutterDensity*(1-this.ProbOfDetect*this.Gater.ProbOfGating), ...
-                        this.ProbOfDetect*this.LikelihoodMatrix(trackInd,:)];
+                        this.ProbOfDetect*this.Gater.ProbOfGating*this.LikelihoodMatrix(trackInd,:)];
                     this.AssocWeightsMatrix(trackInd,:) = this.Hypothesiser.hypothesise(this.AssocLikelihoodMatrix(trackInd,:));
                 end
             end          
