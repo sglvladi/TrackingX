@@ -6,7 +6,9 @@ classdef (Abstract) FilterX < BaseX  % Extends trackingX.BaseX
 % Any custom defined Filters should be derived from this FilterX base class. 
 %
 % FilterX Properties:
-%   + Model   = Object handle to StateSpaceModelX Sub/class
+%   + Model - Object handle to StateSpaceModelX Sub/class
+%   + Measurement - A (matrix of) column vector(s) representing the
+%                   measurement(s) to be used during the filter update step
 %   - FilterState = Current execution state of filter (Currently unused)
 %
 %   (*) Signifies properties necessary to instantiate a class object
@@ -23,8 +25,8 @@ classdef (Abstract) FilterX < BaseX  % Extends trackingX.BaseX
 % January 2018 Lyudmil Vladimirov, University of Liverpool.
     
     properties
-        Measurement;
-        Model;
+        Measurement; % Object handle to StateSpaceModelX Sub/class
+        Model; % A (matrix of) column vector(s) representing the measurement(s) to be used during the filter update step
     end
     
     properties (Access = protected, Hidden)
@@ -75,6 +77,7 @@ classdef (Abstract) FilterX < BaseX  % Extends trackingX.BaseX
         end
         
         function initialise(this,varargin)
+            
             this.FilterState = 0;
         end
         

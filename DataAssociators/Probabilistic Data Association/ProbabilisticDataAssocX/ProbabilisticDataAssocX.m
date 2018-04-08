@@ -5,16 +5,17 @@ classdef ProbabilisticDataAssocX < DataAssociatorX
 % This is a class implementation of a Joint Probabilistic Data Association Filter.
 %
 % ProbabilisticDataAssocX Properties:
-%   + TrackList        A (1-by-NumTracks) vector of TrackX objects
-%   + MeasurementList           A (1-by-NumMeas) vector of observations/measurements
-%   + Gater             A GaterX object used to perform gating
-%   + Clusterer         A ClustererX object used to perform clustering of
+%   + TrackList - A (1 x Tracks) vector of TrackX objects
+%   + MeasurementList - A (1 x NumMeas) vector of observations/measurements
+%   + Gater - A GaterX object used to perform gating
+%   + Clusterer - A ClustererX object used to perform clustering of
 %                       tracks
-%   + ClutterDensity    
+%   + ClutterDensity 
+%   + LikelihoodMatrix - A (
 %
 % ProbabilisticDataAssocX Methods:
 %   + ProbabilisticDataAssocX  - Constructor method
-%   + associate                     - Performs JPDAF association step
+%   + associate - Performs JPDAF association step
 %   + updateTracks                 - Performs JPDAF update step
 %
 % (+) denotes puplic properties/methods

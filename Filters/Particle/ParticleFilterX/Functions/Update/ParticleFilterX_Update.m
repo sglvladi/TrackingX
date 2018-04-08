@@ -2,15 +2,26 @@ function [newWeights,x] = ParticleFilterX_Update(lik,y,parts,weights)
 % PARTICLEFILTERX_UPDATE Perform the discrete-time PF weight update
 % step, under the assumption of additive process noise.
 %
-% INPUTS:   lik(y,x) - Measurement likelihood function handle.
-%           y        - A (yDim x Nm) measurement matrix
-%           parts    - A (xDim x Np) particle matrix.
-%           weights  - A (1 x Np) weights matrix.
+% Parameters
+% ----------
+% lik: function handle 
+%   Measurement likelihood function handle of the form lik(y,parts).
+% y: matrix
+%   A (yDim x Nm) measurement matrix
+% parts: matrix
+%   A (xDim x Np) particle matrix.
+% weights: row vector
+%   A (1 x Np) particle weights vector.
 %
-% OUTPUTS:  newParts   - The (xDim x Np) resampled particle matrix.
-%           newWeights - The (1 x Np) updated weights matrix matrix.
-%           x          - The (xDim x 1) state mean estimate vector
-%                        (Optional, only computed if requested)
+% Returns
+% -------
+% newParts: matrix
+%   The (xDim x Np) resampled particle matrix.
+% newWeights: row vector
+%   The (1 x Np) updated weights matrix matrix.
+% x: column vector, optional
+%   The (xDim x 1) state mean estimate vector
+%   (Optional, only computed if requested)
 %
 % October 2017 Lyudmil Vladimirov, University of Liverpool.
     

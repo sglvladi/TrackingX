@@ -2,16 +2,29 @@ function [xTrans,PTrans,PCross,XTrans] = unscentedTransform(f,X,Wm,Wc,OOM)
 % UNSCENTEDTRANSFORM Compute the Unscented Tranform of a set of sigma
 % points.
 %
-% INPUTS:    f      - The (non-linear) state transition function.
-%            X      - The (xDim x nSigma) sigma point matrix.
-%            Wm     - The (1 x nSigma) mean weights vector.
-%            Wc     - The (1 x nSigma) covariance weights vector.
-%            OOM    - Order of magnitude associated with Wm and Wc
+% Parameters
+% ----------
+% f: function handle
+%   The (non-linear) state transition function.
+% X: matrix
+%   The (xDim x nSigma) sigma point matrix.
+% Wm: row vector
+%   The (1 x nSigma) mean weights vector.
+% Wc: row vector
+%   The (1 x nSigma) covariance weights vector.
+% OOM: scalar
+%   Order of magnitude associated with Wm and Wc
 %
-% OUTPUTS:   xTrans - The (xTDim x 1) transformed mean vector.
-%            PTrans - The (xTim x xDim) transformed state covariance matrix
-%            XTrans - The (xTim x nSigma) transformed sigma points matrix.
-%            PCross - The (xDim x xTDim) unweighted cross-variance matrix
+% Returns
+% -------
+% xTrans: column vector
+%   The (xTDim x 1) transformed mean vector.
+% PTrans: matrix
+%   The (xTim x xDim) transformed state covariance matrix
+% XTrans: matrix 
+%   The (xTim x nSigma) transformed sigma points matrix.
+% PCross: matrix
+%   The (xDim x xTDim) unweighted cross-variance matrix
 %
 % October 2017 Lyudmil Vladimirov, University of Liverpool.
 

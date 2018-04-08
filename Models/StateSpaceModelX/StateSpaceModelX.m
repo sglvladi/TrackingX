@@ -3,7 +3,7 @@ classdef StateSpaceModelX < BaseX
 %
 % Summary of StateSpaceModelX:
 %  This is the base class for all TrackingX state-space models.
-%  State-space models brings together and provides a common interface to all
+%  State-space model brings together and provides a common interface to all
 %  of 2/3 underlying models, i.e.:
 %       * Dynamic/Motion model, making use of DynamicModel.
 %       * Observation/Measurement model, making use of ObservationModel.

@@ -5,11 +5,15 @@ classdef EllipsoidalGaterX <GaterX
 % This is a class implementation of a multinomial resampler.
 %
 % EllipsoidalGaterX Properties:
-%   None
+%   + GateLevel - The desired number of standard deviations (away from the
+%                 mean), which should be used as a threshold
+%   + ProbOfGating - The normalised percentage of the predicted measurement
+%                    pdf, that should be incorporated in the validation
+%                    region (i.e. th probability of gating)
 %
 % EllipsoidalGaterX Methods:
-%    EllipsoidalGaterX  - Constructor method
-%    gate - Perform gating and generate the validation matrix
+%   + EllipsoidalGaterX  - Constructor method
+%   + gate - Perform gating and generate the validation matrix
 % 
 % See also SystematicResamplerX
     properties 
@@ -24,8 +28,24 @@ classdef EllipsoidalGaterX <GaterX
     methods
         function this = EllipsoidalGaterX(varargin)
         % ELLIPSOIDALGATERX Constructor method
-        %   
-        % DESCRIPTION: 
+        % 
+        % Parameters
+        % ----------
+        % NumObsDims: scalar
+        %   The number of observation dimensions, i.e. the dimensionality
+        %   of the gate. For example, 1 = range, 2 = ellipse, 3 = ellipsoid
+        % GateLevel: scalar, optional
+        %   The desired number of standard deviations (away from the mean),
+        %   which should be used as a gating threshold. If supplied, any
+        %   value supplied for ProbOfGating will be overriden and
+        %   recomputed based on this value.
+        % ProbOfGating: normalised scalar, optional
+        %   The normalised ([0,1]) percentage of the predicted measurement 
+        %   pdf, that should be incorporated in the validation region 
+        %   (i.e. the probability of gating)
+        % 
+        % Usage
+        % -----
         % * eg = EllipsoidalGaterX(NumObsDims, 'GateLevel', GateLevel) returns  
         %   an object configured to exclude any measurements falling further 
         %   that GateLevel standard deviations from a track's predicted measurement 
@@ -77,7 +97,28 @@ classdef EllipsoidalGaterX <GaterX
         % matrix indicating the valid associations between Tracks and
         % measurements
         %   
-        % DESCRIPTION: 
+        % Parameters
+        % ----------
+        % TrackList: cell vector, optional
+        %   A (1 x NumTracks) cell vector, where each cell contains a TrackX 
+        %   object. It is required that each TrackX object should have a FilterX
+        %   object as a property.
+        % TrackPredMeasMeans: matrix, optional
+        %   A (NumObsDims x NumTracks) matrix, where each ith column represents
+        %   the predicted measurement mean for the ith track. Can be used,
+        %   in combination with TrackInnovErrCovars (see below), instead of
+        %   a TrackList (see above).
+        % TrackInnovErrCovars: matrix, optional
+        %   A (NumObsDims x NumObsDims x NumTracks) matrix, where each
+        %   (:,:,i) page represents the innovation covariance matrix for
+        %   the ith track. Can be used, in combination with TrackInnovErrCovars
+        %   (see above), instead of a TrackList (see above).
+        % MeasurementList: matrix
+        %   A (NumObsDims x NumMeasurements) matrix, where each jth column
+        %   corresponds to the jth measurement.
+        %
+        % Usage
+        % -----
         % * [ValidationMatrix, GateVolumes] = gate(this,TrackList,MeasurementList) 
         %   returns the (NumTracks x NumMeasurements) validation matrix 
         %   ValidationMatrix indicating the valid associations between tracks  

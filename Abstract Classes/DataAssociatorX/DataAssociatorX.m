@@ -10,8 +10,14 @@ classdef (Abstract) DataAssociatorX < BaseX
 %
 % DataAssociatorX Methods:
 %   + DataAssociatorX - Constructor method
+%   + associate - Parforms data association
+%   ~ performGating - Performs gating
+%   ~ computeLikelihoods - Performs measurement likelihoood computations
+%   ~ performClustering - Performs target/measurement clustering
+%   ~ evaluateAssociations - Computes the target/measurement association weights
 %
 % (+) denotes puplic properties/methods
+% (~) denotes abstract properties/methods
 %
 % February 2018 Lyudmil Vladimirov, University of Liverpool.
     
@@ -24,19 +30,16 @@ classdef (Abstract) DataAssociatorX < BaseX
     end
     
     methods (Abstract, Access = protected)
-        performGating(this);
-        computeLikelihoods(this);
-        performClustering(this);
-        evaluateAssociations(this);
+        performGating(this);        % Performs gating
+        computeLikelihoods(this);   % Performs measurement likelihoood computations
+        performClustering(this);    % Performs target/measurement clustering
+        evaluateAssociations(this); % Computes the target/measurement association weights
     end
     
     methods
         function this = DataAssociatorX(varargin)
         % DATAASSOCIATORX Constructor method
-        %   
-        % DESCRIPTION: 
-        % * DataAssociatorX() returns a "DataAssociatorX" object handle
-            
+        %            
         end
         
         function associate(this)

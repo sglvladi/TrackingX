@@ -8,9 +8,11 @@ classdef NaiveClustererX < ClustererX
 %   + NumObsDims - The number of observation dimensions.
 %
 % NaiveClustererX Methods:
-%    NaiveClustererX  - Constructor method
-%    cluster - Perform clustering and generate a list of clusters
-% 
+%   + NaiveClustererX  - Constructor method
+%   + cluster - Perform clustering and generate a list of clusters
+%
+% (+) denotes public properties/methods
+%
 % See also SystematicResamplerX
     properties 
     end
@@ -23,7 +25,8 @@ classdef NaiveClustererX < ClustererX
         function this = NaiveClustererX(varargin)
         % ELLIPSOIDALGATERX Constructor method
         %   
-        % DESCRIPTION: 
+        % Usage
+        % -----
         % * nv = NaiveClustererX() returns a NaiveClustererX object
         %
         % See also NaiveClustererX/cluster
@@ -33,8 +36,32 @@ classdef NaiveClustererX < ClustererX
         function [ClusterList,UnassocTrackInds] = cluster(this,ValidationMatrix)
         % CLUSTER Perform naive clustering to generate a clusters of
         % tracks sharing common measurements.
+        %
+        % Parameters
+        % ----------
+        % ValidationMatrix: matrix
+        %   A (Nt x Nm) validation matrix, Nt being the number of tracks and 
+        %   Nm being the number of measurements, where each element (t,m) is
+        %   a binary variable (0 or 1), representing whether measurement m
+        %   fell in the gate of target t.
+        %
+        % Returns
+        % -------
+        % ClusterList: cell vector
+        %   A (1 x Nc) cell vector, where each cell represents one of Nc Cluster
+        %   objects, with the following fields:
+        %       - ObsIndList: A list of the indices of all measurements
+        %                     contained within the cluster.
+        %       - TrackIndList: A list of indices of all tracks belonging
+        %                       to the cluster.
+        % 
+        % UnassocTrackInds: column vector
+        %  A (1 x Nu) column vector, where each element contains the index
+        %  (as ordered in ValidationMatrix) of any tracks that have not
+        %  been associated to any measurements. As such, 0<= Nu <= Nt.
         %   
-        % DESCRIPTION: 
+        % Usage
+        % -----
         % * [ClusterList,UnassocTracks] = cluster(this,ValidationMatrix) 
         %   returns a list of clusters ClusterList and a list of unassociated
         %   track indices UnassocTracks (corresponding to the row indices of 

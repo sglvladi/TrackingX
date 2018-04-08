@@ -182,9 +182,9 @@ classdef UnscentedKalmanFilterX < KalmanFilterX
             % Perform prediction
             [this.PredStateMean, this.PredStateCovar, this.PredMeasMean,...
              this.InnovErrCovar, this.CrossCovar] = ...
-                UnscentedKalmanFilterX_Predict(this.Alpha, this.Kappa, this.Beta,...
-                                               this.StateMean, this.StateCovar,...
-                                               f, Q, h, R, this.ControlInput, b, Qu);          
+                this.predict_(this.Alpha, this.Kappa, this.Beta,...
+                              this.StateMean, this.StateCovar,...
+                              f, Q, h, R, this.ControlInput, b, Qu);          
         end
         
         function update(this)
@@ -195,7 +195,14 @@ classdef UnscentedKalmanFilterX < KalmanFilterX
         %   associated uncertainty covariance.
         %
         %   See also KalmanFilterX, predict, iterate, smooth.
-        
+            
+            if(isempty(this.PredMeasMean)||isempty(this.InnovErrCovar)||isempty(this.CrossCovar))
+                [this.PredMeasMean, this.InnovErrCovar, this.CrossCovar] = ...
+                    this.predictObs_(this.Alpha, this.Kappa, this.Beta,...
+                                     this.PredStateMean,this.PredStateCovar,...
+                                     this.Model.Obs.heval(),this.Model.Obs.covariance());
+            end
+            
             % Call SuperClass method
             update@KalmanFilterX(this);
         
@@ -251,6 +258,311 @@ classdef UnscentedKalmanFilterX < KalmanFilterX
             else
                 smoothedEstimates = UnscentedKalmanFilterX_SmoothRTS(filteredEstimates,interval);
             end
+        end
+        
+        function resetStateEstimates(this)
+        % RESETSTATEESTIMATES Reset all the state related class properties
+        %   The following properties are reset upon execution:
+        %       this.StateMean
+        %       this.StateCovar
+        %       this.PredStateMean
+        %       this.PredStateCovar
+        %       this.PredMeasMean
+        %       this.InnovErrCovar
+        %       this.CrossCovar
+        %       this.KalmanGain
+        %
+        % Usage
+        % -----
+        % * ekf.resetStateEstimates() resets all state related properties
+            
+            this.StateMean = [];
+            this.StateCovar = [];
+            this.PredStateMean = [];
+            this.PredStateCovar = [];
+            this.PredMeasMean = [];
+            this.InnovErrCovar = [];
+            this.CrossCovar = [];
+            this.KalmanGain = [];
+        end
+        
+        function [xPred, PPred, yPred, S, Pxy] = predict_(this,alpha,kappa,beta,x,P,f,Q,h,R,u,b,Qu)
+        % PREDICT_ Perform the discrete-time UKF state and measurement
+        % prediction steps, under the assumption of additive process noise.
+        %
+        % Parameters
+        % ----------
+        % alpha, kappa, betta: scalar
+        %   The UKF scaling parameters
+        % x: column vector
+        %   The (xDim x 1) state estimate at the previous time-step.
+        % P: matrix 
+        %   The (xDim x xDim) state covariance matrix at the previous
+        %   time-step.
+        % f: function handle
+        %   A (non-linear) state transition function.
+        % Q: matrix
+        %   The (xDim x xDim) process noise covariance matrix.
+        % h: function handle
+        %   A (non-linear) measurement function.
+        % R: matrix 
+        %   The (yDim x yDim) measurement noise covariance matrix.
+        % u: column vector, optional
+        %   A optional (xDim x 1) control input.
+        %   If omitted, no control input is used.
+        % b: function handle, optional
+        %   A (non-linear) control gain function.
+        %   If omitted, B is assumed to be 1.
+        % O: matrix, optional
+        %   An optional (xDim x xDim) control noise covariance
+        %   matrix. If omitted, Q is assumed to be 0.
+        %
+        % Returns
+        % -------
+        % xPred: column vector
+        %   The (xDim x 1) predicted state estimate.
+        % PPred: matrix
+        %   The (xDim x xDim) predicted state covariance matrix.
+        % yPred: column vector
+        %   The (yDim x 1) predicted measurement estimate.
+        % Pxy: matrix
+        %   The (xDim x yDim) cross-covariance matrix.
+        % S: matrix
+        %   The (yDim x yDim) innovation covariance matrix.
+        % F: matrix
+        %   The computed Jacobian transition matrix 
+        % B: matrix, optional
+        %   The computed Jacobian control gain matrix
+        %
+        % October 2017 Lyudmil Vladimirov, University of Liverpool.
+
+            switch(nargin)
+                case(10) 
+                    u  = 0;
+                    b  = 0;
+                    Qu = 0;
+                case(11)
+                    b  = 1;
+                    Qu = 0;
+                case(12)
+                    Qu = 0;
+            end
+
+           [xPred,PPred]  = this.predictState_(alpha,kappa,beta,x,P,f,Q,u,b,Qu);
+           [yPred,S,Pxy]    = this.predictObs_(alpha,kappa,beta,xPred,PPred,h,R);
+        end
+    end
+    
+     methods (Static)
+                
+        function [xPred, PPred] = predictState_(alpha,kappa,beta,x,P,f,Q,u,b,Qu)
+        % PREDICTSTATE_ Perform the discrete-time UKF state prediction 
+        % step, under the assumption of additive process noise.
+        %
+        % Parameters
+        % ----------
+        % alpha, kappa, betta: scalar
+        %   The UKF scaling parameters
+        % x: column vector
+        %   The (xDim x 1) state estimate at the previous time-step.
+        % P: matrix
+        %   The (xDim x xDim) state covariance matrix at the previous
+        %   time-step.
+        % f: function handle
+        %   A (non-linear) state transition function.
+        % Q: matrix
+        %   The (xDim x xDim) process noise covariance matrix.
+        % u: column vector, optional
+        %   An optional (xDim x 1) control input.
+        %   If omitted, no control input is used.
+        % b: function handle, optional
+        %   A (non-linear) control gain function.
+        %   (Optional, Default = 1 if u provided, 0 otherwise)
+        % O: matrix, optional
+        %   An optional (xDim x xDim) control noise covariance
+        %   matrix. If omitted, Q is assumed to be 0.
+        %
+        % Returns
+        % -------
+        % xPred: column vector
+        %   The (xDim x 1) predicted state estimate.
+        % PPred: matrix
+        %   The (xDim x xDim) predicted state covariance matrix.
+        % F: matrix
+        %   The computed Jacobian transition matrix
+        % H: matrix
+        %   The computed (yDim x yDim) Jacobian measurement matrix
+        % B: matrix, optional
+        %   The computed Jacobian control gain matrix
+        %
+        % October 2017 Lyudmil Vladimirov, University of Liverpool.
+
+            switch(nargin)
+                case(4) 
+                    u  = 0;
+                    b  = 0;
+                    Qu = 0;
+                case(5)
+                    b  = 1;
+                    Qu = 0;
+                case(6)
+                    Qu = 0;
+            end
+            
+            numStateDims = size(x,1);
+            
+            % Calculate unscented transformation parameters
+            [c, Wmean, Wcov, OOM] = ...
+                matlabshared.tracking.internal.calcUTParameters(alpha,beta,kappa,numStateDims);
+
+            % Form the sigma points
+            X = formSigmaPoints(x, P, c);           
+
+            % Perform Unscented Transform to get predicted State and Covariance     
+            [xPred,PPred] = unscentedTransform(f,X,Wmean,Wcov,OOM);
+            % Add uncertainty to our prediction due to process noise
+            PPred = PPred + Q;
+        end
+        
+        function [yPred, S, Pxy] = predictObs_(alpha,kappa,beta,xPred,PPred,h,R)
+        % PREDICTOBS_ Perform the discrete-time UKF observation prediction 
+        % step, under the assumption of additive process noise.
+        %
+        % Parameters
+        % ----------
+        % alpha, kappa, betta: scalar
+        %   The UKF scaling parameters
+        % xPred: column vector
+        %   The (xDim x 1) predicted state estimate at the current
+        %   time-step.
+        % PPred: matrix
+        %   The (xDim x xDim) predicted state covariance matrix at 
+        %   the current time-step.
+        % h: function handle
+        %   A (non-linear) measurement function.
+        % R: matrix
+        %   The (yDim x yDim) measurement noise covariance matrix.
+        %
+        % Returns
+        % -------
+        % yPred: column vector
+        %   The (yDim x 1) predicted measurement estimate.
+        % Pxy: matrix
+        %   The (xDim x yDim) cross-covariance matrix.
+        % S: matrix
+        %   The (yDim x yDim) innovation covariance matrix.
+        % H: matrix
+        %   The computed (yDim x yDim) Jacobian measurement matrix
+        %
+        % October 2017 Lyudmil Vladimirov, University of Liverpool.
+            
+            numStateDims = size(xPred,1);
+            
+            % Calculate unscented transformation parameters
+            [c, Wmean, Wcov, OOM] = matlabshared.tracking.internal.calcUTParameters(alpha,beta,kappa,numStateDims);
+            
+            % Form the sigma points
+            X = formSigmaPoints(xPred, PPred, c);
+
+            % Perform Unscented Transform to get predicted measurement mean,
+            % covariance and cross-covariance
+            [yPred,S,Pxy] = unscentedTransform(h,X,Wmean,Wcov,OOM);
+            
+            % Add uncertainty to our prediction due to measurement noise
+            S = S + R;  
+        end
+        
+        function [x,P,K] = update_(xPred,PPred,y,yPred,S,Pxy)
+        % KALMANFILTERX_UPDATE Perform the discrete-time KF update step, under the  
+        % assumption of additive process noisem for a single measurement.
+        %
+        % Parameters
+        % ----------
+        % xPred: column vector
+        %   The (xDim x 1) predicted state estimate.
+        % PPred: matrix
+        %   The (xDim x xDim) predicted state covariance matrix.
+        % y: column vector
+        %   The (yDim x 1) measurement vector.
+        % yPred: column vector
+        %   The (yDim x 1) predicted measurement estimate.
+        % S: matrix
+        %   The (yDim x yDim) innovation covariance matrix.
+        % Pxy: matrix
+        %   The (xDim x yDim) cross-covariance matrix.
+        %
+        % Returns
+        % -------
+        % x: column vector
+        %   The (xDim x 1) state estimate at the current time-step.
+        % P: matrix
+        %   The (xDim x xDim) state covariance matrix at the current
+        %   time-step.
+        % K: matrix
+        %   The (xDim x yDim) Kalman gain matrix at the current
+        %   time-step.
+        %
+        %October 2017 Lyudmil Vladimirov, University of Liverpool.
+
+            % Compute the Kalman gain
+            K = Pxy/(S);
+
+            % Compute the filtered estimates
+            x = xPred + K * (y - yPred);
+            P = PPred - K*S*K';
+        end
+        
+        function [x,P,K] = updatePDA_(xPred,PPred,Y,W,yPred,S,Pxy)
+        % KALMANFILTERX_UPDATEPDA Perform the discrete-time Probabilistic Data 
+        % Association (PDA) KF update step, under the assumption of additive process 
+        % noise, for multiple measurements (as a Gaussian Mixture)
+        %
+        % Parameters
+        % ----------
+        % xPred: column vector
+        %   The (xDim x 1) predicted state estimate.
+        % PPred: matrix
+        %   The (xDim x xDim) predicted state covariance matrix.
+        % Y: matrix
+        %   The (yDim x nY) measurement vector.
+        % W: row vector
+        %   The (1 x nY+1) measurement association/mixture weights 
+        %   vector. (dummy measurement assumed at index 1)
+        % yPred: column vector
+        %   The (yDim x 1) predicted measurement estimate.
+        % S: matrix
+        %   The (yDim x yDim) innovation covariance matrix.
+        % Pxy: matrix
+        %   The (xDim x yDim) cross-covariance matrix.
+        %
+        % Returns
+        % -------
+        % x: column vector
+        %   The (xDim x 1) state estimate at the current time-step.
+        % P: matrix
+        %   The (xDim x xDim) state covariance matrix at the current
+        %   time-step.
+        % K: matrix
+        %   The (xDim x yDim) Kalman gain matrix at the current
+        %   time-step.
+        %
+        %October 2017 Lyudmil Vladimirov, University of Liverpool.
+
+            % Get size of observation vector
+            [yDim,nY] = size(Y);
+
+            % Compute Kalman gain
+            K = Pxy/S;  
+
+            % Compute innovation mean and (cross) covariance
+            innov_err       = Y - yPred(:,ones(1,nY));
+            tot_innov_err   = innov_err*W(2:end)';
+            Pc              = PPred - K*S*K';
+            Pgag            = K*((innov_err.*W(ones(yDim,1),2:end))*innov_err' - tot_innov_err*tot_innov_err')*K';
+
+            % Compute filtered estimates
+            x    = xPred + K*tot_innov_err;  
+            P    = W(1)*PPred + (1-W(1))*Pc + Pgag;
         end
     end
 end

@@ -10,13 +10,14 @@ classdef ObservationModelX < BaseX
 %   + NumObsDims     The number of observation dimensions.
 %
 % ObservationModelX Methods:
-%   + heval(~)   Equivalent to applying the measurement model function 
-%   + random(~)  Measurement noise sample generator function, i.e. v_k ~ random(~)
-%   + pdf(~)     Function to evaluate the probability p(y_t|x_t) of 
+%   ~ heval - Equivalent to applying the measurement model function 
+%   ~ random - Measurement noise sample generator function, i.e. v_k ~ random(~)
+%   ~ pdf - Function to evaluate the probability p(y_t|x_t) of 
 %                a (set of) measurements, given a (set of) state vector(s)
 %                   e.g. pdf = @(yt,xt) mvnpdf(yt,xt,R);
 %
 % (+) denotes puplic properties/methods
+% (~) denotes abstract properties/methods
 %
 % The above parameters and methods are accessed by the majority of 
 % existing TrackingX library components and are COMPULSORY to guarantee 

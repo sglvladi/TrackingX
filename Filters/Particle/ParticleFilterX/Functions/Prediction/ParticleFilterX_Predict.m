@@ -5,12 +5,21 @@ function [predictedParts] = ParticleFilterX_Predict(f,parts,wk)
 % NOTES: 
 % * Control inputs are NOT currently supported.
 %
-% INPUTS:   parts  - A (xDim x Np) particle matrix from the previous 
-%                    time-step.
-%           f      - A (non-linear) state transition function.
-%           wk     - A (xDim x Np) process noise matrix.
+% Parameters
+% ----------
+% parts: matrix
+%   A (xDim x Np) particle matrix from the previous 
+%   time-step, where xDim is the number of state dimentions and Np is the
+%   number of particles.
+% f: function handle
+%   A (non-linear) state transition function of the form f(x).
+% wk: matrix
+%   A (xDim x Np) process noise matrix.
 %
-% OUTPUTS:  predictedParts - The (xDim x Np) predicted particle matrix.
+% Returns
+% -------
+% predictedParts: matrix
+%   The (xDim x Np) predicted particle matrix.
 %
 % October 2017 Lyudmil Vladimirov, University of Liverpool.
     

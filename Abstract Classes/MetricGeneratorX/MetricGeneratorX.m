@@ -11,6 +11,7 @@ classdef (Abstract) MetricGeneratorX < BaseX
 %
 % MetricGeneratorX Methods:
 %   + MetricGeneratorX - Constructor method
+%   ~ evaluate - Evaluates and returns a given metric
 %
 % (+) denotes puplic properties/methods
 %

@@ -201,6 +201,7 @@ classdef JointProbabilisticDataAssocX < ProbabilisticDataAssocX
         end
         
         function performClustering(this)
+            % Use the defined this.Clusterer to perform clustering
             if(isempty(this.Clusterer))
                 % Do nothing
                 return;

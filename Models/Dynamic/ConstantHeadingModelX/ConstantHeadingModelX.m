@@ -111,9 +111,36 @@ classdef ConstantHeadingModelX <  DynamicModelX
         end
         
         function xk = feval(this, xkm1, wk, Dt)
-        % FEVAL Propagate a given state through the dynamic model  
+        % FEVAL Propagate a given state through the dynamic model
         %
-        % DESCRIPTION:
+        % Parameters
+        % ----------
+        % xkm1: (NumStateDims x Ns) matrix, optional
+        %   - A matrix, whose columns correspond to individual state vectors.
+        %   - If not provided, then the state transition matrix (F) will be 
+        %     returned.
+        % wk: (NumStateDims x Ns) matrix or boolean, optional
+        %   - If wk is a boolean and set True, then the default model noise 
+        %     generation function (this.random()) will be used to generate the 
+        %     noise. 
+        %   - Otherwise, wk should be a matrix of equal dimensions to xk, 
+        %     where each column corresponds to the random noise which will
+        %     be added to each state vector. 
+        %   - If not provided, then no noise will be added to the state vectors.
+        % Dt: scalar, optional
+        %   A time variant. (default=this.TimeVariant)
+        %
+        % Returns
+        % -------
+        % xk: (NumStateDims x Ns) matrix or function handle
+        %   - If no parameters are passed to the function, then xk will be the
+        %     state transition function f.
+        %   - Else, xk will be a (NumStateDims x Ns) matrix, whose columns 
+        %     correspond to the columns of xkm1, each propagated through the
+        %     dynamic model
+        %   
+        % Usage
+        % -----
         % * xk = FEVAL(this,xkm1,wk,Dt) returns the new state xk, produced by
         %   propagating the given state xkm1 through the dynamic model for
         %   time Dt and adding random noise wk. xk, xkm1 and wk must have  
@@ -135,9 +162,11 @@ classdef ConstantHeadingModelX <  DynamicModelX
         
             switch(nargin)
                 case 1 
-                    xkm1 = 1;
-                    wk   = 0;
-                    Dt = this.TimeVariant;
+                    xk = this.f;
+                    return;
+%                     xkm1 = 1;
+%                     wk   = 0;
+%                     Dt = this.TimeVariant;
                 case 2
                     wk   = 0;
                     Dt = this.TimeVariant;
@@ -155,7 +184,18 @@ classdef ConstantHeadingModelX <  DynamicModelX
         function cov = covariance(this,Dt)
         % COVARIANCE Returns process covariance matrix.
         %
-        % DESCRIPTION:
+        % Parameters
+        % ----------
+        % Dt: scalar, optional
+        %   A time variant. (default=this.TimeVariant)
+        %
+        % Returns
+        % -------
+        % cov: (NumStateDims x NumStateDims) matrix
+        %   The process noise covariance matrix
+        %
+        % Usage
+        % -----
         % * Qk = covariance(this,Dt) returns process covariance matrix, upon 
         %   application of Dt.
         % * Qk = covariance(this) returns process covariance matrix, upon 
@@ -176,7 +216,23 @@ classdef ConstantHeadingModelX <  DynamicModelX
         % RANDOM Generates random samples from the dynamic model's noise
         % distribution.
         %
-        % DESCRIPTION:
+        % Parameters
+        % ----------
+        % Ns: scalar, optional
+        %   The number of samples to be generated.
+        %   (default = 1)
+        % Dt: scalar, optional
+        %   A time variant. 
+        %   (default=this.TimeVariant)
+        %
+        % Returns
+        % -------
+        % wk: (NumStateDims x Ns)
+        %   A matrix, whose columns correspond to indivual/independent
+        %   noise samples.
+        %
+        % Usage
+        % -----
         % * wk = random(this,Ns,Dt) generates and returns a set of Ns samples
         %   generated from the noise distribution of the dynamic model, i.e.
         %   wk ~ N(0,Q(Dt)), where Q is the noise covariance upon application 
@@ -204,7 +260,24 @@ classdef ConstantHeadingModelX <  DynamicModelX
         % PDF Evaluates the probability/likelihood p(x_k|x_{k-1}) of a 
         % (set of) new state vector(s), given a (set of) old state vector(s)  
         % 
-        % DESCRIPTION:
+        % Parameters
+        % ----------
+        % xk: (NumStateDims x Ns) matrix
+        %   A matrix, whose columns correspond to individual new state vectors.
+        % xkm1: (NumStateDims x Np) matrix
+        %   A matrix, whose columns correspond to individual old state vectors
+        % Dt: scalar, optional
+        %   A time variant. 
+        %   (default=this.TimeVariant)
+        %
+        % Returns
+        % -------
+        % prob: (Np x Ns) matrix
+        %   A matrix, where each element (i,j) corresponds to the evaluated
+        %   probability p(xk(:,j)|xkm1(:,i))
+        %
+        % Usage
+        % -----
         % * prob = pdf(x_k, x_km1, Dt) evaluates and returns a (a x b)
         %   probability/likelihood matrix given the (NumStatesDim x a) x_k
         %   and (NumStatesDim x b) x_km1 state matrices. Dt is an optional 

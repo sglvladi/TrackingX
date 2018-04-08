@@ -2,12 +2,20 @@ function [xT,Jac] = ExtendedKalmanFilterX_computeJac(fun,x)
 % EXTENDEDKALMANFILTERX_COMPUTEJAC Compute Jacobian through complex step 
 % differentiation
 % 
-% INPUTS:   x    - A state vector
-%           fun  - A (non-linear) transition function
-%                  Must be of the form "fun = @(x)...." 
+% Parameters
+% ----------
+% x: column vector
+%   A state vector
+% fun: function handle
+%   A (non-linear) transition function
+%   Must be of the form "fun = @(x)...." 
 %
-% OUTPUTS:  xT   - The transformed vector
-%           Jac  - The computed Jacobian
+% Returns
+% -------
+% xT: column vector
+%   The transformed vector
+% Jac: matrix
+%   The computed Jacobian
     
     xT   = fun(x);
     xDim    = numel(x);

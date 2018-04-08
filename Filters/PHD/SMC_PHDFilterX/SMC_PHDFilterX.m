@@ -6,60 +6,60 @@ classdef SMC_PHDFilterX < FilterX
 % Hypothesis Density (PHD) Filter.
 %
 % SMC_PHDFilterX Properties:
-%   + NumParticles      The number of particles employed by the PHD Filter
-%   + Particles         A (NumStateDims x NumParticles) matrix used to store 
+%   + NumParticles - The number of particles employed by the PHD Filter
+%   + Particles - A (NumStateDims x NumParticles) matrix used to store 
 %                       the last computed/set filtered particles  
-%   + Weights           A (1 x NumParticles) vector used to store the weights
-%                       of the last computed/set filtered particles
-%   + PredParticles     A (NumStateDims x NumParticles) matrix used to store 
-%                       the last computed/set predicted particles  
-%   + PredWeights       A (1 x NumParticles) vector used to store the weights
-%                       of the last computed/set predicted particles
-%   + MeasurementList   A (NumObsDims x NumObs) matrix used to store the received 
+%   + Weights - A (1 x NumParticles) vector used to store the weights
+%               of the last computed/set filtered particles
+%   + PredParticles - A (NumStateDims x NumParticles) matrix used to store 
+%                     the last computed/set predicted particles  
+%   + PredWeights - A (1 x NumParticles) vector used to store the weights
+%                   of the last computed/set predicted particles
+%   + MeasurementList - A (NumObsDims x NumObs) matrix used to store the received 
 %                       measurements
-%   + ResamplingScheme  Method used for particle resampling, specified as 
-%                       'multinomial', 'systematic'. Default = 'systematic'
-%   + ResamplingPolicy  A (1 x 2) cell array, specifying the resampling trigger
-%                       conditions. ReamplingPolicy{1} should be a string
-%                       which can be either "TimeInterval", in which case 
-%                       ReamplingPolicy{2} should specify the number of 
-%                       iterations after which resampling should be done,
-%                       or "EffectiveRatio", in which case Resampling{2}
-%                       should specify the minimum ratio of effective particles
-%                       which when reached will trigger the resampling process.
-%                       Default ResamplingPolicy = {"TimeInterval",1}, meaning
-%                       that resampling is performed on every iteration of
-%                       the Particle Filter (upon update).                       
-%   + Resampler         An object handle to a ResamplerX subclass. If a 
-%                       Resampler is provided, then it will override any choice
-%                       specified within the ResamplingScheme. ResamplingPolicy
-%                       will not be affected.
-%   + BirthScheme       A (1 x 3) cell array, specifying the particle birth
-%                       scheme. BirthScheme{1} should be a string which can be
-%                       set to either "Mixture", in which case BirthScheme{2}
-%                       should specify the probability of birth of new particles,
-%                       or "Expansion", in which case BirthScheme{2} should
-%                       specify the number of particles to be "birthed" at
-%                       each iteration of the filter.
-%                       Default BirthScheme = {"Mixture",0.5} meaning that
-%                       particles are birthed using the mixture scheme, with
-%                       a birth probability of 50%.
-%   + BirthIntFcn       A function handle, which when called generates a set 
-%                       of initial particles and weights.
-%   + ProbOfDeath       The probability that a target may cease to exist
-%                       between consecutive iterations of the filter.
-%   + ProbOfDetection   The probablity that a target will be detected in
+%   + ResamplingScheme - Method used for particle resampling, specified as 
+%                        'multinomial', 'systematic'. Default = 'systematic'
+%   + ResamplingPolicy - A (1 x 2) cell array, specifying the resampling trigger
+%                        conditions. ReamplingPolicy{1} should be a string
+%                        which can be either "TimeInterval", in which case 
+%                        ReamplingPolicy{2} should specify the number of 
+%                        iterations after which resampling should be done,
+%                        or "EffectiveRatio", in which case Resampling{2}
+%                        should specify the minimum ratio of effective particles
+%                        which when reached will trigger the resampling process.
+%                        Default ResamplingPolicy = {"TimeInterval",1}, meaning
+%                        that resampling is performed on every iteration of
+%                        the Particle Filter (upon update).                       
+%   + Resampler - An object handle to a ResamplerX subclass. If a 
+%                 Resampler is provided, then it will override any choice
+%                 specified within the ResamplingScheme. ResamplingPolicy
+%                 will not be affected.
+%   + BirthScheme - A (1 x 3) cell array, specifying the particle birth
+%                   scheme. BirthScheme{1} should be a string which can be
+%                   set to either "Mixture", in which case BirthScheme{2}
+%                   should specify the probability of birth of new particles,
+%                   or "Expansion", in which case BirthScheme{2} should
+%                   specify the number of particles to be "birthed" at
+%                   each iteration of the filter.
+%                   Default BirthScheme = {"Mixture",0.5} meaning that
+%                   particles are birthed using the mixture scheme, with
+%                   a birth probability of 50%.
+%   + BirthIntFcn - A function handle, which when called generates a set 
+%                   of initial particles and weights.
+%   + ProbOfDeath - The probability that a target may cease to exist
+%                   between consecutive iterations of the filter.
+%   + ProbOfDetection - The probablity that a target will be detected in
 %                       a given measurement scan.
-%   + NumTargets        The estimated number of targets following an update step.
-%   + Model             An object handle to StateSpaceModelX object
-%       + Dyn = Object handle to DynamicModelX SubClass      
-%       + Obs = Object handle to ObservationModelX SubClass 
-%       + Ctr = Object handle to ControlModelX SubClass 
+%   + NumTargets - The estimated number of targets following an update step.
+%   + Model - An object handle to StateSpaceModelX object
+%       + Dyn - Object handle to DynamicModelX SubClass      
+%       + Obs - Object handle to ObservationModelX SubClass 
+%       + Ctr - Object handle to ControlModelX SubClass 
 %
 % SMC_PHDFilterX Methods:
-%   + SMC_PHDFilterX  - Constructor method
-%   + predict         - Performs SMC_PHD prediction step
-%   + update          - Performs SMC_PHD update step
+%   + SMC_PHDFilterX - Constructor method
+%   + predict - Performs SMC_PHD prediction step
+%   + update - Performs SMC_PHD update step
 %
 % (+) denotes puplic properties/methods
 % (¬) denotes dependent properties
@@ -105,7 +105,69 @@ classdef SMC_PHDFilterX < FilterX
         function this = SMC_PHDFilterX(varargin)
         % SMC_PHDFilterX - Constructor method
         %   
-        % DESCRIPTION: 
+        % Parameters
+        % ----------
+        % Model: StateSpaceModelX
+        %   An object handle to StateSpaceModelX object.
+        % NumParticles: scalar
+        %   The number of particles to be employed by the  SMC PHD Filter. 
+        %   (default = 10000)
+        % PriorParticles: (NumStateDims x NumParticles) matrix
+        %   The initial set of particles to be used by the Particle Filter. 
+        %   These are copied into the Particles property by the constructor.
+        % PriorWeights: (1 x NumParticles) row vector
+        %   The initial set of weights to be used by the Particle Filter. 
+        %   These are copied into the Weights property by the constructor. 
+        %   (default = 1/NumParticles, which implies uniform weights)
+        % PriorDistFcn: function handle
+        %   A function handle, of the form [parts, weights] = PriorDistFcn(NumParticles),
+        %   which when called generates a set of initial particles and weights, 
+        %   that are consecutively copied into the Particles and Weights properties
+        %   respectively. The function should accept exactly ONE argument, 
+        %   which is the number of particles (NumParticles) to be generated and
+        %   return 2 outputs. If a PriorDistFcn is specified, then any values provided for the
+        %   PriorParticles and PriorWeights arguments are ignored.
+        % ResamplingScheme: string 
+        %   Method used for particle resampling, specified as either 'Multinomial'
+        %   or 'Systematic'. (default = 'Systematic')
+        % ResamplingPolicy: (1 x 2) cell array
+        %   Specifies the resampling trigger conditions. ReamplingPolicy{1} 
+        %   should be a string which can be either:
+        %       1) "TimeInterval", in which case ReamplingPolicy{2} should 
+        %          be a scalar specifying the number of iterations after which
+        %          resampling should be performed, or
+        %       2) "EffectiveRatio", in which case Resampling{2} should be
+        %          a scalar specifying the minimum ratio of effective particles 
+        %          which, when reached, will trigger the resampling process
+        %   (default ResamplingPolicy = {'TimeInterval',1}], implying that 
+        %   resampling is performed on every update of the Particle Filter).                       
+        % Resampler: ResamplerX object handle, optional
+        %   An object handle to a ResamplerX subclass. If a Resampler is provided,
+        %   then it will override any choice specified within the ResamplingScheme. 
+        %   ResamplingPolicy will not be affected.
+        % BirthScheme: (1 x 2) cell array
+        %   Specifies the particle birth scheme. BirthScheme{1} should be 
+        %   a string which can be set to either:
+        %       1) "Mixture", in which case BirthScheme{2} should specify the
+        %          probability of birth of new particles, or
+        %       2) "Expansion", in which case BirthScheme{2} should specify 
+        %          the number of particles to be "birthed" at each iteration 
+        %          of the filter.
+        %   (default BirthScheme = {"Mixture",0.5} implying that particles 
+        %    are born using the mixture scheme, with a birth probability of 50%)
+        % BirthIntFcn: function handle
+        %   A function handle, [parts, weights] = BirthIntFcn(NumParticles), 
+        %   which when called generates a set of initial particles and weights.
+        % ProbOfDeath: scalar
+        %   The probability that a target may cease to exist between consecutive 
+        %   iterations of the filter.
+        % ProbOfDetection: scalar
+        %   The probablity that a target will be detected in a given measurement scan.
+        % NumTargets: scalar
+        %   The estimated number of targets following an update step.
+        %
+        % Usage
+        % -----
         % * phd = SMC_PHDFilterX() returns an unconfigured object 
         %   handle. Note that the object will need to be configured at a 
         %   later instance before any call is made to it's methods.
@@ -123,59 +185,6 @@ classdef SMC_PHDFilterX < FilterX
         % * phd = SMC_PHDFilterX(___,Name,Value,___) instantiates an  
         %   object handle, configured with the options specified by one or 
         %   more Name,Value pair arguments.
-        %
-        % INPUT ARGUMENTS:
-        % * NumParticles        (Scalar) The number of particles to be employed by the  
-        %                       SMC PHD Filter. [Default = 10000]
-        % * PriorParticles      (NumStateDims x NumParticles) The initial set of particles
-        %                       to be used by the Particle Filter. These are copied into
-        %                       the Particles property by the constructor.
-        % * PriorWeights        (1 x NumParticles matrix) The initial set of weights to be used 
-        %                       by the Particle Filter. These are copied into the Weights 
-        %                       property by the constructor. [Default = 1/NumParticles]
-        % * PriorDistFcn        (function handle) A function handle, which when called
-        %                       generates a set of initial particles and weights, which
-        %                       are consecutively copied into the Particles and Weights
-        %                       properties respectively. The function should accept exactly ONE
-        %                       argument, which is the number of particles to be generated and
-        %                       return 2 outputs. If a PriorDistFcn is specified, then any values
-        %                       provided for the PriorParticles and PriorWeights arguments are ignored.
-        % * ResamplingScheme    (String) Method used for particle resampling, specified as 
-        %                       'Multinomial', 'Systematic'. [Default = 'Systematic']
-        % * ResamplingPolicy    (1 x 2 cell array) specifying the resampling trigger
-        %                       conditions. ReamplingPolicy{1} should be a (String)
-        %                       which can be either "TimeInterval", in which case 
-        %                       ReamplingPolicy{2} should be a (Scalar) specifying the number  
-        %                       of iterations after which resampling should be performed,
-        %                       or "EffectiveRatio", in which case Resampling{2} should be
-        %                       a (Scalar) specifying the minimum ratio of effective particles 
-        %                       which, when reached, will trigger the resampling process
-        %                       [Default ResamplingPolicy = {'TimeInterval',1}], meaning
-        %                       that resampling is performed on every iteration of
-        %                       the Particle Filter (upon update).                       
-        % * Resampler           An object handle to a ResamplerX subclass. If a 
-        %                       Resampler is provided, then it will override any choice
-        %                       specified within the ResamplingScheme. ResamplingPolicy
-        %                       will not be affected.
-        %  * BirthScheme        (1 x 2 cell array) specifying the particle birth
-        %                       scheme. BirthScheme{1} should be a string which can be
-        %                       set to either "Mixture", in which case BirthScheme{2}
-        %                       should specify the probability of birth of new particles,
-        %                       or "Expansion", in which case BirthScheme{2} should
-        %                       specify the number of particles to be "birthed" at
-        %                       each iteration of the filter.
-        %                       Default BirthScheme = {"Mixture",0.5} meaning that
-        %                       particles are birthed using the mixture scheme, with
-        %                       a birth probability of 50%.
-        % * BirthIntFcn         (function handle) A function handle, which when called 
-        %                       generates a set of initial particles and weights.
-        % * ProbOfDeath         (Scalar) The probability that a target may cease to exist
-        %                       between consecutive iterations of the filter.
-        % * ProbOfDetection     (Scalar) The probablity that a target will be detected in
-        %                       a given measurement scan.
-        % * NumTargets          (Scalar) The estimated number of targets following an 
-        %                       update step.
-        % * Model               An object handle to StateSpaceModelX object
         %
         %  See also predict, update.   
             
@@ -287,7 +296,69 @@ classdef SMC_PHDFilterX < FilterX
         % INITIALISE Initialise the SMC PHD Filter with a certain 
         % set of parameters.  
         %   
-        % DESCRIPTION: 
+        % Parameters
+        % ----------
+        % Model: StateSpaceModelX
+        %   An object handle to StateSpaceModelX object.
+        % NumParticles: scalar
+        %   The number of particles to be employed by the  SMC PHD Filter. 
+        %   (default = 10000)
+        % PriorParticles: (NumStateDims x NumParticles) matrix
+        %   The initial set of particles to be used by the Particle Filter. 
+        %   These are copied into the Particles property by the constructor.
+        % PriorWeights: (1 x NumParticles) row vector
+        %   The initial set of weights to be used by the Particle Filter. 
+        %   These are copied into the Weights property by the constructor. 
+        %   (default = 1/NumParticles, which implies uniform weights)
+        % PriorDistFcn: function handle
+        %   A function handle, of the form [parts, weights] = PriorDistFcn(NumParticles),
+        %   which when called generates a set of initial particles and weights, 
+        %   that are consecutively copied into the Particles and Weights properties
+        %   respectively. The function should accept exactly ONE argument, 
+        %   which is the number of particles (NumParticles) to be generated and
+        %   return 2 outputs. If a PriorDistFcn is specified, then any values provided for the
+        %   PriorParticles and PriorWeights arguments are ignored.
+        % ResamplingScheme: string 
+        %   Method used for particle resampling, specified as either 'Multinomial'
+        %   or 'Systematic'. (default = 'Systematic')
+        % ResamplingPolicy: (1 x 2) cell array
+        %   Specifies the resampling trigger conditions. ReamplingPolicy{1} 
+        %   should be a string which can be either:
+        %       1) "TimeInterval", in which case ReamplingPolicy{2} should 
+        %          be a scalar specifying the number of iterations after which
+        %          resampling should be performed, or
+        %       2) "EffectiveRatio", in which case Resampling{2} should be
+        %          a scalar specifying the minimum ratio of effective particles 
+        %          which, when reached, will trigger the resampling process
+        %   (default ResamplingPolicy = {'TimeInterval',1}], implying that 
+        %   resampling is performed on every update of the Particle Filter).                       
+        % Resampler: ResamplerX object handle, optional
+        %   An object handle to a ResamplerX subclass. If a Resampler is provided,
+        %   then it will override any choice specified within the ResamplingScheme. 
+        %   ResamplingPolicy will not be affected.
+        % BirthScheme: (1 x 2) cell array
+        %   Specifies the particle birth scheme. BirthScheme{1} should be 
+        %   a string which can be set to either:
+        %       1) "Mixture", in which case BirthScheme{2} should specify the
+        %          probability of birth of new particles, or
+        %       2) "Expansion", in which case BirthScheme{2} should specify 
+        %          the number of particles to be "birthed" at each iteration 
+        %          of the filter.
+        %   (default BirthScheme = {"Mixture",0.5} implying that particles 
+        %    are born using the mixture scheme, with a birth probability of 50%)
+        % BirthIntFcn: function handle
+        %   A function handle, [parts, weights] = BirthIntFcn(NumParticles), 
+        %   which when called generates a set of initial particles and weights.
+        % ProbOfDeath: scalar
+        %   The probability that a target may cease to exist between consecutive 
+        %   iterations of the filter.
+        % ProbOfDetection: scalar
+        %   The probablity that a target will be detected in a given measurement scan.
+        % NumTargets: scalar
+        %   The estimated number of targets following an update step.
+        %
+        % Usage
+        % ----- 
         % * initialise(phd,ssm) initialises the SMC_PHDFilterX object 
         %   phd with the provided StateSpaceModelX object ssm.
         % * initialise(phd,priorParticles,priorWeights)initialises the 
@@ -301,59 +372,6 @@ classdef SMC_PHDFilterX < FilterX
         % * initialise(phd,___,Name,Value,___) instantiates an object handle, 
         %   configured with the options specified by one or more Name,Value
         %   pair arguments.
-        %
-        % INPUT ARGUMENTS:
-        % * NumParticles        (Scalar) The number of particles to be employed by the  
-        %                       SMC PHD Filter. [Default = 10000]
-        % * PriorParticles      (NumStateDims x NumParticles) The initial set of particles
-        %                       to be used by the Particle Filter. These are copied into
-        %                       the Particles property by the constructor.
-        % * PriorWeights        (1 x NumParticles matrix) The initial set of weights to be used 
-        %                       by the Particle Filter. These are copied into the Weights 
-        %                       property by the constructor. [Default = 1/NumParticles]
-        % * PriorDistFcn        (function handle) A function handle, which when called
-        %                       generates a set of initial particles and weights, which
-        %                       are consecutively copied into the Particles and Weights
-        %                       properties respectively. The function should accept exactly ONE
-        %                       argument, which is the number of particles to be generated and
-        %                       return 2 outputs. If a PriorDistFcn is specified, then any values
-        %                       provided for the PriorParticles and PriorWeights arguments are ignored.
-        % * ResamplingScheme    (String) Method used for particle resampling, specified as 
-        %                       'Multinomial', 'Systematic'. [Default = 'Systematic']
-        % * ResamplingPolicy    (1 x 2 cell array) specifying the resampling trigger
-        %                       conditions. ReamplingPolicy{1} should be a (String)
-        %                       which can be either "TimeInterval", in which case 
-        %                       ReamplingPolicy{2} should be a (Scalar) specifying the number  
-        %                       of iterations after which resampling should be performed,
-        %                       or "EffectiveRatio", in which case Resampling{2} should be
-        %                       a (Scalar) specifying the minimum ratio of effective particles 
-        %                       which, when reached, will trigger the resampling process
-        %                       [Default ResamplingPolicy = {'TimeInterval',1}], meaning
-        %                       that resampling is performed on every iteration of
-        %                       the Particle Filter (upon update).                       
-        % * Resampler           An object handle to a ResamplerX subclass. If a 
-        %                       Resampler is provided, then it will override any choice
-        %                       specified within the ResamplingScheme. ResamplingPolicy
-        %                       will not be affected.
-        %  * BirthScheme        (1 x 2 cell array) specifying the particle birth
-        %                       scheme. BirthScheme{1} should be a string which can be
-        %                       set to either "Mixture", in which case BirthScheme{2}
-        %                       should specify the probability of birth of new particles,
-        %                       or "Expansion", in which case BirthScheme{2} should
-        %                       specify the number of particles to be "birthed" at
-        %                       each iteration of the filter.
-        %                       Default BirthScheme = {"Mixture",0.5} meaning that
-        %                       particles are birthed using the mixture scheme, with
-        %                       a birth probability of 50%.
-        % * BirthIntFcn         (function handle) A function handle, which when called 
-        %                       generates a set of initial particles and weights.
-        % * ProbOfDeath         (Scalar) The probability that a target may cease to exist
-        %                       between consecutive iterations of the filter.
-        % * ProbOfDetection     (Scalar) The probablity that a target will be detected in
-        %                       a given measurement scan.
-        % * NumTargets          (Scalar) The estimated number of targets following an 
-        %                       update step.
-        % * Model               An object handle to StateSpaceModelX object
         %
         %  See also predict, update.   
                         
@@ -451,10 +469,12 @@ classdef SMC_PHDFilterX < FilterX
         function predict(this)
         % PREDICT Perform SMC PHD Filter prediction step
         %   
-        % DESCRIPTION: 
+        % Usage
+        % -----
         % * predict(this) calculates the predicted PHD
         %
-        % MORE DETAILS:
+        % More details
+        % ------------
         % * SMC_PHDFilterX uses the Model class property, which should 
         %   be an instance of the TrackingX.Models.StateSpaceModel class, in order
         %   to extract information regarding the underlying state-space model.
@@ -540,7 +560,14 @@ classdef SMC_PHDFilterX < FilterX
         % ----------------
         % Performs the relevant SMC PHD update algo, based on the selected .type
         function update(this)
-            
+        % UPDATE Perform SMC PHD update step
+        %
+        % Usage
+        % -----
+        % * update(this) calculates the corrected intensity.
+        %
+        % See also UnscentedParticleFilterX, predict, smooth.
+        
             this.NumMeasurements = size(this.MeasurementList,2);
             
             % Compute g(z|x) matrix as in [1] 

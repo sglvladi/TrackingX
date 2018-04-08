@@ -9,11 +9,7 @@ classdef SystematicResamplerX < ResamplerX & matlabshared.tracking.internal.Syst
 %
 % SystematicResamplerX Methods:
 %    SystematicResamplerX  - Constructor method
-%    resample - Perform multinomial resampling 
-%
-% [1] E. A. Wan and R. Van Der Merwe, "The unscented Kalman filter for nonlinear estimation," 
-%     Proceedings of the IEEE 2000 Adaptive Systems for Signal Processing, Communications, and 
-%     Control Symposium (Cat. No.00EX373), Lake Louise, Alta., 2000, pp. 153-158.
+%    resample - Perform systematic resampling 
 % 
 % See also MultinomialResamplerX
 
@@ -35,10 +31,34 @@ classdef SystematicResamplerX < ResamplerX & matlabshared.tracking.internal.Syst
         function [newSamples, newWeights, idx] = resample(this, samples, weights, Nnew)
         % RESAMPLE Perform systematic resampling
         %   
-        % DESCRIPTION: 
-        % * idx = resample(this,weights) returns a row vector idx containing
-        %   the indexes of samples generated through by performing systematic
-        %   resampling based on the vector weights.
+        % Parameters
+        % ----------
+        % samples: (NumDims x NumSamples) matrix
+        %   A matrix, whose columns correspond to individual samples
+        % weights: (1 x NumSamples) row vector
+        %   A row vector, whose columns correspond to the weights of the
+        %   respective columns/samples of the samples matrix
+        % Nnew: scalar, optional
+        %   The number of samples to be resampled.
+        %   (default = NumSamples, which implies that the same ammount of
+        %   samples will be generated, as the number of samples provided)
+        %
+        % Returns
+        % -------
+        % newSamples: (NumDims x Nnew) matrix
+        %   A matrix, whose columns correspond to resampled samples.
+        % newWeights: (1 x Nnew) row vector
+        %   A row vector, whose columns correspond to the weights of the
+        %   respective columns/samples of the newSamples matrix
+        % idx: (1 x Nnew) row vector
+        %   A row vector of indices, mapping each sample in newSamples to the
+        %   corresponding sample in samples.
+        %
+        % Usage
+        % -----
+        % * [newSamples, newWeights, idx] = resample(this,weights) returns a 
+        %   row vector idx containing the indexes of samples generated through 
+        %   by performing systematic resampling based on the vector weights.
         %
         % See also MultinomialResamplerX/resample
             

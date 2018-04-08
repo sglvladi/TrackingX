@@ -10,8 +10,11 @@ classdef (Abstract) HypothesiserX < BaseX
 %
 % HypothesiserX Methods:
 %   + HypothesiserX - Constructor method
+%   ~ hypothesise - Performs the generation an evaluation of measurement
+%                   hypotheses
 %
 % (+) denotes puplic properties/methods
+% (~) denotes abstract properties/methods
 %
 % February 2018 Lyudmil Vladimirov, University of Liverpool.
     

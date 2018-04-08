@@ -20,6 +20,7 @@ classdef (Abstract) GaterX < BaseX  % Extends trackingX.BaseX
 %
 % GaterX Methods:
 %   + GaterX - Constructor method
+%   ~ gate - Performs gating
 %
 % (+) denotes puplic properties/methods
 %

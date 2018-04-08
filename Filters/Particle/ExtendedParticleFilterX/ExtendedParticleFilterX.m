@@ -5,61 +5,61 @@ classdef ExtendedParticleFilterX < ParticleFilterX
 % This is a class implementation of a SIR Particle Filter. (Alg. 4 of [1])
 %
 % ExtendedParticleFilterX Properties: (*)
-%   + NumParticles      The number of particles employed by the Particle Filter
-%   + Particles         A (NumStateDims x NumParticles) matrix used to store 
-%                       the last computed/set filtered particles  
-%   + Weights           A (1 x NumParticles) vector used to store the weights
-%                       of the last computed/set filtered particles
-%   + PredParticles     A (NumStateDims x NumParticles) matrix used to store 
-%                       the last computed/set predicted particles  
-%   + PredWeights       A (1 x NumParticles) vector used to store the weights
+%   + NumParticles - The number of particles employed by the Particle Filter
+%   + Particles - A (NumStateDims x NumParticles) matrix used to store 
+%                 the last computed/set filtered particles  
+%   + Weights - A (1 x NumParticles) vector used to store the weights
+%               of the last computed/set filtered particles
+%   + PredParticles - A (NumStateDims x NumParticles) matrix used to store 
+%                     the last computed/set predicted particles  
+%   + PredWeights - A (1 x NumParticles) vector used to store the weights
 %                       of the last computed/set predicted particles
-%   + Measurement       A (NumObsDims x 1) matrix used to store the received measurement
-%   + ControlInput      A (NumCtrDims x 1) matrix used to store the last received 
-%                       control input
-%   + ResamplingScheme  Method used for particle resampling, specified as 
-%                       'multinomial', 'systematic'. Default = 'systematic'
-%   + ResamplingPolicy  A (1 x 2) cell array, specifying the resampling trigger
-%                       conditions. ReamplingPolicy{1} should be a string
-%                       which can be either "TimeInterval", in which case 
-%                       ReamplingPolicy{2} should specify the number of 
-%                       iterations after which resampling should be done,
-%                       or "EffectiveRatio", in which case Resampling{2}
-%                       should specify the minimum ratio of effective particles
-%                       which when reached will trigger the resampling process.
-%                       Default ResamplingPolicy = {"TimeInterval",1}, meaning
-%                       that resampling is performed on every iteration of
-%                       the Particle Filter (upon update).                       
-%   + Resampler         An object handle to a ResamplerX subclass. If a 
-%                       Resampler is provided, then it will override any choice
-%                       specified within the ResamplingScheme. ResamplingPolicy
-%                       will not be affected.
-%   ¬ StateMean         A (NumStateDims x 1) vector used to store the last 
-%                       computed filtered state mean.  
-%   ¬ StateCovar        A (NumStateDims x NumStateDims) matrix used to store
-%                       the last computed filtered state covariance
-%   ¬ PredStateMean     A (NumStateDims x 1) vector used to store the last 
-%                       computed prediicted state mean  
-%   ¬ PredStateCovar    A (NumStateDims x NumStateDims) matrix used to store
-%                       the last computed/set predicted state covariance
-%   ¬ PredMeasMean      A (NumObsDims x 1) vector used to store the last 
-%                       computed predicted measurement mean
-%   ¬ InnovErrCovar     A (NumObsDims x NumObsDims) matrix used to store the
-%                       last computed innovation error covariance
-%   ¬ CrossCovar        A (NumStateDims x NumObsDims) matrix used to store 
-%                       the last computed cross-covariance Cov(X,Y)  
-%   + Model             An object handle to StateSpaceModelX object
-%       + Dyn = Object handle to DynamicModelX SubClass      
-%       + Obs = Object handle to ObservationModelX SubClass 
-%       + Ctr = Object handle to ControlModelX SubClass    
+%   + Measurement - A (NumObsDims x 1) matrix used to store the received measurement
+%   + ControlInput - A (NumCtrDims x 1) matrix used to store the last received 
+%                    control input
+%   + ResamplingScheme - Method used for particle resampling, specified as 
+%                        'multinomial', 'systematic'. Default = 'systematic'
+%   + ResamplingPolicy - A (1 x 2) cell array, specifying the resampling trigger
+%                        conditions. ReamplingPolicy{1} should be a string
+%                        which can be either "TimeInterval", in which case 
+%                        ReamplingPolicy{2} should specify the number of 
+%                        iterations after which resampling should be done,
+%                        or "EffectiveRatio", in which case Resampling{2}
+%                        should specify the minimum ratio of effective particles
+%                        which when reached will trigger the resampling process.
+%                        Default ResamplingPolicy = {"TimeInterval",1}, meaning
+%                        that resampling is performed on every iteration of
+%                        the Particle Filter (upon update).                       
+%   + Resampler - An object handle to a ResamplerX subclass. If a 
+%                 Resampler is provided, then it will override any choice
+%                 specified within the ResamplingScheme. ResamplingPolicy
+%                 will not be affected.
+%   ¬ StateMean - A (NumStateDims x 1) vector used to store the last 
+%                 computed filtered state mean.  
+%   ¬ StateCovar - A (NumStateDims x NumStateDims) matrix used to store
+%                  the last computed filtered state covariance
+%   ¬ PredStateMean - A (NumStateDims x 1) vector used to store the last 
+%                     computed prediicted state mean  
+%   ¬ PredStateCovar - A (NumStateDims x NumStateDims) matrix used to store
+%                      the last computed/set predicted state covariance
+%   ¬ PredMeasMean - A (NumObsDims x 1) vector used to store the last 
+%                    computed predicted measurement mean
+%   ¬ InnovErrCovar - A (NumObsDims x NumObsDims) matrix used to store the
+%                     last computed innovation error covariance
+%   ¬ CrossCovar - A (NumStateDims x NumObsDims) matrix used to store 
+%                  the last computed cross-covariance Cov(X,Y)  
+%   + Model - An object handle to StateSpaceModelX object
+%       + Dyn - Object handle to DynamicModelX SubClass      
+%       + Obs - Object handle to ObservationModelX SubClass 
+%       + Ctr - Object handle to ControlModelX SubClass    
 %
 %   (*) NumStateDims, NumObsDims and NumCtrDims denote the dimentionality of 
 %       the state, measurement and control vectors respectively.
 %
 % ExtendedParticleFilterX Methods:
 %   + ExtendedParticleFilterX  - Constructor method
-%   + predict        - Performs UKF prediction step
-%   + update         - Performs UKF update step
+%   + predict - Performs UKF prediction step
+%   + update - Performs UKF update step
 %
 % (+) denotes puplic properties/methods
 % (¬) denotes dependent properties
@@ -74,7 +74,49 @@ classdef ExtendedParticleFilterX < ParticleFilterX
         function this = ExtendedParticleFilterX(varargin)
         % EXTENDEDPARTICLEFILTERX Constructor method
         %   
-        % DESCRIPTION: 
+        % Parameters
+        % ----------
+        % Model: StateSpaceModelX
+        %   An object handle to StateSpaceModelX object.
+        % NumParticles: scalar, optional
+        %   The number of particles to be employed by the Particle Filter. 
+        %   (default = 1000)
+        % PriorDistFcn: function handle, optional 
+        %   A function handle, of the form [parts, weights] = PriorDistFcn(NumParticles),
+        %   which when called generates a set of initial particles and weights, 
+        %   that are consecutively copied into the Particles and Weights properties
+        %   respectively. The function should accept exactly ONE argument, 
+        %   which is the number of particles (NumParticles) to be generated and
+        %   return 2 outputs. If a PriorDistFcn is specified, then any values provided for the
+        %   PriorParticles and PriorWeights arguments are ignored.
+        % PriorParticles: (NumStateDims x NumParticles) matrix, optional
+        %   The initial set of particles to be used by the Particle Filter. 
+        %   These are copied into the Particles property by the constructor.
+        % PriorWeights : (1 x NumParticles) row vector, optional
+        %   The initial set of weights to be used by the Particle Filter. 
+        %   These are copied into the Weights property by the constructor. 
+        %   (default = 1/NumParticles, which implies uniformly distributed weights)
+        % ResamplingScheme: string , optional
+        %   Method used for particle resampling, specified as either 'Multinomial'
+        %   or 'Systematic'. (default = 'Systematic')
+        % ResamplingPolicy: (1 x 2) cell array, optional
+        %   Specifies the resampling trigger conditions. ReamplingPolicy{1} 
+        %   should be a string which can be either:
+        %       1) "TimeInterval", in which case ReamplingPolicy{2} should 
+        %          be a scalar specifying the number of iterations after which
+        %          resampling should be performed, or
+        %       2) "EffectiveRatio", in which case Resampling{2} should be
+        %          a scalar specifying the minimum ratio of effective particles 
+        %          which, when reached, will trigger the resampling process
+        %  (default ResamplingPolicy = {'TimeInterval',1}], implying that 
+        %   resampling is performed on every update of the Particle Filter).                       
+        % Resampler: ResamplerX object handle, optional
+        %   An object handle to a ResamplerX subclass. If a Resampler is provided,
+        %   then it will override any choice specified within the ResamplingScheme. 
+        %   ResamplingPolicy will not be affected.
+        %
+        % Usage
+        % ----- 
         % * epf = ExtendedParticleFilterX() returns an unconfigured object 
         %   handle. Note that the object will need to be configured at a 
         %   later instance before any call is made to it's methods.
@@ -93,41 +135,6 @@ classdef ExtendedParticleFilterX < ParticleFilterX
         %   object handle, configured with the options specified by one or 
         %   more Name,Value pair arguments.
         %
-        % INPUT ARGUMENTS:
-        % * NumParticles        (Scalar) The number of particles to be employed by the  
-        %                       Extended Particle Filter. [Default = 1000]
-        % * PriorParticles      (NumStateDims x NumParticles) The initial set of particles
-        %                       to be used by the Particle Filter. These are copied into
-        %                       the Particles property by the constructor.
-        % * PriorWeights        (1 x NumParticles matrix) The initial set of weights to be used 
-        %                       by the Particle Filter. These are copied into the Weights 
-        %                       property by the constructor. [Default = 1/NumParticles]
-        % * PriorDistFcn        (function handle) A function handle, which when called
-        %                       generates a set of initial particles and weights, which
-        %                       are consecutively copied into the Particles and Weights
-        %                       properties respectively. The function should accept exactly ONE
-        %                       argument, which is the number of particles to be generated and
-        %                       return 2 outputs. If a
-        %                       PriorDistFcn is specified, then any values provided for the
-        %                       PriorParticles and PriorWeights arguments are ignored.
-        % * ResamplingScheme    (String) Method used for particle resampling, specified as 
-        %                       'Multinomial', 'Systematic'. [Default = 'Systematic']
-        % * ResamplingPolicy    (1 x 2 cell array) specifying the resampling trigger
-        %                       conditions. ReamplingPolicy{1} should be a (String)
-        %                       which can be either "TimeInterval", in which case 
-        %                       ReamplingPolicy{2} should be a (Scalar) specifying the number  
-        %                       of iterations after which resampling should be performed,
-        %                       or "EffectiveRatio", in which case Resampling{2} should be
-        %                       a (Scalar) specifying the minimum ratio of effective particles 
-        %                       which, when reached, will trigger the resampling process
-        %                       [Default ResamplingPolicy = {'TimeInterval',1}], meaning
-        %                       that resampling is performed on every iteration of
-        %                       the Particle Filter (upon update).                       
-        % * Resampler           An object handle to a ResamplerX subclass. If a 
-        %                       Resampler is provided, then it will override any choice
-        %                       specified within the ResamplingScheme. ResamplingPolicy
-        %                       will not be affected.
-        %
         %  See also predict, update, smooth. 
         
            % Call SuperClass method
@@ -141,7 +148,49 @@ classdef ExtendedParticleFilterX < ParticleFilterX
         % INITIALISE Initialise the Extended Particle Filter with a certain 
         % set of parameters.  
         %   
-        % DESCRIPTION: 
+        % Parameters
+        % ----------
+        % Model: StateSpaceModelX
+        %   An object handle to StateSpaceModelX object.
+        % NumParticles: scalar, optional
+        %   The number of particles to be employed by the Particle Filter. 
+        %   (default = 1000)
+        % PriorDistFcn: function handle, optional 
+        %   A function handle, of the form [parts, weights] = PriorDistFcn(NumParticles),
+        %   which when called generates a set of initial particles and weights, 
+        %   that are consecutively copied into the Particles and Weights properties
+        %   respectively. The function should accept exactly ONE argument, 
+        %   which is the number of particles (NumParticles) to be generated and
+        %   return 2 outputs. If a PriorDistFcn is specified, then any values provided for the
+        %   PriorParticles and PriorWeights arguments are ignored.
+        % PriorParticles: (NumStateDims x NumParticles) matrix, optional
+        %   The initial set of particles to be used by the Particle Filter. 
+        %   These are copied into the Particles property by the constructor.
+        % PriorWeights : (1 x NumParticles) row vector, optional
+        %   The initial set of weights to be used by the Particle Filter. 
+        %   These are copied into the Weights property by the constructor. 
+        %   (default = 1/NumParticles, which implies uniformly distributed weights)
+        % ResamplingScheme: string , optional
+        %   Method used for particle resampling, specified as either 'Multinomial'
+        %   or 'Systematic'. (default = 'Systematic')
+        % ResamplingPolicy: (1 x 2) cell array, optional
+        %   Specifies the resampling trigger conditions. ReamplingPolicy{1} 
+        %   should be a string which can be either:
+        %       1) "TimeInterval", in which case ReamplingPolicy{2} should 
+        %          be a scalar specifying the number of iterations after which
+        %          resampling should be performed, or
+        %       2) "EffectiveRatio", in which case Resampling{2} should be
+        %          a scalar specifying the minimum ratio of effective particles 
+        %          which, when reached, will trigger the resampling process
+        %  (default ResamplingPolicy = {'TimeInterval',1}], implying that 
+        %   resampling is performed on every update of the Particle Filter).                       
+        % Resampler: ResamplerX object handle, optional
+        %   An object handle to a ResamplerX subclass. If a Resampler is provided,
+        %   then it will override any choice specified within the ResamplingScheme. 
+        %   ResamplingPolicy will not be affected.
+        %
+        % Usage
+        % -----  
         % * initialise(epf,ssm) initialises the ExtendedParticleFilterX object 
         %   epf with the provided StateSpaceModelX object ssm.
         % * initialise(epf,priorParticles,priorWeights)initialises the 
@@ -156,41 +205,6 @@ classdef ExtendedParticleFilterX < ParticleFilterX
         %   configured with the options specified by one or more Name,Value
         %   pair arguments.
         %
-        % INPUT ARGUMENTS:
-        % * NumParticles        (Scalar) The number of particles to be employed by the  
-        %                       Particle Filter. [Default = 1000]
-        % * PriorParticles      (NumStateDims x NumParticles) The initial set of particles
-        %                       to be used by the Particle Filter. These are copied into
-        %                       the Particles property by the constructor.
-        % * PriorWeights        (1 x NumParticles matrix) The initial set of weights to be used 
-        %                       by the Particle Filter. These are copied into the Weights 
-        %                       property by the constructor. [Default = 1/NumParticles]
-        % * PriorDistFcn        (function handle) A function handle, which when called
-        %                       generates a set of initial particles and weights, which
-        %                       are consecutively copied into the Particles and Weights
-        %                       properties respectively. The function should accept exactly ONE
-        %                       argument, which is the number of particles to be generated and
-        %                       return 2 outputs. If a
-        %                       PriorDistFcn is specified, then any values provided for the
-        %                       PriorParticles and PriorWeights arguments are ignored.
-        % * ResamplingScheme    (String) Method used for particle resampling, specified as 
-        %                       'Multinomial', 'Systematic'. [Default = 'Systematic']
-        % * ResamplingPolicy    (1 x 2 cell array) specifying the resampling trigger
-        %                       conditions. ReamplingPolicy{1} should be a (String)
-        %                       which can be either "TimeInterval", in which case 
-        %                       ReamplingPolicy{2} should be a (Scalar) specifying the number  
-        %                       of iterations after which resampling should be performed,
-        %                       or "EffectiveRatio", in which case Resampling{2} should be
-        %                       a (Scalar) specifying the minimum ratio of effective particles 
-        %                       which, when reached, will trigger the resampling process
-        %                       [Default ResamplingPolicy = {'TimeInterval',1}], meaning
-        %                       that resampling is performed on every iteration of
-        %                       the Particle Filter (upon update).                       
-        % * Resampler           An object handle to a ResamplerX subclass. If a 
-        %                       Resampler is provided, then it will override any choice
-        %                       specified within the ResamplingScheme. ResamplingPolicy
-        %                       will not be affected.
-        %
         %  See also predict, update, smooth. 
                     
            % Call SuperClass method
@@ -203,11 +217,13 @@ classdef ExtendedParticleFilterX < ParticleFilterX
         function predict(this)
         % PREDICT Perform Extended Particle Filter prediction step
         %   
-        % DESCRIPTION: 
+        % Usage
+        % -----
         % * predict(this) calculates the predicted system state and measurement,
         %   as well as their associated uncertainty covariances.
         %
-        % MORE DETAILS:
+        % More details
+        % ------------
         % * ExtendedParticleFilterX uses the Model class property, which should 
         %   be an instance of the TrackingX.Models.StateSpaceModel class, in order
         %   to extract information regarding the underlying state-space model.
@@ -241,11 +257,12 @@ classdef ExtendedParticleFilterX < ParticleFilterX
        function update(this)
         % UPDATE Perform Extended Particle Filter update step
         %   
-        % DESCRIPTION: 
+        % Usage
+        % -----
         % * update(this) calculates the corrected sytem state and the 
         %   associated uncertainty covariance.
         %
-        %   See also ExtendedParticleFilterX, predict, smooth.
+        % See also ExtendedParticleFilterX, predict, smooth.
                         
             % Perform EKF update to obtain Optimal Proposal
             this.ekf.update();
@@ -262,14 +279,15 @@ classdef ExtendedParticleFilterX < ParticleFilterX
         % UPDATEPDA - Performs EPF update step, for multiple measurements
         %             Update is performed according to the generic (J)PDAF equations [1] 
         % 
-        % DESCRIPTION:
+        % Usage
+        % -----
         %  * updatePDA(assocWeights) Performs EPF-PDA update step for multiple 
         %    measurements based on the provided (1-by-Nm+1) association weights 
         %    matrix assocWeights.
         %
         %   [1] Y. Bar-Shalom, F. Daum and J. Huang, "The probabilistic data association filter," in IEEE Control Models, vol. 29, no. 6, pp. 82-100, Dec. 2009.
         %
-        %   See also KalmanFilterX, Predict, Iterate, Smooth, resample.
+        % See also KalmanFilterX, Predict, Iterate, Smooth, resample.
             
             NumMeasurements = size(this.Measurement,2);  
             if(~NumMeasurements)

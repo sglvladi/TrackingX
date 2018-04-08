@@ -1,26 +1,44 @@
 function [xPred, PPred, yPred, S, Pxy] = KalmanFilterX_Predict(x,P,F,Q,H,R,u,B,O)
-%KALMANFILTERX_PREDICT Perform the discrete-time KF state and measurement
+% KALMANFILTERX_PREDICT Perform the discrete-time KF state and measurement
 % prediction steps, under the assumption of additive process noise.
 %
-%INPUTS:    x   The (xDim x 1) state estimate at the previous time-step.
-%           P   The (xDim x xDim) state covariance matrix at the previous
-%               time-step.
-%           F   An (xDim x xDim) state transition matrix.
-%           Q   The (xDim x xDim) process noise covariance matrix.
-%           H   A (xDim x yDim) measurement matrix.
-%           R   The (yDim x yDim) measurement noise covariance matrix.
-%           u   A optional (xDim x 1) control input.
-%               If omitted, no control input is used.
-%           B   An optional (xDim x xDim) control gain matrix.
-%               If omitted, B is assumed to be 1.
-%           O   An optional (xDim x xDim) control noise covariance
-%               matrix. If omitted, Q is assumed to be 0.
+% Parameters
+% ----------
+% x: column vector
+%   The (xDim x 1) state estimate at the previous time-step.
+% P: matrix 
+%   The (xDim x xDim) state covariance matrix at the previous
+%   time-step.
+% F: matrix
+%   An (xDim x xDim) state transition matrix.
+% Q: matrix
+%   The (xDim x xDim) process noise covariance matrix.
+% H: matrix
+%   A (xDim x yDim) measurement matrix.
+% R: matrix 
+%   The (yDim x yDim) measurement noise covariance matrix.
+% u: column vector, optional
+%   A optional (xDim x 1) control input.
+%   If omitted, no control input is used.
+% B: matrix, optional
+%   An optional (xDim x xDim) control gain matrix.
+%   If omitted, B is assumed to be 1.
+% O: matrix, optional
+%   An optional (xDim x xDim) control noise covariance
+%   matrix. If omitted, Q is assumed to be 0.
 %
-%OUTPUTS:   xPred   The (xDim x 1) predicted state estimate.
-%           PPred   The (xDim x xDim) predicted state covariance matrix.
-%           yPred   The (yDim x 1) predicted measurement estimate.
-%           Pxy     The (xDim x yDim) cross-covariance matrix.
-%           S       The (yDim x yDim) innovation covariance matrix.
+% Returns
+% -------
+% xPred: column vector
+%   The (xDim x 1) predicted state estimate.
+% PPred: matrix
+%   The (xDim x xDim) predicted state covariance matrix.
+% yPred: column vector
+%   The (yDim x 1) predicted measurement estimate.
+% Pxy: matrix
+%   The (xDim x yDim) cross-covariance matrix.
+% S: matrix
+%   The (yDim x yDim) innovation covariance matrix.
 %
 %October 2017 Lyudmil Vladimirov, University of Liverpool.
     

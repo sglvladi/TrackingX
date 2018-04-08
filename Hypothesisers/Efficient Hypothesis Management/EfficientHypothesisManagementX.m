@@ -27,16 +27,22 @@ classdef EfficientHypothesisManagementX < HypothesiserX
     methods
         function this = EfficientHypothesisManagementX(varargin)
         % EFFICIENTHYPOTHESISMANAGEMENTX Constructor method
-        %   
-        % DESCRIPTION: 
+        % 
+        % Parameters
+        % ----------
+        % Mode: string
+        %   Specifies the mode of operation of the EHM algorithm, which can
+        %   be set to either:
+        %       1) 'Track-Oriented'
+        %       2) 'Measurement-Oriented'
+        %   (default='Track-Oriented')
+        % 
+        % Usage
+        % -----
         % * EfficientHypothesisManagementX() creates a EHM object handle
         % * EfficientHypothesisManagementX('Mode',mode) creates an EHM
         %   object handle, configured to operate in Mode mode. Mode can be
         %   either 'Track-Oriented' (default) or 'Measurement-Oriented'.
-        % * EfficientHypothesisManagementX('Clusterer',clusterObj) creates 
-        %   an EHM object handle, configured to operate with the given
-        %   ClustererX class instance clusterObj. By default a NaiveClustererX
-        %   is used. Set clusterObj=[] to disable clustering.
         %
         % See also EfficientHypothesisManagementX/hypothesise
             % Return early if no arguments are supplied
@@ -66,8 +72,25 @@ classdef EfficientHypothesisManagementX < HypothesiserX
         
         function AssocWeightsMatrix = hypothesise(this,LikelihoodMatrix)
         % HYPOTHESISE Generate hypotheses and calculate association weights
-        %   
-        % DESCRIPTION: 
+        % 
+        % Parameters
+        % ----------
+        % LikelihoodMatrix: (NumMeasurements+1 x NumTracks) matrix
+        %   A matrix whose (i,j)th element is the likelihood of the (i-1)th
+        %   measurement, given the measurement prediction of the jth track.
+        %   The row (1,:) represents the dummy (null) measurement likelihood
+        %   for each track.
+        %
+        % Returns
+        % -------
+        % AssocWeightsMatrix: (NumMeasurements+1 x NumTracks) matrix
+        %   A matrix whose (i,j)th element is the joint probability that the 
+        %   (i-1)th measurement is associated to the jth track. The row (1,:) 
+        %   represents the dummy (null) measurement association probability
+        %   for each target.
+        %
+        % Usage
+        % -----
         % * hypothesise(ehm) generates all valid association hypotheses and  
         %   calculates the respective association weights, based on the
         %   likelihood matrix ehm.LikelihoodMatrix.
@@ -93,31 +116,35 @@ classdef EfficientHypothesisManagementX < HypothesiserX
         % BUILDNETTO Build Track-Oriented (TO) EHM net and compute respective 
         % association probabilities (betta).
         %
-        % DESCRIPTION:
-        % * NetObj=buildNetTO(ValidationMatrix) generates and returns the
+        % Parameters
+        % ----------
+        % ValidationMatrix: (T x M) matrix
+        %   A matrix containing all possible measurement to track associations 
+        %   (M: number of measurements, including dummy at index 1)
+        %   (T: number of tracks)
+        %
+        % Returns
+        % -------
+        % NetObj: structure
+        %   A net object with the following fields:
+        %       + NetObj.NodeList - List of all Nodes (NodeObj) 
+        %         contained in net.
+        %       + NetObj.EdgeList - Cell Matrix (Nn-by-Nn), Nn being 
+        %         the total number of nodes), where cell (i,j) contains 
+        %         the tracks contained in edge from parent node i, to
+        %         child node j.
+        %
+        % Usage
+        % -----
+        % * NetObj = buildNetTO(ValidationMatrix) generates and returns the
         %   EHM net NetObj.
         %
-        % INPUTS:
-        % * ValidationMatrix:   (T-by-M matrix) containing all possible measurement
-        %                       to track associations (for cluster of interest).
-        %                       (M: number of measurements, including dummy at index 1)
-        %                       (T: number of tracks)
+        % IMPORTANT REMINDER TO SELF:
+        %   When computing the remainders for a node, we always look at the remaining
+        %   association events in the !NEXT! layer and then get the difference
+        %   between these and any entries in the node's MeasIndList.
         %
-        % OUTPUTS:
-        % * NetObj:             (Structure) with the following fields:
-        %                       # NetObj.NodeList - List of all Nodes (NodeObj) 
-        %                         contained in net.
-        %                       # NetObj.EdgeList - Cell Matrix (Nn-by-Nn), Nn being 
-        %                         the total number of nodes), where cell (i,j) contains 
-        %                         the tracks contained in edge from parent node i, to
-        %                         child node j.
-        %
-        %   IMPORTANT REMINDER TO SELF:
-        %     When computing the remainders for a node, we always look at the remaining
-        %     association events in the !NEXT! layer and then get the difference
-        %     between these and any entries in the node's MeasIndList.
-        %
-        %   Author: Lyudmil Vladimirov
+        % Author: Lyudmil Vladimirov
 
             % Get number of tracks/layers
             TrackNum = size(ValidationMatrix,1); 

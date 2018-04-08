@@ -2,11 +2,19 @@ function sigmaPoints = formSigmaPoints(x,P,lambda)
 % FORMSIGMAPOINTS Compute and return the Augmented Sigma Points matrix
 % and the respective mean and covariance sigma weight vectors.
 %
-% INPUTS:    lambda - UKF scaling factor
-%            x      - The (xDim x 1) state mean vector.
-%            P      - The (xDim x xDim) state covariance vector.
+% Parameters
+% ----------
+% lambda: scalar
+%   UKF scaling factor
+% x: column vector
+%   The (xDim x 1) state mean vector.
+% P: matrix
+%   The (xDim x xDim) state covariance vector.
 %
-% OUTPUTS:   X      - The (xDim x 2xDim+1) matrix of sigma points
+% Returns
+% -------
+% X: matrix
+%   The (xDim x 2xDim+1) matrix of sigma points
 %
 % October 2017 Lyudmil Vladimirov, University of Liverpool.
 

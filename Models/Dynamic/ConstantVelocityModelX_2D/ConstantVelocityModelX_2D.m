@@ -15,22 +15,26 @@ classdef ConstantVelocityModelX_2D < DynamicModelX
 %   x(t) = F(Dt)*x(t-1) + w(t),  w(t)~ N(0,Q)
 %
 % where:
-%   x = [Xx; Vv; Xy; Vy]
-%   F = [1 Dt 0 0; 0 1 0 0; 0 0 1 Dt; 0 0 0 1]
-%   Q = [Dt^3/3, Dt^2/2, 0, 0; Dt^2/2, Dt, 0, 0;
-%        0, 0, Dt^3/3, Dt^2/2; 0, 0, Dt^2/2, Dt]*q; 
+%   x = [Xx; Vx; Xy; Vy]
+%   F = [1  Dt 0  0; 
+%        0  1  0  0; 
+%        0  0  1  Dt; 
+%        0  0  0  1]
+%   Q = [Dt^3/3, Dt^2/2, 0,      0; 
+%        Dt^2/2, Dt,     0,      0;
+%        0,      0,      Dt^3/3, Dt^2/2; 
+%        0,      0,      Dt^2/2, Dt]*q; 
 %
-% ConstantVelocityModelX_2D Properties:
-%   - VelocityErrVariance  Value of the noise diffusion coefficient q
-%   - TimeVariant          Value of the time variant Dt
+% ConstantVelocityModelX_1D Properties:
+%   + VelocityErrVariance  Value of the noise diffusion coefficient q
+%   + TimeVariant         Value of the time variant Dt
 %
-% ConstantVelocityModelX_2D Methods:
-%   - feval(~)         Equivalent to applying the model transition equations 
-%   - random(~)        Process noise sample generator function
-%   - pdf(~)           Function to evaluate the probability p(x_k|x_{k-1}) of 
-%                       a set of new states, given a set of (particle) state vectors
-%                       e.g. eval = @(xk,xkm1) mvnpdf(xk,xkm1,Q);
-%   - covariance(~)    Returns the state covariance process Q_k 
+% ConstantVelocityModelX_1D Methods:
+%   + feval - Equivalent to applying the model transition equations 
+%   + random - Process noise sample generator function
+%   + pdf - Function to evaluate the probability p(x_k|x_{k-1}) of 
+%           a set of new states, given a set of (particle) state vectors
+%   + covariance - Returns the state covariance process Q_k 
 %
 %  February 2018 Lyudmil Vladimirov, University of Liverpool
 
@@ -48,7 +52,13 @@ classdef ConstantVelocityModelX_2D < DynamicModelX
         function this = ConstantVelocityModelX_2D(varargin)
         % CONSTANTVELOCITYMODELX_2D Constructor method
         %   
-        % DESCRIPTION: 
+        % Parameters
+        % ----------
+        % VelocityErrVariance: scalar
+        %   A value describing the process noise diffusion coefficient.
+        %
+        % Usage
+        % ----- 
         % * ConstantVelocityModelX_2D(q) instantiates aan object handle 
         %   configured with the provided process noise diffusion
         %   coefficient q (scalar). 
@@ -57,13 +67,9 @@ classdef ConstantVelocityModelX_2D < DynamicModelX
         %   coefficient config.q (scalar).
         % * ConstantVelocityModelX_2D(___,Name,Value) instantiates an object 
         %   handle, configured with additional options specified by one or
-        %   more Name,Value pair arguments.
+        %   more Name,Value pair arguments. 
         %
-        % PARAMETERS
-        % * VelocityErrVariance - (Required) The VelocityErrVariance is a scalar
-        %   value describing the process noise diffusion coefficient. 
-        %
-        %  See also apply, rnd, pdf, covariance.   
+        %  See also feval, random, pdf, covariance.   
             
         
             % Call SuperClass method
@@ -100,7 +106,34 @@ classdef ConstantVelocityModelX_2D < DynamicModelX
         function xk = feval(this, xkm1, wk, Dt)
         % FEVAL Propagate a given state through the dynamic model  
         %
-        % DESCRIPTION:
+        % Parameters
+        % ----------
+        % xkm1: (NumStateDims x Ns) matrix, optional
+        %   - A matrix, whose columns correspond to individual state vectors.
+        %   - If not provided, then the state transition matrix (F) will be 
+        %     returned.
+        % wk: (NumStateDims x Ns) matrix or boolean, optional
+        %   - If wk is a boolean and set True, then the default model noise 
+        %     generation function (this.random()) will be used to generate the 
+        %     noise. 
+        %   - Otherwise, wk should be a matrix of equal dimensions to xk, 
+        %     where each column corresponds to the random noise which will
+        %     be added to each state vector. 
+        %   - If not provided, then no noise will be added to the state vectors.
+        % Dt: scalar, optional
+        %   A time variant. (default=this.TimeVariant)
+        %
+        % Returns
+        % -------
+        % xk: (NumStateDims x Ns) or (NumStateDims x NumStateDims)  matrix
+        %   - If no parameters are passed to the function, then xk will be the
+        %     (NumStateDims x NumStateDims) state transition matrix.
+        %   - Else, xk will be a (NumStateDims x Ns) matrix, whose columns 
+        %     correspond to the columns of xkm1, each propagated through the
+        %     dynamic model
+        %   
+        % Usage
+        % -----
         % * xk = FEVAL(this,xkm1,wk,Dt) returns the new state xk, produced by
         %   propagating the given state xkm1 through the dynamic model for
         %   time Dt and adding random noise wk. xk, xkm1 and wk must have  
@@ -142,7 +175,18 @@ classdef ConstantVelocityModelX_2D < DynamicModelX
         function cov = covariance(this,Dt)
         % COVARIANCE Returns process covariance matrix.
         %
-        % DESCRIPTION:
+        % Parameters
+        % ----------
+        % Dt: scalar, optional
+        %   A time variant. (default=this.TimeVariant)
+        %
+        % Returns
+        % -------
+        % cov: (NumStateDims x NumStateDims) matrix
+        %   The process noise covariance matrix
+        %
+        % Usage
+        % -----
         % * Qk = covariance(this,Dt) returns process covariance matrix, upon 
         %   application of Dt.
         % * Qk = covariance(this) returns process covariance matrix, upon 
@@ -163,7 +207,23 @@ classdef ConstantVelocityModelX_2D < DynamicModelX
         % RANDOM Generates random samples from the dynamic model's noise
         % distribution.
         %
-        % DESCRIPTION:
+        % Parameters
+        % ----------
+        % Ns: scalar, optional
+        %   The number of samples to be generated.
+        %   (default = 1)
+        % Dt: scalar, optional
+        %   A time variant. 
+        %   (default=this.TimeVariant)
+        %
+        % Returns
+        % -------
+        % wk: (NumStateDims x Ns)
+        %   A matrix, whose columns correspond to indivual/independent
+        %   noise samples.
+        %
+        % Usage
+        % -----
         % * wk = random(this,Ns,Dt) generates and returns a set of Ns samples
         %   generated from the noise distribution of the dynamic model, i.e.
         %   wk ~ N(0,Q(Dt)), where Q is the noise covariance upon application 
@@ -191,7 +251,24 @@ classdef ConstantVelocityModelX_2D < DynamicModelX
         % PDF Evaluates the probability/likelihood p(x_k|x_{k-1}) of a 
         % (set of) new state vector(s), given a (set of) old state vector(s)  
         % 
-        % DESCRIPTION:
+        % Parameters
+        % ----------
+        % xk: (NumStateDims x Ns) matrix
+        %   A matrix, whose columns correspond to individual new state vectors.
+        % xkm1: (NumStateDims x Np) matrix
+        %   A matrix, whose columns correspond to individual old state vectors
+        % Dt: scalar, optional
+        %   A time variant. 
+        %   (default=this.TimeVariant)
+        %
+        % Returns
+        % -------
+        % prob: (Np x Ns) matrix
+        %   A matrix, where each element (i,j) corresponds to the evaluated
+        %   probability p(xk(:,j)|xkm1(:,i))
+        %
+        % Usage
+        % -----
         % * prob = pdf(x_k, x_km1, Dt) evaluates and returns a (a x b)
         %   probability/likelihood matrix given the (NumStatesDim x a) x_k
         %   and (NumStatesDim x b) x_km1 state matrices. Dt is an optional 

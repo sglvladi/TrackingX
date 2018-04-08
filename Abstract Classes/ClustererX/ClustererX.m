@@ -6,7 +6,9 @@ classdef (Abstract) ClustererX < BaseX  % Extends trackingX.BaseX
 % Any custom defined Clusterer should be derived from this ClustererX base class. 
 %
 % ClustererX Properties:
-%   None
+%   ClusterList - A maintained list containing the last generated clusters
+%   UnassocTrackInds - A maintained list of all tracks not associated to
+%                      any measurements
 %
 % ClustererX Methods:
 %   + ClustererX - Constructor method
@@ -27,8 +29,6 @@ classdef (Abstract) ClustererX < BaseX  % Extends trackingX.BaseX
         function this = ClustererX(varargin)
         % CLUSTERERX Constructor method
         %   
-        % DESCRIPTION: 
-        % * ClustererX() returns a "ClustererX" object handle
             
         end
     end

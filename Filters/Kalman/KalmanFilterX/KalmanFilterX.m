@@ -5,20 +5,20 @@ classdef KalmanFilterX < FilterX
 % This is a class implementation of a standard Kalman Filter.
 %
 % KalmanFilterX Properties: (**)
-%   + StateMean            A (xDim x 1) vector used to store the last computed/set filtered state mean  
-%   + StateCovar      A (xDim x xDim) matrix used to store the last computed/set filtered state covariance
-%   + PredStateMean        A (xDim x 1) vector used to store the last computed prediicted state mean  
-%   + PredStateCovar  A (xDim x xDim) matrix used to store the last computed/set predicted state covariance
-%   + PredMeasMean         A (yDim x 1) vector used to store the last computed predicted measurement mean
-%   + InnovErrCovar   A (yDim x yDim) matrix used to store the last computed innovation error covariance
-%   + CrossCovar      A (xDim x yDim) matrix used to store the last computed cross-covariance Cov(X,Y)
-%   + KalmanGain           A (xDim x yDim) matrix used to store the last computed Kalman gain%   
-%   + Measurement          A (yDim x 1) matrix used to store the received measurement
-%   + ControlInput         A (uDim x 1) matrix used to store the last received control input
-%   + Model                An object handle to StateSpaceModelX object
-%       + Dyn (*)  = Object handle to DynamicModelX SubClass     | (TO DO: LinearGaussDynModelX) 
-%       + Obs (*)  = Object handle to ObservationModelX SubClass | (TO DO: LinearGaussObsModelX)
-%       + Ctr (*)  = Object handle to ControlModelX SubClass     | (TO DO: LinearCtrModelX)
+%   + StateMean - A (xDim x 1) vector used to store the last computed/set filtered state mean  
+%   + StateCovar - A (xDim x xDim) matrix used to store the last computed/set filtered state covariance
+%   + PredStateMean - A (xDim x 1) vector used to store the last computed prediicted state mean  
+%   + PredStateCovar - A (xDim x xDim) matrix used to store the last computed/set predicted state covariance
+%   + PredMeasMean - A (yDim x 1) vector used to store the last computed predicted measurement mean
+%   + InnovErrCovar - A (yDim x yDim) matrix used to store the last computed innovation error covariance
+%   + CrossCovar - A (xDim x yDim) matrix used to store the last computed cross-covariance Cov(X,Y)
+%   + KalmanGain - A (xDim x yDim) matrix used to store the last computed Kalman gain%   
+%   + Measurement - A (yDim x 1) matrix used to store the received measurement
+%   + ControlInput - A (uDim x 1) matrix used to store the last received control input
+%   + Model - An object handle to StateSpaceModelX object
+%       + Dyn (*)  = Object handle to DynamicModelX SubClass      
+%       + Obs (*)  = Object handle to ObservationModelX SubClass 
+%       + Ctr (*)  = Object handle to ControlModelX SubClass     
 %
 %   (*)  Signifies properties necessary to instantiate a class object
 %   (**) xDim, yDim and uDim denote the dimentionality of the state, measurement
@@ -34,22 +34,34 @@ classdef KalmanFilterX < FilterX
 % See also DynamicModelX, ObservationModelX and ControlModelX template classes
     
     properties
-        StateMean 
-        StateCovar     
-        PredStateMean        
-        PredStateCovar  
-        PredMeasMean         
-        InnovErrCovar   
-        CrossCovar 
-        KalmanGain       
-        ControlInput     
+        StateMean % A (xDim x 1) vector used to store the last computed/set filtered state mean
+        StateCovar % A (xDim x xDim) matrix used to store the last computed/set filtered state covariance    
+        PredStateMean % A (xDim x 1) vector used to store the last computed prediicted state mean       
+        PredStateCovar % A (xDim x xDim) matrix used to store the last computed/set predicted state covariance
+        PredMeasMean % A (yDim x 1) vector used to store the last computed predicted measurement mean       
+        InnovErrCovar % A (yDim x yDim) matrix used to store the last computed innovation error covariance  
+        CrossCovar % A (xDim x yDim) matrix used to store the last computed cross-covariance Cov(X,Y)
+        KalmanGain % A (xDim x yDim) matrix used to store the last computed Kalman gain     
+        ControlInput % A (uDim x 1) matrix used to store the last received control input   
     end
     
     methods
         function this = KalmanFilterX(varargin)
         % KALMANFILTER Constructor method
-        %   
-        % DESCRIPTION: 
+        %
+        % Parameters
+        % ----------
+        % Model: StateSpaceModelX
+        %   An object handle to StateSpaceModelX object.
+        % PriorStateMean: column vector, optional
+        %   A (NumStateDims x 1) column vector, representing the prior
+        %   state mean, which is copied over to StateMean.
+        % PriorStateCovar: matrix, optional  
+        %   A (NumStateDims x NumStateDims) matrix, representing the prior
+        %   state covariance, which is copied over to StateCovar.
+        %
+        % Usage
+        % -----
         % * kf = KalmanFilterX() returns an unconfigured object handle. Note
         %   that the object will need to be configured at a later instance
         %   before any call is made to it's methods.
@@ -77,13 +89,11 @@ classdef KalmanFilterX < FilterX
             % First check to see if a structure was received
             if(nargin==1)
                 if(isstruct(varargin{1}))
-                    if (isfield(varargin{1},'priorStateMean'))
-                        this.StateMean = varargin{1}.priorStateMean;
-                        %this.StateMean  = this.priorStateMean;
+                    if (isfield(varargin{1},'PriorStateMean'))
+                        this.StateMean = varargin{1}.PriorStateMean;
                     end
-                    if (isfield(varargin{1},'priorStateCovar'))
-                        this.StateCovar  = varargin{1}.priorStateCovar;
-                        %this.filtStateCov   = this.priorStateCov;
+                    if (isfield(varargin{1},'PriorStateCovar'))
+                        this.StateCovar  = varargin{1}.PriorStateCovar;
                     end
                 end
                 return;
@@ -92,16 +102,16 @@ classdef KalmanFilterX < FilterX
             % Otherwise, fall back to input parser
             parser = inputParser;
             parser.KeepUnmatched = true;
-            parser.addParameter('priorStateMean',NaN);
-            parser.addParameter('priorStateCovar',NaN);
+            parser.addParameter('PriorStateMean',NaN);
+            parser.addParameter('PriorStateCovar',NaN);
             parser.parse(varargin{:});
             
-            if(~isnan(parser.Results.priorStateMean))
-                this.StateMean = parser.Results.priorStateMean;
+            if(~isnan(parser.Results.PriorStateMean))
+                this.StateMean = parser.Results.PriorStateMean;
             end
             
             if(~isnan(parser.Results.priorStateCov))
-                this.StateCovar  = parser.Results.priorStateCovar;
+                this.StateCovar  = parser.Results.PriorStateCovar;
             end
         end
         
@@ -109,7 +119,19 @@ classdef KalmanFilterX < FilterX
         % INITIALISE Initialise the KalmanFilter with a certain set of
         % parameters. 
         %   
-        % DESCRIPTION: 
+        % Parameters
+        % ----------
+        % Model: StateSpaceModelX
+        %   An object handle to StateSpaceModelX object.
+        % PriorStateMean: column vector, optional
+        %   A (NumStateDims x 1) column vector, representing the prior
+        %   state mean, which is copied over to StateMean.
+        % PriorStateCovar: matrix, optional  
+        %   A (NumStateDims x NumStateDims) matrix, representing the prior
+        %   state covariance, which is copied over to StateCovar.
+        % 
+        % Usage
+        % -----
         % * initialise(kf, ssm) initialises the KalmanFilterX object kf
         %   with the provided StateSpaceModelX object ssm.
         % * initialise(kf,ssm,priorStateMean,priorStateCov) initialises 
@@ -170,11 +192,13 @@ classdef KalmanFilterX < FilterX
         function predict(this)
         % PREDICT Perform Kalman Filter prediction step
         %   
-        % DESCRIPTION: 
+        % Usage
+        % -----
         % * predict(this) calculates the predicted system state and measurement,
         %   as well as their associated uncertainty covariances.
         %
-        % MORE DETAILS:
+        % More details
+        % ------------
         % * KalmanFilterX uses the Model class property, which should be an
         %   instance of the TrackingX.Models.StateSpaceModel class, in order
         %   to extract information regarding the underlying state-space model.
@@ -190,13 +214,57 @@ classdef KalmanFilterX < FilterX
         %   - Model.Obs.heval(): Returns the model measurement matrix
         %   - Model.Obs.covariance(): Returns the measurement noise covariance
         %
-        %  See also update, smooth.
+        % See also update, smooth.
+            
+            this.predictState();
+            this.predictObs();
+%             % Extract model parameters
+%             F = this.Model.Dyn.feval();
+%             Q = this.Model.Dyn.covariance();
+%             H = this.Model.Obs.heval();
+%             R = this.Model.Obs.covariance();
+%             if(~isempty(this.Model.Ctr))
+%                 B   = this.Model.Ctr.beval();
+%                 Qu  = this.Model.Ctr.covariance();
+%             else
+%                 this.ControlInput   = 0;
+%                 B   = 0;
+%                 Qu  = 0;
+%             end
+%             % Perform prediction
+%             [this.PredStateMean, this.PredStateCovar, this.PredMeasMean, this.InnovErrCovar, this.CrossCovar] = ...
+%                 this.predict_(this.StateMean, this.StateCovar, F, Q, H, R, this.ControlInput, B, Qu); 
+        end
+        
+        function predictState(this)
+        % PREDICTSTATE Perform Kalman Filter state prediction step
+        %   
+        % Usage
+        % -----
+        % * predict(this) calculates the predicted system state and covariance.
+        %
+        % More details
+        % ------------
+        % * KalmanFilterX uses the Model class property, which should be an
+        %   instance of the TrackingX.Models.StateSpaceModel class, in order
+        %   to extract information regarding the underlying state-space model.
+        % * State prediction is performed using the Model.Dyn property,
+        %   which must be a subclass of TrackingX.Abstract.DynamicModel and
+        %   provide the following interface functions:
+        %   - Model.Dyn.feval(): Returns the model transition matrix
+        %   - Model.Dyn.covariance(): Returns the process noise covariance
+        % * Measurement prediction and innovation covariance calculation is
+        %   performed usinf the Model.Obs class property, which should be
+        %   a subclass of TrackingX.Abstract.DynamicModel and provide the
+        %   following interface functions:
+        %   - Model.Obs.heval(): Returns the model measurement matrix
+        %   - Model.Obs.covariance(): Returns the measurement noise covariance
+        %
+        % See also update, smooth.
             
             % Extract model parameters
             F = this.Model.Dyn.feval();
             Q = this.Model.Dyn.covariance();
-            H = this.Model.Obs.heval();
-            R = this.Model.Obs.covariance();
             if(~isempty(this.Model.Ctr))
                 B   = this.Model.Ctr.beval();
                 Qu  = this.Model.Ctr.covariance();
@@ -205,22 +273,55 @@ classdef KalmanFilterX < FilterX
                 B   = 0;
                 Qu  = 0;
             end
-            % Perform prediction
-            [this.PredStateMean, this.PredStateCovar, this.PredMeasMean, this.InnovErrCovar, this.CrossCovar] = ...
-                KalmanFilterX_Predict(this.StateMean, this.StateCovar, F, Q, H, R, this.ControlInput, Qu); 
-            
-            predict@FilterX(this);
+            % Perform state prediction
+            [this.PredStateMean, this.PredStateCovar] = ...
+                this.predictState_(this.StateMean, this.StateCovar, F, Q, this.ControlInput, B, Qu); 
         end
         
+        function predictObs(this)
+        % PREDICTOBS Perform Kalman Filter measurement prediction step
+        %   
+        % Usage
+        % -----
+        % * predict(this) calculates the predicted measurement,
+        %   as well as the associated uncertainty covariances.
+        %
+        % More details
+        % ------------
+        % * KalmanFilterX uses the Model class property, which should be an
+        %   instance of the TrackingX.Models.StateSpaceModel class, in order
+        %   to extract information regarding the underlying state-space model.
+        % * State prediction is performed using the Model.Dyn property,
+        %   which must be a subclass of TrackingX.Abstract.DynamicModel and
+        %   provide the following interface functions:
+        %   - Model.Dyn.feval(): Returns the model transition matrix
+        %   - Model.Dyn.covariance(): Returns the process noise covariance
+        % * Measurement prediction and innovation covariance calculation is
+        %   performed usinf the Model.Obs class property, which should be
+        %   a subclass of TrackingX.Abstract.DynamicModel and provide the
+        %   following interface functions:
+        %   - Model.Obs.heval(): Returns the model measurement matrix
+        %   - Model.Obs.covariance(): Returns the measurement noise covariance
+        %
+        % See also update, smooth.
+            
+            % Extract model parameters
+            H = this.Model.Obs.heval();
+            R = this.Model.Obs.covariance();
+            % Perform prediction
+            [this.PredMeasMean, this.InnovErrCovar, this.CrossCovar] = ...
+                this.predictObs_(this.StateMean, this.StateCovar, H, R); 
+        end
         
         function update(this)
         % UPDATE Perform Kalman Filter update step
         %   
-        % DESCRIPTION: 
+        % Usage
+        % -----
         % * update(this) calculates the corrected sytem state and the 
         %   associated uncertainty covariance.
         %
-        %   See also KalmanFilterX, predict, iterate, smooth.
+        % See also KalmanFilterX, predict, iterate, smooth.
         
             if(size(this.Measurement,2)>1)
                 error('[KF] More than one measurement have been provided for update. Use KalmanFilterX.UpdateMulti() function instead!');
@@ -230,20 +331,26 @@ classdef KalmanFilterX < FilterX
                 this.StateCovar = this.PredStateCovar;
                 return;
             end
+            
+            if(isempty(this.PredMeasMean)||isempty(this.InnovErrCovar)||isempty(this.CrossCovar))
+                [this.PredMeasMean, this.InnovErrCovar, this.CrossCovar] = ...
+                    this.predictObs_(this.PredStateMean,this.PredStateCovar,this.Model.Obs.heval(),this.Model.Obs.covariance());
+            end     
         
             % Perform single measurement update
             [this.StateMean, this.StateCovar, this.KalmanGain] = ...
-                KalmanFilterX_Update(this.PredStateMean,this.PredStateCovar,...
+                this.update_(this.PredStateMean,this.PredStateCovar,...
                                      this.Measurement,this.PredMeasMean,this.InnovErrCovar,this.CrossCovar);
                                  
             update@FilterX(this);
         end
         
         function updatePDA(this, assocWeights)
-        % UPDATEPDA - Performs KF update step, for multiple measurements
-        %             Update is performed according to the generic (J)PDAF equations [1] 
+        % UPDATEPDA Performs KF update step, for multiple measurements
+        %           Update is performed according to the generic (J)PDAF equations [1] 
         % 
-        % DESCRIPTION:
+        % Usage
+        % -----
         %  * updatePDA(assocWeights) Performs KF-PDA update step for multiple 
         %    measurements based on the provided (1-by-Nm+1) association weights 
         %    matrix assocWeights.
@@ -267,7 +374,7 @@ classdef KalmanFilterX < FilterX
             end
             
             [this.StateMean,this.StateCovar,this.KalmanGain] = ...
-                KalmanFilterX_UpdatePDA(this.PredStateMean,this.PredStateCovar,this.Measurement,...
+                this.updatePDA_(this.PredStateMean,this.PredStateCovar,this.Measurement,...
                                         assocWeights,this.PredMeasMean,this.InnovErrCovar,this.CrossCovar);
         end
         
@@ -290,5 +397,271 @@ classdef KalmanFilterX < FilterX
                 smoothedEstimates = KalmanFilterX_SmoothRTS(filteredEstimates,interval);
             end     
         end 
+        
+        function resetStateEstimates(this)
+        % RESETSTATEESTIMATES Reset all the state related class properties
+        %   The following properties are reset upon execution:
+        %       this.StateMean
+        %       this.StateCovar
+        %       this.PredStateMean
+        %       this.PredStateCovar
+        %       this.PredMeasMean
+        %       this.InnovErrCovar
+        %       this.CrossCovar
+        %       this.KalmanGain
+        %
+        % Usage
+        % -----
+        % * kf.resetStateEstimates() resets all state related properties
+            
+            this.StateMean = [];
+            this.StateCovar = [];
+            this.PredStateMean = [];
+            this.PredStateCovar = [];
+            this.PredMeasMean = [];
+            this.InnovErrCovar = [];
+            this.CrossCovar = [];
+            this.KalmanGain = [];
+        end
+    
+        function [xPred, PPred, yPred, S, Pxy] = predict_(this,x,P,F,Q,H,R,u,B,O)
+        % PREDICT_ Perform the discrete-time KF state and measurement
+        % prediction steps, under the assumption of additive process noise.
+        %
+        % Parameters
+        % ----------
+        % x: column vector
+        %   The (xDim x 1) state estimate at the previous time-step.
+        % P: matrix 
+        %   The (xDim x xDim) state covariance matrix at the previous
+        %   time-step.
+        % F: matrix
+        %   An (xDim x xDim) state transition matrix.
+        % Q: matrix
+        %   The (xDim x xDim) process noise covariance matrix.
+        % H: matrix
+        %   A (xDim x yDim) measurement matrix.
+        % R: matrix 
+        %   The (yDim x yDim) measurement noise covariance matrix.
+        % u: column vector, optional
+        %   A optional (xDim x 1) control input.
+        %   If omitted, no control input is used.
+        % B: matrix, optional
+        %   An optional (xDim x xDim) control gain matrix.
+        %   If omitted, B is assumed to be 1.
+        % O: matrix, optional
+        %   An optional (xDim x xDim) control noise covariance
+        %   matrix. If omitted, Q is assumed to be 0.
+        %
+        % Returns
+        % -------
+        % xPred: column vector
+        %   The (xDim x 1) predicted state estimate.
+        % PPred: matrix
+        %   The (xDim x xDim) predicted state covariance matrix.
+        % yPred: column vector
+        %   The (yDim x 1) predicted measurement estimate.
+        % Pxy: matrix
+        %   The (xDim x yDim) cross-covariance matrix.
+        % S: matrix
+        %   The (yDim x yDim) innovation covariance matrix.
+        %
+        %October 2017 Lyudmil Vladimirov, University of Liverpool.
+
+            switch(nargin)
+                case(7) 
+                    u = 0;
+                    B = 0;
+                    O = 0;
+                case(8)
+                    B = 1;
+                    O = 0;
+                case(9)
+                    O = 0;
+            end
+
+           [xPred, PPred] = this.predictState_(x,P,F,Q,u,B,O);
+           [yPred, S, Pxy] = this.predictObs_(xPred,PPred,H,R);
+        end
+    end
+    
+    methods (Static)
+        function [xPred, PPred] = predictState_(x,P,F,Q,u,B,Qu)
+        % PREDICTSTATE_ Perform the discrete-time KF state prediction 
+        % step, under the assumption of additive process noise.
+        %
+        % Parameters
+        % ----------
+        % x: column vector
+        %   The (xDim x 1) state estimate at the previous time-step.
+        % P: matrix
+        %   The (xDim x xDim) state covariance matrix at the previous
+        %   time-step.
+        % F: matrix
+        %   An (xDim x xDim) state transition matrix.
+        % Q: matrix
+        %   The (xDim x xDim) process noise covariance matrix.
+        % u: column vector, optional
+        %   An optional (xDim x 1) control input.
+        %   If omitted, no control input is used.
+        % B: matrix, optional
+        %   An optional (xDim x xDim) control gain matrix.
+        %   If omitted, B is assumed to be 1.
+        % O: matrix, optional
+        %   An optional (xDim x xDim) control noise covariance
+        %   matrix. If omitted, Q is assumed to be 0.
+        %
+        % Returns
+        % -------
+        % xPred: column vector
+        %   The (xDim x 1) predicted state estimate.
+        % PPred: matrix
+        %   The (xDim x xDim) predicted state covariance matrix.
+        %
+        %October 2017 Lyudmil Vladimirov, University of Liverpool.
+
+            switch(nargin)
+                case(4) 
+                    u  = 0;
+                    B  = 0;
+                    Qu = 0;
+                case(5)
+                    B  = 1;
+                    Qu = 0;
+                case(6)
+                    Qu = 0;
+            end
+
+            % Compute predicted state mean and covariance
+            xPred = F*x + B*u;
+            PPred =F*P*F' + Q + B*Qu*B';
+        end
+
+        function [yPred, S, Pxy] = predictObs_(xPred,PPred,H,R)
+        % PREDICTOBS_ Perform the discrete-time KF observation prediction 
+        % step, under the assumption of additive process noise.
+        %
+        % Parameters
+        % ----------
+        % xPred: column vector
+        %   The (xDim x 1) predicted state estimate at the current
+        %   time-step.
+        % PPred: matrix
+        %   The (xDim x xDim) predicted state covariance matrix at 
+        %   the current time-step.
+        % H: matrix
+        %   An (xDim x yDim) measurement matrix.
+        % R: matrix
+        %   The (yDim x yDim) measurement noise covariance matrix.
+        %
+        % Returns
+        % -------
+        % yPred: column vector
+        %   The (yDim x 1) predicted measurement estimate.
+        % Pxy: matrix
+        %   The (xDim x yDim) cross-covariance matrix.
+        % S: matrix
+        %   The (yDim x yDim) innovation covariance matrix.
+        %
+        %October 2017 Lyudmil Vladimirov, University of Liverpool.
+
+            % Compute predicted measurement mean and covariance
+            yPred   = H*xPred;
+            Pxy     = PPred*H'; 
+            S       = H*PPred*H' + R;
+        end
+
+        function [x,P,K] = update_(xPred,PPred,y,yPred,S,Pxy)
+        % UPDATE_ Perform the discrete-time KF update step, under the  
+        % assumption of additive process noisem for a single measurement.
+        %
+        % Parameters
+        % ----------
+        % xPred: column vector
+        %   The (xDim x 1) predicted state estimate.
+        % PPred: matrix
+        %   The (xDim x xDim) predicted state covariance matrix.
+        % y: column vector
+        %   The (yDim x 1) measurement vector.
+        % yPred: column vector
+        %   The (yDim x 1) predicted measurement estimate.
+        % S: matrix
+        %   The (yDim x yDim) innovation covariance matrix.
+        % Pxy: matrix
+        %   The (xDim x yDim) cross-covariance matrix.
+        %
+        % Returns
+        % -------
+        % x: column vector
+        %   The (xDim x 1) state estimate at the current time-step.
+        % P: matrix
+        %   The (xDim x xDim) state covariance matrix at the current
+        %   time-step.
+        % K: matrix
+        %   The (xDim x yDim) Kalman gain matrix at the current
+        %   time-step.
+        %
+        %October 2017 Lyudmil Vladimirov, University of Liverpool.
+
+            % Compute the Kalman gain
+            K = Pxy/(S);
+
+            % Compute the filtered estimates
+            x = xPred + K * (y - yPred);
+            P = PPred - K*S*K';
+        end
+
+        function [x,P,K] = updatePDA_(xPred,PPred,Y,W,yPred,S,Pxy)
+        % UPDATEPDA_ Perform the discrete-time Probabilistic Data 
+        % Association (PDA) KF update step, under the assumption of additive process 
+        % noise, for multiple measurements (as a Gaussian Mixture)
+        %
+        % Parameters
+        % ----------
+        % xPred: column vector
+        %   The (xDim x 1) predicted state estimate.
+        % PPred: matrix
+        %   The (xDim x xDim) predicted state covariance matrix.
+        % Y: matrix
+        %   The (yDim x nY) measurement vector.
+        % W: row vector
+        %   The (1 x nY+1) measurement association/mixture weights 
+        %   vector. (dummy measurement assumed at index 1)
+        % yPred: column vector
+        %   The (yDim x 1) predicted measurement estimate.
+        % S: matrix
+        %   The (yDim x yDim) innovation covariance matrix.
+        % Pxy: matrix
+        %   The (xDim x yDim) cross-covariance matrix.
+        %
+        % Returns
+        % -------
+        % x: column vector
+        %   The (xDim x 1) state estimate at the current time-step.
+        % P: matrix
+        %   The (xDim x xDim) state covariance matrix at the current
+        %   time-step.
+        % K: matrix
+        %   The (xDim x yDim) Kalman gain matrix at the current
+        %   time-step.
+        %
+        %October 2017 Lyudmil Vladimirov, University of Liverpool.
+
+            % Get size of observation vector
+            [yDim,nY] = size(Y);
+
+            % Compute Kalman gain
+            K = Pxy/S;  
+
+            % Compute innovation mean and (cross) covariance
+            innov_err       = Y - yPred(:,ones(1,nY));
+            tot_innov_err   = innov_err*W(2:end)';
+            Pc              = PPred - K*S*K';
+            Pgag            = K*((innov_err.*W(ones(yDim,1),2:end))*innov_err' - tot_innov_err*tot_innov_err')*K';
+
+            % Compute filtered estimates
+            x    = xPred + K*tot_innov_err;  
+            P    = W(1)*PPred + (1-W(1))*Pc + Pgag;
+        end
     end
 end
