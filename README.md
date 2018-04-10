@@ -6,7 +6,7 @@ The class architecture and interfaces of TrackingX are being designed such that 
 
 Below is an up-to-date class diagram of the intended TrackingX architecture.
 
-![Class Diagram so far...](https://github.com/sglvladi/TrackingX/blob/dev/_docs/TrackingX%20Class%20diagram%20(draft).jpg)
+![Class Diagram so far...](./_docs/TrackingX%20Class%20diagram%20(draft).jpg)
 
 Note that the letter "X" has been appended to the name of each TrackingX class in order to avoid conflicts with other matlab toolboxes. For example, classes like "KalmanFilterX" and "ParticleFilterX" are in fact implementations of the standard Kalman Filter and Particle Filter algorithms.
 
