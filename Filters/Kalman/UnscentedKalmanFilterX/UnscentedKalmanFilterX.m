@@ -165,11 +165,38 @@ classdef UnscentedKalmanFilterX < KalmanFilterX
         %
         %  See also update, smooth.
         
+            % Predict state and measurement
+            this.predictState();
+            this.predictObs();       
+        end
+        
+        function predictState(this)
+        % PREDICTSTATE Perform an Unscented Kalman Filter prediction step
+        %   
+        % DESCRIPTION: 
+        % * predict(this) calculates the predicted system state and covariance.
+        %
+        % MORE DETAILS:
+        % * UnscentedKalmanFilterX() uses the Model class property, which should be an
+        %   instance/sublclass of the TrackingX.Models.StateSpaceModel class, in order
+        %   to extract information regarding the underlying state-space model.
+        % * State prediction is performed using the Model.Dyn property,
+        %   which must be a subclass of TrackingX.Abstract.DynamicModel and
+        %   provide the following interface functions:
+        %   - Model.Dyn.feval(): Returns the model transition matrix
+        %   - Model.Dyn.covariance(): Returns the process noise covariance
+        % * Measurement prediction and innovation covariance calculation is
+        %   performed using the Model.Obs class property, which should be
+        %   a subclass of TrackingX.Abstract.DynamicModel and provide the
+        %   following interface functions:
+        %   - Model.Obs.heval(): Returns the model measurement matrix
+        %   - Model.Obs.covariance(): Returns the measurement noise covariance
+        %
+        %  See also update, smooth.
+        
              % Extract model parameters
             f = @(x) this.Model.Dyn.feval(x);
             Q = this.Model.Dyn.covariance();
-            h = @(x) this.Model.Obs.heval(x);
-            R = this.Model.Obs.covariance();
             if(~isempty(this.Model.Ctr))
                 b   = @(x) this.Model.Ctr.beval(x);
                 Qu  = this.Model.Ctr.covariance();
@@ -180,11 +207,45 @@ classdef UnscentedKalmanFilterX < KalmanFilterX
             end
             
             % Perform prediction
-            [this.PredStateMean, this.PredStateCovar, this.PredMeasMean,...
-             this.InnovErrCovar, this.CrossCovar] = ...
-                this.predict_(this.Alpha, this.Kappa, this.Beta,...
+            [this.PredStateMean, this.PredStateCovar] = ...
+                this.predictState_(this.Alpha, this.Kappa, this.Beta,...
                               this.StateMean, this.StateCovar,...
-                              f, Q, h, R, this.ControlInput, b, Qu);          
+                              f, Q, this.ControlInput, b, Qu);          
+        end
+        
+        function predictObs(this)
+        % PREDICTOBS Perform an Unscented Kalman Filter measurement prediction step
+        %   
+        % DESCRIPTION: 
+        % * predict(this) calculates the predicted measurement,
+        %   as well as the associated uncertainty covariances.
+        %
+        % MORE DETAILS:
+        % * UnscentedKalmanFilterX() uses the Model class property, which should be an
+        %   instance/sublclass of the TrackingX.Models.StateSpaceModel class, in order
+        %   to extract information regarding the underlying state-space model.
+        % * State prediction is performed using the Model.Dyn property,
+        %   which must be a subclass of TrackingX.Abstract.DynamicModel and
+        %   provide the following interface functions:
+        %   - Model.Dyn.feval(): Returns the model transition matrix
+        %   - Model.Dyn.covariance(): Returns the process noise covariance
+        % * Measurement prediction and innovation covariance calculation is
+        %   performed using the Model.Obs class property, which should be
+        %   a subclass of TrackingX.Abstract.DynamicModel and provide the
+        %   following interface functions:
+        %   - Model.Obs.heval(): Returns the model measurement matrix
+        %   - Model.Obs.covariance(): Returns the measurement noise covariance
+        %
+        %  See also update, smooth.
+        
+             % Extract model parameters
+            h = @(x) this.Model.Obs.heval(x);
+            R = this.Model.Obs.covariance();
+            
+            % Perform prediction
+            [this.PredMeasMean,this.InnovErrCovar, this.CrossCovar] = ...
+                this.predictObs_(this.Alpha, this.Kappa, this.Beta,...
+                              this.PredStateMean, this.PredStateCovar, h, R);          
         end
         
         function update(this)
@@ -285,8 +346,11 @@ classdef UnscentedKalmanFilterX < KalmanFilterX
             this.CrossCovar = [];
             this.KalmanGain = [];
         end
+    end
+    
+     methods (Static)
         
-        function [xPred, PPred, yPred, S, Pxy] = predict_(this,alpha,kappa,beta,x,P,f,Q,h,R,u,b,Qu)
+        function [xPred, PPred, yPred, S, Pxy] = predict_(alpha,kappa,beta,x,P,f,Q,h,R,u,b,Qu)
         % PREDICT_ Perform the discrete-time UKF state and measurement
         % prediction steps, under the assumption of additive process noise.
         %
@@ -348,13 +412,10 @@ classdef UnscentedKalmanFilterX < KalmanFilterX
                     Qu = 0;
             end
 
-           [xPred,PPred]  = this.predictState_(alpha,kappa,beta,x,P,f,Q,u,b,Qu);
-           [yPred,S,Pxy]    = this.predictObs_(alpha,kappa,beta,xPred,PPred,h,R);
+           [xPred,PPred]  = UnscentedKalmanFilterX.predictState_(alpha,kappa,beta,x,P,f,Q,u,b,Qu);
+           [yPred,S,Pxy]  = UnscentedKalmanFilterX.predictObs_(alpha,kappa,beta,xPred,PPred,h,R);
         end
-    end
-    
-     methods (Static)
-                
+        
         function [xPred, PPred] = predictState_(alpha,kappa,beta,x,P,f,Q,u,b,Qu)
         % PREDICTSTATE_ Perform the discrete-time UKF state prediction 
         % step, under the assumption of additive process noise.

@@ -5,6 +5,8 @@ classdef GM_PHDFilterX < FilterX
 % This is a class implementation of a Sequential Monte Carlo (SMC) Probabilistic
 % Hypothesis Density (PHD) Filter.
 %
+% NOTE: Spawned targets are not currently implemented.
+%
 % SMC_PHDFilterX Properties:
 %   + NumParticles - The number of particles employed by the PHD Filter
 %   + Particles - A (NumStateDims x NumParticles) matrix used to store 
@@ -80,7 +82,7 @@ classdef GM_PHDFilterX < FilterX
         NumPredComponents
         MaxNumComponents = 100
         PruneThreshold = 1e-5
-        MergeThreshold = 4
+        MergeThreshold = 0.5
         Gater
         BirthIntFcn 
         ProbOfDeath  
@@ -178,13 +180,14 @@ classdef GM_PHDFilterX < FilterX
                     config = varargin{1};
                     if (isfield(config,'PriorComponents'))
                         this.Components  = config.PriorComponents;
+                        this.NumComponents = length(this.Components.Weights);
                     end
                     if (isfield(config,'Gater'))
                         this.Gater = config.Gater;
                     elseif (isfield(config,'GateLevel'))
                         this.Gater = EllipsoidalGaterX('GateLevel',config.GateLevel);
                     else
-                        this.Gater = EllipsoidalGaterX('ProbOfGating',config.ProbOfGating);
+                        this.Gater = EllipsoidalGaterX('ProbOfGating',config.ProbOfGating,'NumObsDims',2);
                     end
                     if (isfield(config,'BirthIntFcn'))
                         this.BirthIntFcn = config.BirthIntFcn;
@@ -198,6 +201,11 @@ classdef GM_PHDFilterX < FilterX
                     if (isfield(config,'ClutterRate'))
                         this.ClutterRate = config.ClutterRate;
                     end
+                    if (isfield(config,'Filter'))
+                        this.Filter = config.Filter;
+                    else
+                        this.Filter = KalmanFilterX(this.Model);
+                    end
                 end
                 return;
             end
@@ -209,6 +217,7 @@ classdef GM_PHDFilterX < FilterX
             config = parser.Unmatched;
             if (isfield(config,'PriorComponents'))
                 this.Components  = config.PriorComponents;
+                this.NumComponents = length(this.Components.Weights);
             end
             if (isfield(config,'Gater'))
                 this.Gater = config.Gater;
@@ -228,6 +237,11 @@ classdef GM_PHDFilterX < FilterX
             end
             if (isfield(config,'ClutterRate'))
                 this.ClutterRate = config.ClutterRate;
+            end
+            if (isfield(config,'Filter'))
+                this.Filter = config.Filter;
+            else
+                this.Filter = KalmanFilterX(this.Model);
             end
         end
         
@@ -302,6 +316,7 @@ classdef GM_PHDFilterX < FilterX
                     config = varargin{1};
                     if (isfield(config,'PriorComponents'))
                         this.Components  = config.PriorComponents;
+                        this.NumComponents = length(this.Components.Weights);
                     end
                     if (isfield(config,'Gater'))
                         this.Gater = config.Gater;
@@ -322,6 +337,11 @@ classdef GM_PHDFilterX < FilterX
                     if (isfield(config,'ClutterRate'))
                         this.ClutterRate = config.ClutterRate;
                     end
+                    if (isfield(config,'Filter'))
+                        this.Filter = config.Filter;
+                    else
+                        this.Filter = KalmanFilterX(this.Model);
+                    end
                 end
                 return;
             end
@@ -333,6 +353,7 @@ classdef GM_PHDFilterX < FilterX
             config = parser.Unmatched;
             if (isfield(config,'PriorComponents'))
                 this.Components  = config.PriorComponents;
+                this.NumComponents = length(this.Components.Weights);
             end
             if (isfield(config,'Gater'))
                 this.Gater = config.Gater;
@@ -352,6 +373,11 @@ classdef GM_PHDFilterX < FilterX
             end
             if (isfield(config,'ClutterRate'))
                 this.ClutterRate = config.ClutterRate;
+            end
+            if (isfield(config,'Filter'))
+                this.Filter = config.Filter;
+            else
+                this.Filter = KalmanFilterX(this.Model);
             end
         end
         
@@ -384,27 +410,31 @@ classdef GM_PHDFilterX < FilterX
             % reset measLikelihood matrix
             this.pmeasLikelihood_ = [];
             
-            % Prediction for birth components 
+            % 1) Birth component extraction 
+            % --------------------------
             BirthComponents = this.BirthIntFcn();
-            
+                                                    
+            % 2) State Prediction for existing components
+            % ----------------------------------------
+            % Preallocate memory
             this.PredComponents.Means = zeros(this.Model.Dyn.NumStateDims,...
                                               this.NumComponents);
             this.PredComponents.Covars = zeros(this.Model.Dyn.NumStateDims,...
                                                this.Model.Dyn.NumStateDims,...
                                                this.NumComponents);
             this.PredComponents.Weights = zeros(1, this.NumComponents);
-                                          
-            % Prediction for existing components
+            
+            % Perform prediction
             for i = 1:this.NumComponents
                 
                 % Use underlying filter to predict components
                 this.Filter.StateMean = this.Components.Means(:,i);
                 this.Filter.StateCovar = this.Components.Covars(:,:,i);
-                this.Filter.predict();
+                this.Filter.predictState();
                 
                 % Assing predicted state to components
                 this.PredComponents.Means(:,i) = this.Filter.PredStateMean;
-                this.PredComponents.Covar(:,:,i) = this.Filter.PredStateCovar;
+                this.PredComponents.Covars(:,:,i) = this.Filter.PredStateCovar;
             end
             
             % Compute predicted weights for components
@@ -412,10 +442,37 @@ classdef GM_PHDFilterX < FilterX
             
             % Add birth component to prediction
             this.PredComponents.Means = [this.PredComponents.Means, BirthComponents.Means];
-            this.PredComponents.Covars = [this.PredComponents.Covars, BirthComponents.Covars];
+            this.PredComponents.Covars = cat(3,this.PredComponents.Covars, BirthComponents.Covars);
             this.PredComponents.Weights = [this.PredComponents.Weights, BirthComponents.Weights];
             
+            % Compute number of prediction components
             this.NumPredComponents = this.NumComponents + size(BirthComponents.Means,2);
+                                            
+            % 3) Measurement prediction
+            % ----------------------
+            % Preallocate memory
+            this.PredComponents.PredMeasMeans = zeros(this.Model.Obs.NumObsDims,...
+                                                      this.NumPredComponents);
+            this.PredComponents.InnovErrCovars = zeros(this.Model.Obs.NumObsDims,...
+                                                       this.Model.Obs.NumObsDims,...
+                                                       this.NumPredComponents);
+            this.PredComponents.CrossCovars = zeros(this.Model.Dyn.NumStateDims,...
+                                                    this.Model.Obs.NumObsDims,...
+                                                    this.NumPredComponents);
+            % Perform measurement prediction
+            for i = 1:this.NumPredComponents
+                    
+                % Use underlying filter to predict measurement
+                this.Filter.resetStateEstimates();
+                this.Filter.PredStateMean = this.PredComponents.Means(:,i);
+                this.Filter.PredStateCovar = this.PredComponents.Covars(:,:,i);
+                this.Filter.predictObs();
+                
+                % Assigned measurement prediction to component
+                this.PredComponents.PredMeasMeans(:,i) = this.Filter.PredMeasMean;
+                this.PredComponents.InnovErrCovars(:,:,i) = this.Filter.InnovErrCovar;
+                this.PredComponents.CrossCovars(:,:,i) = this.Filter.CrossCovar;
+            end
         end
         
 
@@ -430,75 +487,76 @@ classdef GM_PHDFilterX < FilterX
         
             this.NumMeasurements = size(this.MeasurementList,2);
             
+            % 4) Update
+            % ---------
             numUpdateComponents = (1+this.NumMeasurements)*this.NumPredComponents;
+            % Preallocate memory
             updateComponents.Means = zeros(this.Model.Dyn.NumStateDims,...
                                            numUpdateComponents);
             updateComponents.Covars = zeros(this.Model.Dyn.NumStateDims,...
                                             this.Model.Dyn.NumStateDims,...
                                             numUpdateComponents);
             updateComponents.Weights = zeros(1, numUpdateComponents);
-            updateComponents.PredMeasMeans = zeros(this.Model.Obs.NumObsDims,...
-                                                   numUpdateComponents);
-            updateComponents.InnovErrCovars = zeros(this.Model.Obs.NumObsDims,...
-                                                    this.Model.Obs.NumObsDims,...
-                                                    numUpdateComponents);
-            updateComponents.CrossCovars = zeros(this.Model.Dyn.NumStateDims,...
-                                                 this.Model.Obs.NumObsDims,...
-                                                 numUpdateComponents);
             
             % Create null measurement hypothesis components
             updateComponents.Means(:,1:this.NumPredComponents) = this.PredComponents.Means;
-            updateComponents.Covar(:,:,1:this.NumPredComponents) = this.PredComponents.Covars;
+            updateComponents.Covars(:,:,1:this.NumPredComponents) = this.PredComponents.Covars;
             updateComponents.Weights(1:this.NumPredComponents) = (1-this.ProbOfDetection)*this.PredComponents.Weights;
             
-            likelihoods = zeros(1,numUpdateComponents);
+            % Compute measurement likelihoods
+            likelihoods = this.MeasLikelihood;
+            
+            % Compute normalising constant
+            Ck = zeros(1,this.NumMeasurements);
+            for i = 1:this.NumMeasurements   % for all measurements
+                Ck(i) = sum(this.ProbOfDetection*likelihoods(i,:).*this.PredComponents.Weights,2);
+            end
+            
             % Create true measurement hypothesis components
             for i = 1:this.NumPredComponents
-                for j = 1:this.NumMeasurements
+                
+                % Use underlying filter to update components
+                this.Filter.resetStateEstimates();
+                this.Filter.Measurement = this.MeasurementList;
+                this.Filter.PredStateMean = this.PredComponents.Means(:,i);
+                this.Filter.PredStateCovar = this.PredComponents.Covars(:,:,i);
+                this.Filter.PredMeasMean = this.PredComponents.PredMeasMeans(:,i);
+                this.Filter.InnovErrCovar = this.PredComponents.InnovErrCovars(:,:,i);
+                this.Filter.CrossCovar = this.PredComponents.CrossCovars(:,:,i);
+                this.Filter.update();
                     
-                    % Use underlying filter to update components
-                    this.Filter.resetStateEstimates();
-                    this.Filter.Measurement = this.MeasurementList(:,j);
-                    this.Filter.PredStateMean = this.PredComponents.Means(:,i);
-                    this.Filter.PredStateCovar = this.PredComponents.Covars(:,:,i);
-                    this.Filter.update();
-
+                for j = 1:this.NumMeasurements
                     % Assing predicted state to components
                     compIndex = this.NumPredComponents + (i-1)*this.NumMeasurements + j;
-                    updateComponents.Means(:,compIndex) = this.Filter.PredStateMean;
-                    updateComponents.Covars(:,:,compIndex) = this.Filter.PredStateCovar;
-                    updateComponents.PredMeasMeans(:,compIndex) = this.Filter.PredMeasMean;
-                    updateComponents.InnovErrCovars(:,:,compIndex) = this.Filter.InnovErrCovar;
-                    updateComponents.CrossCovars(:,:,compIndex) = this.Filter.CrossCovar;
+                    updateComponents.Means(:,compIndex) = this.Filter.StateMean(:,j);
+                    updateComponents.Covars(:,:,compIndex) = this.Filter.StateCovar;
+                    % Compute corresponding weights
+                    updateComponents.Weights(compIndex) = ...
+                        this.ProbOfDetection*this.PredComponents.Weights(i)...
+                        *likelihoods(j,i)/(this.ClutterRate+Ck(j));
                 end
-                offsetInd = this.NumPredComponents + (i-1)*this.NumMeasurements;
-                likelihoods(offsetInd:offsetInd+this.NumMeasurements) = ...
-                    gauss_pdf(this.MeasurementList,...
-                              updateComponents.PredMeasMeans(:,compIndex),...
-                              this.Filter.InnovErrCovar);
-            end
-             
-            updateComponents.Weights(this.NumPredComponents+1:end) = ...
-                this.ProbOfDetection*this.PredComponents.Weights(i)...
-                *gauss_pdf(this.MeasurementList(:,j),this.Filter.PredMeas,this.Filter.InnovErrCovar);
-            denom = denom + updateComponents{compIndex}.Weight;
+            end  
             
-            % Normalise weights
-            for i = 1:numel(updateComponents)
-                updateComponents{i}.Weight = updateComponents{i}.Weight/denom;
-            end
+            % 5) Prune
+            % --------
+            [updateComponents.Means,updateComponents.Covars,updateComponents.Weights] = ...
+                gauss_prune(updateComponents.Means,updateComponents.Covars,...
+                            updateComponents.Weights, this.PruneThreshold);
             
-            % Prune
-            for i = 1:numel(updateComponents)
-                if(updateComponents{i}.Weight<=this.PruneThreshold)
-                    updateComponents{i} = [];
-                end
-                
-            end
-            updateComponents = updateComponents(~cellfun('isempty',updateComponents));
-            
-            % Merge 
-            
+            % 6) Merge
+            % --------
+            [updateComponents.Means,updateComponents.Covars,updateComponents.Weights] = ...
+               gauss_merge(updateComponents.Means,updateComponents.Covars,...
+                           updateComponents.Weights, this.MergeThreshold);
+                        
+            % 7) Cap
+            % ------
+            [this.Components.Means,this.Components.Covars,this.Components.Weights] = ...
+                gauss_cap(updateComponents.Means,updateComponents.Covars,...
+                            updateComponents.Weights, this.MaxNumComponents);
+                        
+            this.NumComponents = length(this.Components.Weights);
+            this.NumTargets = sum(this.Components.Weights);
         end
     
         function MeasLikelihood = get.MeasLikelihood(this)
@@ -514,7 +572,7 @@ classdef GM_PHDFilterX < FilterX
         
         function MeasLikelihood = getMeasLikelihood(this)
             if(isempty(this.pmeasLikelihood_))
-                this.pmeasLikelihood_ = this.Model.Obs.pdf(this.MeasurementList, this.PredParticles);               
+                this.pmeasLikelihood_ = this.Model.Obs.pdf(this.MeasurementList, this.PredComponents.Means, this.PredComponents.Covars);               
             end
             MeasLikelihood = this.pmeasLikelihood_;
         end

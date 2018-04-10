@@ -237,8 +237,8 @@ classdef LinGaussObsModelX_2D < ObservationModelX
             vk = mvnrnd(zeros(this.NumObsDims,Ns)',this.R)';
         end
         
-        function prob = pdf(this, yk, xk)
-        % PDF Evaluates the probability/likelihood p(y_k|x_k) between a 
+        function prob = pdf(this, yk, xk, Pk)
+        % PDF Evaluates the probability/likelihood N(yk | xk, Pk) between a 
         % (set of) measurement(s) and a (set of) state vector(s)  
         %
         % Parameters
@@ -249,6 +249,16 @@ classdef LinGaussObsModelX_2D < ObservationModelX
         % xk: matrix
         %   A (NumStateDims x Ns) matrix, whose columns correspond to Ns
         %   individual state vectors
+        % Pk: matrix, optional
+        %   A (NumStateDims x NumStateDims) or (NumStateDims x NumStateDims x Ns)
+        %   covariance matrix/matrices. 
+        %   - If Pk is a (NumStateDims x NumStateDims x Ns) matrix, then
+        %     each (NumStateDims x NumStateDims x i) matrix corresponds to 
+        %     the covariance of sample xk(:,i).
+        %   - If Pk is a (NumStateDims x NumStateDims) matrix, then it is
+        %     implied that all samples in xk have the same covariance.
+        %   (default Pk = 0, which implies that only the measurement noise
+        %    will be taken into account)
         %
         % Returns
         % -------
@@ -262,16 +272,26 @@ classdef LinGaussObsModelX_2D < ObservationModelX
         %   and (NumStatesDim x b) x_k state matrices.
         %
         % See also HEVAL, RANDOM, COVARIANCE
-        
-            prob = zeros(size(yk,2), size(xk,2));
+            
+            Ns = size(xk,2);
+            Nm = size(yk,2);
+            if(nargin<4)
+                Pk = 0;
+            end
+            if(size(Pk,3)>1 && size(Pk,3)~=Ns)
+                error("Pk size error! Check function documentation for more details");
+            end
+            prob = zeros(Nm, Ns);
             % Increase speed by iterating over the smallest matrix 
-            if(size(xk,2)>size(yk,2))
+            if(Ns>Nm && size(Pk,3)==1)
+                Sk = this.H*Pk*this.H' + this.R;
                 for i=1:size(yk,2)
-                    prob(i,:) = gauss_pdf(yk(:,i), this.heval(xk), this.R);
+                    prob(i,:) = gauss_pdf(yk(:,i), this.heval(xk), Sk);
                 end
             else
                 for i=1:size(xk,2)
-                    prob(:,i) = gauss_pdf(yk, this.heval(xk(:,i)), this.R);  
+                    Sk = this.H*Pk(:,:,i)*this.H' + this.R;
+                    prob(:,i) = gauss_pdf(yk, this.heval(xk(:,i)), Sk);  
                 end
             end
         end

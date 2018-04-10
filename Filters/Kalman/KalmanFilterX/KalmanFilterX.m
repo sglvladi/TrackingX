@@ -216,24 +216,9 @@ classdef KalmanFilterX < FilterX
         %
         % See also update, smooth.
             
+            % Predict state and measurement
             this.predictState();
             this.predictObs();
-%             % Extract model parameters
-%             F = this.Model.Dyn.feval();
-%             Q = this.Model.Dyn.covariance();
-%             H = this.Model.Obs.heval();
-%             R = this.Model.Obs.covariance();
-%             if(~isempty(this.Model.Ctr))
-%                 B   = this.Model.Ctr.beval();
-%                 Qu  = this.Model.Ctr.covariance();
-%             else
-%                 this.ControlInput   = 0;
-%                 B   = 0;
-%                 Qu  = 0;
-%             end
-%             % Perform prediction
-%             [this.PredStateMean, this.PredStateCovar, this.PredMeasMean, this.InnovErrCovar, this.CrossCovar] = ...
-%                 this.predict_(this.StateMean, this.StateCovar, F, Q, H, R, this.ControlInput, B, Qu); 
         end
         
         function predictState(this)
@@ -310,7 +295,7 @@ classdef KalmanFilterX < FilterX
             R = this.Model.Obs.covariance();
             % Perform prediction
             [this.PredMeasMean, this.InnovErrCovar, this.CrossCovar] = ...
-                this.predictObs_(this.StateMean, this.StateCovar, H, R); 
+                this.predictObs_(this.PredStateMean, this.PredStateCovar, H, R); 
         end
         
         function update(this)
@@ -323,14 +308,14 @@ classdef KalmanFilterX < FilterX
         %
         % See also KalmanFilterX, predict, iterate, smooth.
         
-            if(size(this.Measurement,2)>1)
-                error('[KF] More than one measurement have been provided for update. Use KalmanFilterX.UpdateMulti() function instead!');
-            elseif size(this.Measurement,2)==0
-                warning('[KF] No measurements have been supplied to update track! Skipping Update step...');
-                this.StateMean = this.PredStateMean;
-                this.StateCovar = this.PredStateCovar;
-                return;
-            end
+%             if(size(this.Measurement,2)>1)
+%                 error('[KF] More than one measurement have been provided for update. Use KalmanFilterX.UpdateMulti() function instead!');
+%             elseif size(this.Measurement,2)==0
+%                 warning('[KF] No measurements have been supplied to update track! Skipping Update step...');
+%                 this.StateMean = this.PredStateMean;
+%                 this.StateCovar = this.PredStateCovar;
+%                 return;
+%             end
             
             if(isempty(this.PredMeasMean)||isempty(this.InnovErrCovar)||isempty(this.CrossCovar))
                 [this.PredMeasMean, this.InnovErrCovar, this.CrossCovar] = ...
@@ -423,8 +408,11 @@ classdef KalmanFilterX < FilterX
             this.CrossCovar = [];
             this.KalmanGain = [];
         end
+    end
     
-        function [xPred, PPred, yPred, S, Pxy] = predict_(this,x,P,F,Q,H,R,u,B,O)
+    methods (Static)
+        
+        function [xPred, PPred, yPred, S, Pxy] = predict_(x,P,F,Q,H,R,u,B,O)
         % PREDICT_ Perform the discrete-time KF state and measurement
         % prediction steps, under the assumption of additive process noise.
         %
@@ -469,23 +457,21 @@ classdef KalmanFilterX < FilterX
         %October 2017 Lyudmil Vladimirov, University of Liverpool.
 
             switch(nargin)
-                case(7) 
+                case(6) 
                     u = 0;
                     B = 0;
                     O = 0;
-                case(8)
+                case(7)
                     B = 1;
                     O = 0;
-                case(9)
+                case(8)
                     O = 0;
             end
 
-           [xPred, PPred] = this.predictState_(x,P,F,Q,u,B,O);
-           [yPred, S, Pxy] = this.predictObs_(xPred,PPred,H,R);
+           [xPred, PPred] = KalmanFilterX.predictState_(x,P,F,Q,u,B,O);
+           [yPred, S, Pxy] = KalmanFilterX.predictObs_(xPred,PPred,H,R);
         end
-    end
-    
-    methods (Static)
+        
         function [xPred, PPred] = predictState_(x,P,F,Q,u,B,Qu)
         % PREDICTSTATE_ Perform the discrete-time KF state prediction 
         % step, under the assumption of additive process noise.

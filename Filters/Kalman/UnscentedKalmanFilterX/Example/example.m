@@ -49,16 +49,24 @@ for t = 1:NumIter
     Log.Estimates.StateMean(:,t) = ukf.StateMean;
     Log.Estimates.StateCovar(:,:,t) = ukf.StateCovar;
     
-    clf;
-    hold on;
-    plot(truth(1,1:t),truth(3,1:t),'.-k', Log.Estimates.StateMean(1,1:t), Log.Estimates.StateMean(3,1:t), 'b-o', measurements(1,1:t), measurements(2,1:t), 'rx');
-    plot_gaussian_ellipsoid(Log.Estimates.StateMean([1,3],t), Log.Estimates.StateCovar([1,3],[1,3],t));
-    legend('GroundTrouth','Estimated Mean','Measurements', 'Estimated Covariance');
-    xlabel("x coordinate (m)");
-    ylabel("y coordinate (m)");
-    axis([2 9 1 9]);
-    pause(0.1);
+%     clf;
+%     hold on;
+%     plot(truth(1,1:t),truth(3,1:t),'.-k', Log.Estimates.StateMean(1,1:t), Log.Estimates.StateMean(3,1:t), 'b-o', measurements(1,1:t), measurements(2,1:t), 'rx');
+%     plot_gaussian_ellipsoid(Log.Estimates.StateMean([1,3],t), Log.Estimates.StateCovar([1,3],[1,3],t));
+%     legend('GroundTrouth','Estimated Mean','Measurements', 'Estimated Covariance');
+%     xlabel("x coordinate (m)");
+%     ylabel("y coordinate (m)");
+%     axis([2 9 1 9]);
+%     pause(0.1);
 end
 
-
+clf;
+hold on;
+plot(truth(1,1:t),truth(3,1:t),'.-k', Log.Estimates.StateMean(1,1:t), Log.Estimates.StateMean(3,1:t), 'b-o', measurements(1,1:t), measurements(2,1:t), 'rx');
+plot_gaussian_ellipsoid(Log.Estimates.StateMean([1,3],t), Log.Estimates.StateCovar([1,3],[1,3],t));
+legend('GroundTrouth','Estimated Mean','Measurements', 'Estimated Covariance');
+xlabel("x coordinate (m)");
+ylabel("y coordinate (m)");
+axis([2 9 1 9]);
+pause(0.1);
     

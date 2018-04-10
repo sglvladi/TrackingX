@@ -125,11 +125,40 @@ classdef ExtendedKalmanFilterX<KalmanFilterX
         %
         %  See also update, smooth.
         
+            % Predict state and measurement
+            this.predictState();
+            this.predictObs();                                                                
+        end
+        
+        function predictState(this)
+        % PREDICTSTATE Perform an Extended Kalman Filter state prediction step
+        %   
+         % Usage
+        % -----
+        % * predict(this) calculates the predicted system state and covariance.
+        %
+        % More details
+        % ------------
+        % * ExtendedKalmanFilterX() uses the Model class property, which should be an
+        %   instance/sublclass of the TrackingX.Models.StateSpaceModel class, in order
+        %   to extract information regarding the underlying state-space model.
+        % * State prediction is performed using the Model.Dyn property,
+        %   which must be a subclass of TrackingX.Abstract.DynamicModel and
+        %   provide the following interface functions:
+        %   - Model.Dyn.feval(): Returns the model transition matrix
+        %   - Model.Dyn.covariance(): Returns the process noise covariance
+        % * Measurement prediction and innovation covariance calculation is
+        %   performed using the Model.Obs class property, which should be
+        %   a subclass of TrackingX.Abstract.DynamicModel and provide the
+        %   following interface functions:
+        %   - Model.Obs.heval(): Returns the model measurement matrix
+        %   - Model.Obs.covariance(): Returns the measurement noise covariance
+        %
+        %  See also update, smooth.
+        
             % Extract model parameters
             f = @(x) this.Model.Dyn.feval(x);
             Q = this.Model.Dyn.covariance();
-            h = @(x) this.Model.Obs.heval(x);
-            R = this.Model.Obs.covariance();
             if(~isempty(this.Model.Ctr))
                 b   = @(x) this.Model.Ctr.beval(x);
                 Qu  = this.Model.Ctr.covariance();
@@ -140,12 +169,48 @@ classdef ExtendedKalmanFilterX<KalmanFilterX
             end
             
             % Perform prediction
-            [this.PredStateMean, this.PredStateCovar, this.PredMeasMean,...
-             this.InnovErrCovar, this.CrossCovar, this.Jacobians.TransitionMatrix,... 
-             this.Jacobians.MeasurementMatrix, this.Jacobians.ControlGain] = ...
-                ExtendedKalmanFilterX_Predict(this.StateMean, this.StateCovar,...
-                                              f, Q, h, R, this.ControlInput, b, Qu);                                                                  
-        end   
+            [this.PredStateMean, this.PredStateCovar, ...
+             this.Jacobians.TransitionMatrix,this.Jacobians.ControlGain] = ...
+                this.predictState_(this.StateMean, this.StateCovar,...
+                                   f, Q, this.ControlInput, b, Qu);                                                                  
+        end
+        
+        function predictObs(this)
+        % PREDICTOBS Perform an Extended Kalman Filter mesurement prediction step
+        %   
+         % Usage
+        % -----
+        % * predict(this) calculates the predicted measurement,
+        %   as well as the associated uncertainty covariances.
+        %
+        % More details
+        % ------------
+        % * ExtendedKalmanFilterX() uses the Model class property, which should be an
+        %   instance/sublclass of the TrackingX.Models.StateSpaceModel class, in order
+        %   to extract information regarding the underlying state-space model.
+        % * State prediction is performed using the Model.Dyn property,
+        %   which must be a subclass of TrackingX.Abstract.DynamicModel and
+        %   provide the following interface functions:
+        %   - Model.Dyn.feval(): Returns the model transition matrix
+        %   - Model.Dyn.covariance(): Returns the process noise covariance
+        % * Measurement prediction and innovation covariance calculation is
+        %   performed using the Model.Obs class property, which should be
+        %   a subclass of TrackingX.Abstract.DynamicModel and provide the
+        %   following interface functions:
+        %   - Model.Obs.heval(): Returns the model measurement matrix
+        %   - Model.Obs.covariance(): Returns the measurement noise covariance
+        %
+        %  See also update, smooth.
+        
+            % Extract model parameters
+            h = @(x) this.Model.Obs.heval(x);
+            R = this.Model.Obs.covariance();
+                        
+            % Perform prediction
+            [this.PredMeasMean, this.InnovErrCovar, ...
+             this.CrossCovar, this.Jacobians.MeasurementMatrix] = ...
+                this.predictObs_(this.PredStateMean, this.PredStateCovar,h, R);                                                                  
+        end
         
         function update(this)
         % UPDATE Perform Extended Kalman Filter update step
@@ -257,8 +322,11 @@ classdef ExtendedKalmanFilterX<KalmanFilterX
             this.CrossCovar = [];
             this.KalmanGain = [];
         end
+    end
+    
+    methods (Static)
         
-        function [xPred, PPred, yPred, S, Pxy, F, H, B] = predict_(this,x,P,f,Q,h,R,u,b,Qu)
+        function [xPred, PPred, yPred, S, Pxy, F, H, B] = predict_(x,P,f,Q,h,R,u,b,Qu)
         % PREDICT_ Perform the discrete-time EKF state and measurement
         % prediction steps, under the assumption of additive process noise.
         %
@@ -318,13 +386,10 @@ classdef ExtendedKalmanFilterX<KalmanFilterX
                     Qu = 0;
             end
 
-           [xPred,PPred,F,B]  = this.predictState_(x,P,f,Q,u,b,Qu);
-           [yPred,S,Pxy,H]    = this.predictObs_(xPred,PPred,h,R);
+           [xPred,PPred,F,B]  = ExtendedKalmanFilterX.predictState_(x,P,f,Q,u,b,Qu);
+           [yPred,S,Pxy,H]    = ExtendedKalmanFilterX.predictObs_(xPred,PPred,h,R);
         end
-    end
-    
-    methods (Static)
-                
+        
         function [xPred, PPred, F, B] = predictState_(x,P,f,Q,u,b,Qu)
         % PREDICTSTATE_ Perform the discrete-time EKF state prediction 
         % step, under the assumption of additive process noise.
@@ -378,11 +443,11 @@ classdef ExtendedKalmanFilterX<KalmanFilterX
             end
 
             % Prediction for state vector and covariance:
-            [xPred,F] = this.computeJac_(f,x);    %nonlinear update and linearization at current state
+            [xPred,F] = ExtendedKalmanFilterX.computeJac_(f,x);    %nonlinear update and linearization at current state
             PPred = F*P*F' + Q;                 %partial update
 
             % Compute Control Input (if applicable)
-            [controlInputWithGain,B] = this.computeJac_(b,u); 
+            [controlInputWithGain,B] = ExtendedKalmanFilterX.computeJac_(b,u); 
 
             % Add control input
             xPred = xPred + controlInputWithGain;
@@ -420,7 +485,7 @@ classdef ExtendedKalmanFilterX<KalmanFilterX
         % October 2017 Lyudmil Vladimirov, University of Liverpool.
 
             % Prediction for measurement vector and covariance
-            [yPred,H] = this.computeJac_(h, xPred);    %nonlinear measurement and linearization
+            [yPred,H] = ExtendedKalmanFilterX.computeJac_(h, xPred);    %nonlinear measurement and linearization
             S = H*PPred*H' + R;
 
             % Cross-covariance

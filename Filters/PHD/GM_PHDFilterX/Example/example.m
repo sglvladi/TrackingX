@@ -40,22 +40,23 @@ V_bounds = [0 10 0 10]; % [x_min x_max y_min y_max]
 N=size(DataList,2); % timesteps 
 
 % Assign PHD parameter values
-config.NumParticles = 50000;              % number of particles
 config.Model = ssm;
 q = dyn.covariance();
-%config.BirthIntFcn = @(Np) [(V_bounds(2)-V_bounds(1))*rand(Np,1), mvnrnd(zeros(Np,1), q(3,3)'),(V_bounds(4)-V_bounds(3))*rand(Np,1),mvnrnd(zeros(Np,1), q(4,4)')]'; % Uniform position and heading, Gaussian speed
-config.BirthIntFcn = @(Np) [(V_bounds(2)-V_bounds(1))*rand(Np,1), mvnrnd(zeros(Np,1), 0.05'),(V_bounds(4)-V_bounds(3))*rand(Np,1),mvnrnd(zeros(Np,1), 0.05')]'; % Uniform position and heading, Gaussian speed
-
-config.PriorDistFcn = @ (Np) deal(config.BirthIntFcn(Np), repmat(1/Np, Np, 1)');
-config.BirthScheme = {'Mixture', 0.01};
-%config.BirthScheme = {'Expansion', 500};
+BirthComponents.Means = [(V_bounds(2)-V_bounds(1))*rand(50,1), mvnrnd(zeros(50,1), 0.05'),(V_bounds(4)-V_bounds(3))*rand(50,1),mvnrnd(zeros(50,1), 0.05')]';
+BirthComponents.Covars = repmat(10*q,1,1,50);
+BirthComponents.Weights = 0.001*ones(1,50);
+config.PriorComponents.Means = [];
+config.PriorComponents.Covars = [];
+config.PriorComponents.Weights = [];
+config.BirthIntFcn = BirthComponents; % Uniform position and heading, Gaussian speed
 config.ProbOfDeath = 0.005;
 config.ProbOfDetection = 0.9;
+config.ProbOfGating = 0.9;
 config.ClutterRate = lambdaV/V;
-config.ResamplingScheme = 'Multinomial';
+config.Filter = UnscentedKalmanFilterX(ssm);
 
 % Instantiate PHD filter
-myphd = SMC_PHDFilterX(config);
+myphd = GM_PHDFilterX(config);
 
 % Create figure windows
 if(ShowPlots)
@@ -89,62 +90,18 @@ for k=1:N
     
     % Change PHD filter parameters
     myphd.MeasurementList = tempDataList; % New observations
-    %myphd.ClutterRate = (size(tempDataList,2)-myphd.NumTargets)/V;
-    
+    BirthComponents.Means = [(V_bounds(2)-V_bounds(1))*rand(50,1), mvnrnd(zeros(50,1), 0.05'),(V_bounds(4)-V_bounds(3))*rand(50,1),mvnrnd(zeros(50,1), 0.05')]';
+    BirthComponents.Covars = repmat(10*q,1,1,50);
+    BirthComponents.Weights = 0.001*ones(1,50);
+    myphd.BirthIntFcn = BirthComponents; % New birth components
+
     tic;
     % Predict PHD filter
     myphd.predict();
-    
-    % Plot prediction step results
-    if(ShowPlots && ShowPrediction)
-        % Plot data
-        cla(ax(1));
-         % Flip the image upside down before showing it
-        imagesc(ax(1),[min_x max_x], [min_y max_y], flipud(img));
-
-        % NOTE: if your image is RGB, you should use flipdim(img, 1) instead of flipud.
-        hold on;
-        h2 = plot(ax(1), DataList{k}(1,:),DataList{k}(2,:),'k*','MarkerSize', 10);
-        for j=1:TrackNum
-            h2 = plot(ax(1), x_true(1:k,j),y_true(1:k,j),'b.-','LineWidth',1);
-            if j==2
-                set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
-            end
-            h2 = plot(ax(1), x_true(k,j),y_true(k,j),'bo','MarkerSize', 10);
-            set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off'); % Exclude line from legend
-        end
-
-        % set the y-axis back to normal.
-        set(ax(1),'ydir','normal');
-        str = sprintf('Robot positions (Prediction)');
-        title(ax(1),str)
-        xlabel('X position (m)')
-        ylabel('Y position (m)')
-        axis(ax(1),V_bounds)
             
-        % Plot PHD
-        cla(ax(2), 'reset');
-        [bandwidth,density,X,Y]=kde2d(myphd.PredParticles([1,3],:)');
-        %contour3(X,Y,density,50);
-        h = surf(ax(2),X,Y,density);
-        shading interp
-        colormap(ax(2), jet(3000))
-        set(h, 'edgecolor','none')
-        hold on;
-        plot(ax(2), myphd.PredParticles(1,:), myphd.PredParticles(3,:), '.')
-        hold on;
-        plot(ax(2), myphd.MeasurementList(1,:), myphd.MeasurementList(2,:), 'y*');
-        axis(ax(2), [V_bounds 0 10]);
-        str = sprintf('PHD intensity (Prediction)');
-        xlabel(ax(2),'X position (m)')
-        ylabel(ax(2),'Y position (m)')
-        zlabel(ax(2),'Intensity')
-        title(ax(2),str)
-        pause(0.01)
-    end
-        
     % Update PHD filter
     myphd.update();
+    
     ellapsed = toc;
     tot_ellapsed = tot_ellapsed + ellapsed;
     fprintf("Estimated number of targets: %f\n", myphd.NumTargets);
@@ -176,15 +133,24 @@ for k=1:N
         axis(ax(1),V_bounds)
             
         % Plot PHD
+        particles = zeros(2,0);
+        numParticles = 10000;
+        for i=1:myphd.NumComponents
+            numParts = round(myphd.Components.Weights(i)/sum(myphd.Components.Weights)*numParticles);
+            particles = [particles, mvnrnd(myphd.Components.Means([1,3],i)',myphd.Components.Covars([1,3],[1,3],i)',numParts)'];
+        end
+        %gm = gmdistribution(myphd.Components.Means([1,3],:)',myphd.Components.Covars([1,3],[1,3],:),myphd.Components.Weights/sum(myphd.Components.Weights));
         cla(ax(2), 'reset');
-        [bandwidth,density,X,Y]=kde2d(myphd.Particles([1,3],:)');
+        %fsurf(ax(2),@(x,y)pdf(gm,[x y]),[0 10 0 10])
+        [bandwidth,density,X,Y]=kde2d(particles');
         %contour3(X,Y,density,50);
         h = surf(ax(2),X,Y,density);        
+        %camlight
         shading interp
         colormap(ax(2), jet(3000))
         %set(h, 'edgecolor','none')
         hold on;
-        plot(ax(2), myphd.Particles(1,:), myphd.Particles(3,:), '.')
+        plot(ax(2), particles(1,:), particles(2,:), '.')
         hold on;
         plot(ax(2), myphd.MeasurementList(1,:), myphd.MeasurementList(2,:), 'y*');
         axis(ax(2), [V_bounds]);
