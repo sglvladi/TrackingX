@@ -1,6 +1,6 @@
 % Plot settings
 ShowPlots = 1;
-ShowUpdate = 1;
+ShowUpdate = 0;
 ShowArena = 0;
 ShowPredict = 0;
 SimNum = 100;
@@ -8,11 +8,11 @@ V_bounds = [0 25 0 15];
 
 % Instantiate a Tracklist to store each filter
 FilterList = [];
-FilterNum = 4;
+FilterNum = 5;
 
 % Containers
 Logs = cell(1, 3); % 4 tracks
-N = size(x_true,1)-2;
+N = size(GroundTruth,2)-2;
 for i=1:FilterNum
     Logs{i}.xV = zeros(4,N);          %estmate        % allocate memory
     Logs{i}.err = zeros(2,N);
@@ -65,7 +65,7 @@ for SimIter = 1:SimNum
     % Positional Observation Model
     Params_meas.xDim = 4;
     Params_meas.yDim = 2;
-    Params_meas.r = 0.3;
+    Params_meas.r = .3;
     obs_model = PositionalObsModelX(Params_meas);
     
     % Polar2Cart Observation Model
@@ -82,13 +82,13 @@ for SimIter = 1:SimNum
     FilterList{1}.Filter = KalmanFilterX(Params_kf);
 
     % Initiate Extended Kalman Filter
-%     Params_ekf.k = 1;
-%     %Params_ekf.x_init = [x_true(2,1); y_true(2,1); x_true(2,1)-x_true(1,1); y_true(2,1)-y_true(1,1)];
-%     Params_ekf.x_init = [x_true(2,1); y_true(2,1); sqrt((x_true(2,1)-x_true(1,1))^2+(y_true(2,1)-y_true(1,1))^2); atan2((y_true(2,1)-y_true(1,1)),(x_true(2,1)-x_true(1,1)))];
-%     Params_ekf.P_init = CHmodel.Params.Q(1);
-%     Params_ekf.DynModel = CHmodel;
-%     Params_ekf.ObsModel = obs_model;
-%     FilterList{end+1}.Filter = EKalmanFilterX(Params_ekf);
+    Params_ekf.k = 1;
+    %Params_ekf.x_init = [x_true(2,1); y_true(2,1); x_true(2,1)-x_true(1,1); y_true(2,1)-y_true(1,1)];
+    Params_ekf.x_init = [x_true(2,1); y_true(2,1); sqrt((x_true(2,1)-x_true(1,1))^2+(y_true(2,1)-y_true(1,1))^2); atan2((y_true(2,1)-y_true(1,1)),(x_true(2,1)-x_true(1,1)))];
+    Params_ekf.P_init = CHmodel.Params.Q(1);
+    Params_ekf.DynModel = CHmodel;
+    Params_ekf.ObsModel = obs_model;
+    FilterList{end+1}.Filter = EKalmanFilterX(Params_ekf);
 
     % Initiate Unscented Kalman Filter
     Params_ukf.k = 1;
@@ -101,7 +101,7 @@ for SimIter = 1:SimNum
 
     % Initiate Particle Filter
     Params_pf.k = 1;
-    Params_pf.Np = 5000;
+    Params_pf.Np = 1000;
     %Params_pf.gen_x0 = @(Np) mvnrnd(repmat([x_true(2,1); y_true(2,1); x_true(2,1)-x_true(1,1); y_true(2,1)-y_true(1,1)]', Np,1), CVmodel.Params.Q(1));
     Params_pf.DynModel = CHmodel;
     Params_pf.ObsModel = obs_model;
@@ -126,7 +126,7 @@ for SimIter = 1:SimNum
      
     % Initiate UParticle Filter
     Params_upf.k = 1;
-    Params_upf.Np = 5000;
+    Params_upf.Np = 1000;
     %Params_upf.gen_x0 = @(Np) mvnrnd(repmat([x_true(2,1); y_true(2,1); x_true(2,1)-x_true(1,1); y_true(2,1)-y_true(1,1)]', Np,1), CVmodel.Params.Q(1));
     Params_upf.DynModel = CHmodel;
     Params_upf.ObsModel = obs_model;
@@ -192,8 +192,8 @@ for SimIter = 1:SimNum
                 %plot(pf.Params.particles(1,:), pf.Params.particles(2,:), 'b.', 'MarkerSize', 10);
                 plot(Logs{i}.xV(1,1:k), Logs{i}.xV(2,1:k), '.-', 'MarkerSize', 10);
             end
-            legend('KF','UKF', 'PF', 'UPF')
-            %legend('KF','EKF', 'UKF', 'PF', 'EPF', 'UPF')
+            %legend('KF','UKF', 'PF', 'UPF')
+            legend('KF','EKF', 'UKF', 'PF', 'UPF')
 
             if(ShowArena)
                 % set the y-axis back to normal.
@@ -216,15 +216,15 @@ for i=1:FilterNum
     hold on;
     plot(sqrt(Logs{i}.pos_err(1,:)/SimNum), '.-');
 end
-legend('UKF', 'PF', 'UPF')
-%legend('KF','EKF', 'UKF', 'PF', 'EPF', 'UPF');%, 'EPF', 'UPF')
+%legend('UKF', 'PF', 'UPF')
+legend('KF','EKF', 'UKF', 'PF', 'UPF');%, 'EPF', 'UPF')
 
 figure
 bars = zeros(1, FilterNum);
-c = {'UKF', 'PF', 'UPF'};
-%c = {'KF','EKF', 'UKF', 'PF', 'EPF', 'UPF'};
-%c = categorical(c, {'KF','EKF', 'UKF', 'PF', 'EPF', 'UPF'},'Ordinal',true); %, 'EPF', 'UPF'
-c = categorical(c, {'UKF', 'PF', 'UPF'},'Ordinal',true); %, 'EPF', 'UPF'
+%c = {'UKF', 'PF', 'UPF'};
+c = {'KF','EKF', 'UKF', 'PF',  'UPF'};
+c = categorical(c, {'KF','EKF', 'UKF', 'PF',  'UPF'},'Ordinal',true); %, 'EPF', 'UPF'
+%c = categorical(c, {'UKF', 'PF', 'UPF'},'Ordinal',true); %, 'EPF', 'UPF'
 for i=1:FilterNum
     bars(i) =  Logs{i}.exec_time;
 end

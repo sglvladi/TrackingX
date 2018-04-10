@@ -1,4 +1,4 @@
-function loglik = computeEMLoglik(xInit,PInit,xSmooth,y,F,H,Q,R,B,u)
+function loglik = computeEMLoglik(xInit,PInit,xSmooth,y,F,H,Q,R,B,u, Pt,Pt_tm1)
 % COMPUTEEMLOGLIK Compute EM loglikelihood p(y_{1:t},x_{1:t} | theta), where
 % theta = {F,H,Q,R,B}.
 %
@@ -22,26 +22,32 @@ function loglik = computeEMLoglik(xInit,PInit,xSmooth,y,F,H,Q,R,B,u)
     [xDim, N] = size(xSmooth);
     yDim = size(y,1);
     
-    loglik = -sum((y-H*xSmooth).^2)/(2*R) - N/2*log(abs(R))...
-        -1/2*sum((xSmooth(2:N)-F*xSmooth(1:N-1)-B*u(2:N)).^2)/(Q) - (N-1)/2*log(abs(Q))...
-        -sum((xSmooth(1)-xInit).^2)/(2*PInit) - 0.5*log(abs(PInit)) - N*log(2*pi);
-    
-%     loglik = -.5*(y-H*xSmooth)/R*(y-H*xSmooth)' - N/2*log(abs(R))...
-%         -1/2*(xSmooth(:,2:N)-F*xSmooth(1:N-1)-B*u(2:N))/Q - (N-1)/2*log(abs(Q))...
+%     loglik = -sum((y-H*xSmooth).^2)/(2*R) - N/2*log(abs(R))...
+%         -1/2*sum((xSmooth(2:N)-F*xSmooth(1:N-1)-B*u(2:N)).^2)/(Q) - (N-1)/2*log(abs(Q))...
 %         -sum((xSmooth(1)-xInit).^2)/(2*PInit) - 0.5*log(abs(PInit)) - N*log(2*pi);
+%     
+%     loglik = -0.5*(y-H*xSmooth)/R*(y-H*xSmooth)' - 0.5*log(abs(R))...
+%         -1/2*(xSmooth(:,2:N)-F*xSmooth(1:N-1)-B*u(2:N))/Q*(xSmooth(:,2:N)-F*xSmooth(1:N-1)-B*u(2:N))'...
+%         - (N-1)/2*log(abs(Q)) -0.5*(xSmooth(1)-xInit)/PInit*(xSmooth(1)-xInit) - 0.5*log(abs(PInit)) - N*log(2*pi);
+%     
+    loglik = cell(1,3);
     
-%     loglik = cell(1,3);
-%     loglik{1} = -.5*(xSmooth(:,1) - xInit)/PInit*(xSmooth(:,1) - xInit)' ...
-%                   -.5*log(abs(PInit)) - .5*(N-1)*log(abs(Q)) - .5*N*log(abs(R)) ...
-%                   -.5*N*(xDim+yDim)*log(2*pi);
-%     loglik{2} = 0;
-%     loglik{3} = 0;
-%     for k = 1:N
-%         if(k>1)
-%             loglik{2} = loglik{2} + .5*(xSmooth(:,k) ...
-%                           - F*xSmooth(:,k-1) - B*u(:,k))/Q*(xSmooth(:,k) - F*xSmooth(:,k-1) - B*u(:,k))';
-%         end
+    loglik{1} = -0.5*trace(PInit\(Pt(:,:,1) - xSmooth(:,1)*xInit' - xInit*xSmooth(:,1)' - xInit*xInit')) - 0.5*log(det(PInit)) - N*log(2*pi);
+    loglik{2} = 0;
+    loglik{3} = 0;
+    for k = 1:N
+        if(k>1)
+            loglik{2} = loglik{2} + trace(Q\(Pt(:,:,k) - Pt_tm1(:,:,k)*F' - F*Pt_tm1(:,:,k)' + F*Pt(:,:,k-1)*F'...
+                + F*xSmooth(:,k-1)*u(:,k)'*B' + B*u(:,k)*xSmooth(:,k-1)'*F' - xSmooth(:,k)*u(:,k)'*B'...
+                - B*u(:,k)*xSmooth(:,k)' + B*u(:,k)*u(:,k)'*B'));
+            
+%             loglik{2} = loglik{2} + .5*(xSmooth(:,k) - F*xSmooth(:,k-1) ...
+%                 - B*u(:,k))/Q*(xSmooth(:,k) - F*xSmooth(:,k-1) - B*u(:,k))';
+        end
+        loglik{3} = loglik{3} + trace(R\(y(:,k)*y(:,k)' - y(:,k)*xSmooth(:,k)'*H' - H*xSmooth(:,k)*y(:,k)' + H*Pt(:,:,k)*H'));
 %         loglik{3} = loglik{3} + .5*(y(:,k) - H*xSmooth(:,k))/R*(y(:,k) - H*xSmooth(:,k))';
-%     end
-%     loglik = loglik{1} - loglik{2} - loglik{3};
+    end
+    loglik{2} = 0.5*loglik{2} + 0.5*(N-1)*log(det(Q));
+    loglik{3} = 0.5*loglik{3} + 0.5*N*log(det(R));
+    %loglik = loglik{1} - loglik{2} - loglik{3};
 end

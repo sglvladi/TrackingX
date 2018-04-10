@@ -25,7 +25,6 @@ function [Fnew,Qnew,Hnew,Rnew,Bnew,Params] = KalmanFilterX_LearnEM_Mstep_new(est
     Pt(:,:,N)     = V_s{N} + x_s(:,N)*x_s(:,N)';
     Pt(:,:,N-1)     = V_s{N-1} + x_s(:,N-1)*x_s(:,N-1)';
     
-    Params.loglik = computeEMLoglik(est_f{1}.x, est_f{1}.P, x_s,y,F,H,Q,R,B,u);
     
     for k = N-1:-1:2
         Vt_tm1(:,:,k) = V_f{k}*C{k-1}' + C{k}*(Vt_tm1(:,:,k+1) - F*V_f{k})*C{k-1}';
@@ -61,9 +60,17 @@ function [Fnew,Qnew,Hnew,Rnew,Bnew,Params] = KalmanFilterX_LearnEM_Mstep_new(est
 %     %Update state noise covariance
 %     Qnew = 1/(N-1)*sum(Pt2(2:N) + xhat(2:N).*u(2:N)*B - F*Ptt1(2:N) + F*xhat(1:N-1).*u(2:N)*B - B*u(2:N).*xhat(2:N) + B*(u(2:N).^2)*B);
      
+
+    % In the calcualtions below we have used the following simplification:
+    %   summ = y*x';
+    % is the same as sum_{t=1}^{N}(y_{t}*x_{t}'), i.e:
+    %   summ = 0;
+    %   for t=1:N
+    %       summ = summ + y(:,t)*x(:,t)';
+    %   end
       
     %Update output matrix
-    Hnew = y*x_s'/sum(Pt,3);
+    Hnew = y*x_s'/sum(Pt,3); 
 
     %Update noise covariance
     Rnew = 1/N*( y*y' - y*(x_s'*H') - (H*x_s)*y' + H*sum(Pt,3)*H'); %sum( - H*xhat.*y);
@@ -71,13 +78,16 @@ function [Fnew,Qnew,Hnew,Rnew,Bnew,Params] = KalmanFilterX_LearnEM_Mstep_new(est
     %Update dynamics matrix
     Fnew = (sum(Pt_tm1(:,:,2:N),3)-(B*u(:,2:N))*x_s(:,1:N-1)') / sum(Pt(:,:,1:N-1),3);
 
-    %new version of B and Q
+    %update Control matrix
     Bnew = (x_s(:,2:N)*u(:,2:end)' - F*x_s(:,1:N-1)*u(:,2:N)') / (u(:,2:N)*u(:,2:N)');
     
     %Update state noise covariance
     Qnew = 1/(N-1)*(sum(Pt(:,:,2:end),3) - sum(Pt_tm1(:,:,2:end),3)*F' - F*sum(Pt_tm1(:,:,2:end),3)' + F*sum(Pt(:,:,1:N-1),3)*F' ...
          + F*(x_s(:,1:N-1)*u(:,2:N)')*B' + B*(u(:,2:end)*x_s(:,1:N-1)')*F'- x_s(:,2:N)*u(:,2:N)'*B' - B*(u(:,2:N)*x_s(:,2:N)')+ B*(u(:,2:N)*u(:,2:N)')*B'); 
     
+     
+    Params.loglik = computeEMLoglik(est_f{1}.x, est_f{1}.P, x_s,y,Fnew,Hnew,Qnew,Rnew,Bnew,u,Pt,Pt_tm1);
+     
     Params.Vt_tm1 = Vt_tm1;
     Params.Pt_tm1 = Pt_tm1;
     Params.Pt = Pt;

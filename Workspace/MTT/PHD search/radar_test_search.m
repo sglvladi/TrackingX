@@ -31,9 +31,9 @@ Params_po.r = 5;
 POmodel = PositionalObsModelX(Params_po);
 
 %% Polar2Cart Observation Model
-Params_meas.xDim = 4;
-Params_meas.R = [0.00121846967914683, 0; 0, 100];%[pi/3600 0 ; 0 1];
-POmodel = Polar2CartGaussModelX(Params_meas);
+% Params_meas.xDim = 4;
+% Params_meas.R = [0.00121846967914683, 0; 0, 100];%[pi/3600 0 ; 0 1];
+%POmodel = Polar2CartGaussModelX(Params_meas);
 
 %% Assign PF parameter values
 Params_pf.k               = 1;                   % initial iteration number
@@ -69,7 +69,7 @@ jpdaf.Params.DataList = DataList{1}(:,:);
 
 %% Assign PHD parameter values
 Params.k               = 1;                   % initial iteration number
-Params.Np              = 50000;              % number of particles
+Params.Np              = 100000;              % number of particles
 Params.resampling_strategy = 'systematic_resampling'; % resampling strategy
 Params.DynModel = CVmodel;
 Params.ObsModel = POmodel;
@@ -83,7 +83,7 @@ Params.pDeath = 0.005;
 Params.Jk = 500;
 Params.pDetect = 0.4;
 Params.lambda = lambdaV/V;
-Params.pConf = 0.9;
+Params.pConf = 0.7;
 Params.NpConf = Params_pf.Np;
 Params.type = 'search';
 Params.birth_strategy = 'mixture';
@@ -135,7 +135,7 @@ for i = 1:N
     
     %% Change JPDA and PHD filter parameters
     jpdaf.Params.DataList = DataList_k; % New observations
-    myphd.Params.lambda = size(DataList_k,2)/(pi*5); %V;
+    myphd.Params.lambda = size(DataList_k,2)/V;% (pi*5); %V;
     myphd.Params.y = DataList_k; % New observations
     for t = 1:length(jpdaf.Params.TrackList)
         if(i==1)
@@ -226,8 +226,8 @@ for i = 1:N
             plot(ax(2), myphd.Params.particles(1,:), myphd.Params.particles(2,:), '.')
             hold on;
             Data = POmodel.obs_inv(0,DataList{i});
-            data = plot(ax(2), Data(1,:),Data(2,:),'y*','MarkerSize', 5);
-            %plot(ax(2), myphd.Params.y(1,:), myphd.Params.y(2,:), 'y*');
+            %data = plot(ax(2), Data(1,:),Data(2,:),'y*','MarkerSize', 5);
+            plot(ax(2), myphd.Params.y(1,:), myphd.Params.y(2,:), 'y*');
             axis(ax(2),V_bounds);
             str = sprintf('Visualisation of PHD search track density');
             xlabel(ax(2),'X position (m)')

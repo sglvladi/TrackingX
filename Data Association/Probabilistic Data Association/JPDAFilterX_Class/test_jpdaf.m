@@ -22,7 +22,7 @@ POmodel = PositionalObsModelX(Params_pom);
 %% Assign PF parameter values
 Params_pf.k               = 1;                   % initial iteration number
 Params_pf.Np              = 5000;                 % number of particles
-Params_pf.DynModel = CVmodel;
+Params_pf.DynModel = CHmodel;
 Params_pf.ObsModel = POmodel;
 Params_pf.resampling_strategy = 'systematic_resampling';
 
@@ -31,27 +31,27 @@ Params_kf.k = 1;
 
 
 %% Set TrackNum
-TrackNum = 3;
+TrackNum = 2;
 
 %% Generate DataList
-[DataList,x1,y1] = gen_obs_cluttered_multi2(TrackNum, x_true, y_true, Params_pom.r, 2, 20, 1);
+%[DataList,x1,y1] = gen_obs_cluttered_multi2(TrackNum, x_true, y_true, Params_pom.r, [0 10 0 10], 20, 1);
 
 %% Get GroundTruth
-for i=1:TrackNum
-    GroundTruth{i} = [x_true(:,i), y_true(:,i)]; % ith target's GroundTruth
-end
+% for i=1:TrackNum
+%     GroundTruth{i} = [x_true(:,i), y_true(:,i)]; % ith target's GroundTruth
+% end
 
 %% Initiate TrackList
 for i=1:TrackNum
-    Params_kf.x_init = [GroundTruth{i}(1,1);GroundTruth{i}(1,2); 0; 0];
-    Params_kf.P_init = CVmodel.Params.Q(1); %blkdiag(POmodel.Params.R(1)/2, 2^2, 2*pi);%CVmodel.Params.Q(1);
+    Params_kf.x_init = [GroundTruth{1}(1,i);GroundTruth{1}(2,i); 0; 0];
+    Params_kf.P_init = CHmodel.Params.Q(1); %blkdiag(POmodel.Params.R(1)/2, 2^2, 2*pi);%CVmodel.Params.Q(1);
     %FilterList{1}.Filter = KalmanFilterX(Params_kf, CVmodel, obs_model);
-    Params_pf.gen_x0 =  @(Np) [mvnrnd(repmat([GroundTruth{i}(1,1),GroundTruth{i}(1,2), 0, 0],Np,1),CVmodel.Params.Q(1))]; %2*pi*rand(Np,1)];
-    Params_kf.DynModel = CVmodel;
+    Params_pf.gen_x0 =  @(N)mvnrnd(Params_kf.x_init(:,ones(1,N))',Params_kf.P_init);%@(Np) [mvnrnd(repmat([GroundTruth{i}(1,1),GroundTruth{i}(1,2), 0, 0],Np,1),CVmodel.Params.Q(1))]; %2*pi*rand(Np,1)];
+    Params_kf.DynModel = CHmodel;
     Params_kf.ObsModel = POmodel;
     %Params_pf.gen_x0 = @(Np) mvnrnd(repmat([x_true(2,1); y_true(2,1); sqrt((x_true(2,1)-x_true(1,1))^2+(y_true(2,1)-y_true(1,1))^2); atan((y_true(2,1)-y_true(1,1))/(x_true(2,1)-x_true(1,1)))]', Np,1), CVmodel.Params.Q(1));
-    TrackList{i}.TrackObj = EKalmanFilterX(Params_kf);
-    %TrackList{i}.TrackObj = ParticleFilterX(Params_pf);%UKalmanFilterX(Params_kf, CHmodel, POmodel);% 
+    %TrackList{i}.TrackObj = UKalmanFilterX(Params_kf);
+    TrackList{i}.TrackObj = ParticleFilterX(Params_pf);%UKalmanFilterX(Params_kf, CHmodel, POmodel);% 
 end
 
 %% Initiate PDAF parameters
@@ -116,59 +116,59 @@ for i = 1:N
     tic;
     jpdaf.Predict();
     %exec_time = 
-    if (ShowPlots && i>1)
-        if(i==1 || rem(i,SkipFrames+1)==0)
-            % Plot data
-            clf;
-             % Flip the image upside down before showing it
-            imagesc([min_x max_x], [min_y max_y], flipud(img));
-
-            % NOTE: if your image is RGB, you should use flipdim(img, 1) instead of flipud.
-
-            hold on;
-            for j=1:TrackNum
-                h2 = plot(Logs{j}.sV_ekf(1,1:i),Logs{j}.sV_ekf(2,1:i),'b.-','LineWidth',1);
-                if j==2
-                    set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
-                end
-                h2 = plot(Logs{j}.sV_ekf(1,i),Logs{j}.sV_ekf(2,i),'bo','MarkerSize', 10);
-                set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off'); % Exclude line from legend
-            end
-            h2 = plot(DataList{i}(1,:),DataList{i}(2,:),'k*','MarkerSize', 10);
-            for j=1:TrackNum
-                colour = 'r';
-                if(j==2)
-                   colour = 'c';
-                elseif (j==3)
-                   colour = 'm';
-                end
-                h4 = plot(Logs{j}.xV_ekf(1,:),Logs{j}.xV_ekf(2,:),strcat(colour,'.-'),'LineWidth',1);
-                %h4 = plot(Logs{j}.xV_ekf(1,i),Logs{j}.xV_ekf(2,i),strcat(colour,'o'),'MarkerSize', 10);
-                if(isa(jpdaf.Params.TrackList{j}.TrackObj,'ParticleFilterX'))
-                    c_mean = sum(repmat(jpdaf.Params.TrackList{j}.TrackObj.Params.w,size(jpdaf.Params.TrackList{j}.TrackObj.Params.particles,1),1).*jpdaf.Params.TrackList{j}.TrackObj.Params.particles,2);
-                    c_cov = [std(jpdaf.Params.TrackList{j}.TrackObj.Params.particles(1,:),jpdaf.Params.TrackList{j}.TrackObj.Params.w)^2,0;0,std(jpdaf.Params.TrackList{j}.TrackObj.Params.particles(2,:),jpdaf.Params.TrackList{j}.TrackObj.Params.w)^2];
-                else
-                    c_mean = jpdaf.Params.TrackList{j}.TrackObj.Params.xPred;
-                    c_cov = jpdaf.Params.TrackList{j}.TrackObj.Params.PPred(1:2,1:2);
-                end
-                h2=plot_gaussian_ellipsoid(c_mean(1:2), c_cov);
-                set(h2,'color',colour);
-                set(h2,'LineWidth',1);
-                %plot(jpdaf.Params.TrackList{j}.TrackObj.pf.particles(1,:),jpdaf.Params.TrackList{j}.TrackObj.pf.particles(2,:),strcat(colour,'.'),'MarkerSize', 3);
-                set(get(get(h4,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
-            end
-                % set the y-axis back to normal.
-            set(gca,'ydir','normal');
-            str = sprintf('Estimated state x_{1,k} vs. x_{2,k}');
-            title(str)
-            xlabel('X position (m)')
-            ylabel('Y position (m)')
-%            h_legend = legend('Real', 'Meas', 'Target 1', 'Target 2');
-%            set(h_legend,'FontSize',9, 'Orientation', 'horizontal', 'Location', 'north');
-            axis([0 10 0 10])
-            pause(0.01)
-        end
-    end
+%     if (ShowPlots && i>1)
+%         if(i==1 || rem(i,SkipFrames+1)==0)
+%             % Plot data
+%             clf;
+%              % Flip the image upside down before showing it
+%             imagesc([min_x max_x], [min_y max_y], flipud(img));
+% 
+%             % NOTE: if your image is RGB, you should use flipdim(img, 1) instead of flipud.
+% 
+%             hold on;
+%             for j=1:TrackNum
+%                 h2 = plot(Logs{j}.sV_ekf(1,1:i),Logs{j}.sV_ekf(2,1:i),'b.-','LineWidth',1);
+%                 if j==2
+%                     set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
+%                 end
+%                 h2 = plot(Logs{j}.sV_ekf(1,i),Logs{j}.sV_ekf(2,i),'bo','MarkerSize', 10);
+%                 set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off'); % Exclude line from legend
+%             end
+%             h2 = plot(DataList{i}(1,:),DataList{i}(2,:),'k*','MarkerSize', 10);
+%             for j=1:TrackNum
+%                 colour = 'r';
+%                 if(j==2)
+%                    colour = 'c';
+%                 elseif (j==3)
+%                    colour = 'm';
+%                 end
+%                 h4 = plot(Logs{j}.xV_ekf(1,:),Logs{j}.xV_ekf(2,:),strcat(colour,'.-'),'LineWidth',1);
+%                 %h4 = plot(Logs{j}.xV_ekf(1,i),Logs{j}.xV_ekf(2,i),strcat(colour,'o'),'MarkerSize', 10);
+%                 if(isa(jpdaf.Params.TrackList{j}.TrackObj,'ParticleFilterX'))
+%                     c_mean = sum(repmat(jpdaf.Params.TrackList{j}.TrackObj.Params.w,size(jpdaf.Params.TrackList{j}.TrackObj.Params.particles,1),1).*jpdaf.Params.TrackList{j}.TrackObj.Params.particles,2);
+%                     c_cov = [std(jpdaf.Params.TrackList{j}.TrackObj.Params.particles(1,:),jpdaf.Params.TrackList{j}.TrackObj.Params.w)^2,0;0,std(jpdaf.Params.TrackList{j}.TrackObj.Params.particles(2,:),jpdaf.Params.TrackList{j}.TrackObj.Params.w)^2];
+%                 else
+%                     c_mean = jpdaf.Params.TrackList{j}.TrackObj.Params.xPred;
+%                     c_cov = jpdaf.Params.TrackList{j}.TrackObj.Params.PPred(1:2,1:2);
+%                 end
+%                 h2=plot_gaussian_ellipsoid(c_mean(1:2), c_cov);
+%                 set(h2,'color',colour);
+%                 set(h2,'LineWidth',1);
+%                 %plot(jpdaf.Params.TrackList{j}.TrackObj.pf.particles(1,:),jpdaf.Params.TrackList{j}.TrackObj.pf.particles(2,:),strcat(colour,'.'),'MarkerSize', 3);
+%                 set(get(get(h4,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
+%             end
+%                 % set the y-axis back to normal.
+%             set(gca,'ydir','normal');
+%             str = sprintf('Estimated state x_{1,k} vs. x_{2,k}');
+%             title(str)
+%             xlabel('X position (m)')
+%             ylabel('Y position (m)')
+% %            h_legend = legend('Real', 'Meas', 'Target 1', 'Target 2');
+% %            set(h_legend,'FontSize',9, 'Orientation', 'horizontal', 'Location', 'north');
+%             axis([0 10 0 10])
+%             pause(0.01)
+%         end
+%     end
     
     jpdaf.Update();
         

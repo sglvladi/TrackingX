@@ -49,14 +49,35 @@ function [xPred, PPred, yPred, S, Pxy] = UKalmanFilterX_Predict(alpha,kappa,beta
     vDim = yDim;       % Observation noise dims
     aDim = xDim + wDim + vDim; 
     
-    % Compute Augmented Sigma Points and Weights
-    [Xa, Wm, Wc] = FormAugmentedSigmas(alpha,kappa,beta,x,P,Q,R);
+    Ns = xDim; % # of states
+            
+    % Calculate unscented transformation parameters
+    [c, Wmean, Wcov, OOM] = matlabshared.tracking.internal.calcUTParameters(alpha,beta,kappa,Ns);
+    
+    % Form the sigma points
+    X = formSigmaPoints(x, P, c);           
 
-    % Unscented Tranform
-    [xPred, XPred, PPred, X1] = UnscentedTransform(f, Xa(1:xDim,:), Wm, Wc, Xa(xDim+1:xDim+wDim,:));
-    %[ctr, Ctr, ctrP, P1] = UnscentedTransform(b, Xa(1:xDim,:), Wm, Wc, Xa(xDim+1:xDim+wDim,:));
-    [yPred, YPred, S, Y1] = UnscentedTransform(h, XPred, Wm, Wc, Xa(xDim+wDim+1:aDim,:));
-
+    % Perform Unscented Tranform     
+    [xPred,PPred] = unscentedTransform(f,X,Wmean,Wcov,OOM);
+    % Add uncertainty to our prediction due to process noise
+    PPred = PPred + Q;
+     
+    % Form the sigma points again
+    X = formSigmaPoints(xPred, PPred, c);
+    % Calculate the unscented transformation mean and covariance
+    [yPred,S,Pxy] = unscentedTransform(h,X,Wmean,Wcov,OOM);
+    % Add uncertainty to our prediction due to measurement noise
+    S = S + R;
+        
+%     %Compute Augmented Sigma Points and Weights
+%     [Xa, Wm, Wc] = FormAugmentedSigmas(alpha,kappa,beta,x,P,Q,R);
+% 
+%     %Unscented Tranform
+%     [xPred, XPred, PPred, P1] = UnscentedTransform(f, Xa(1:xDim,:), Wm, Wc, Xa(xDim+1:xDim+wDim,:));
+%     PPred = PPred + Q;
+%     %[ctr, Ctr, ctrP, P1] = UnscentedTransform(b, Xa(1:xDim,:), Wm, Wc, Xa(xDim+1:xDim+wDim,:));
+%     [yPred, YPred, S, P2] = UnscentedTransform(h, XPred, Wm, Wc, Xa(xDim+wDim+1:aDim,:));
+%     S = S + R;
     % Cross-covariance
-    Pxy = X1*diag(Wc)*Y1';
+    %Pxy = P2;%P1*diag(Wcov)*P2';
 end

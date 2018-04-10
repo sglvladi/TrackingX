@@ -9,12 +9,11 @@ nEMIter = 50000;            % Number of EM iterations
 F_pre = @(~) 1;
 H_pre = @(~) 1;
 Q_pre = @(~) .1;
-R_pre = @(~) 1;
-B_pre = @(~) -.002;
-c     = 10^(-4);
-
+R_pre = @(~) 11;
+c     = 10^(-6);
+load('data.mat');
 % Recording Settings
-Record = 1;                 % Enable|Disable recording
+Record = 0;                 % Enable|Disable recording
 clear Frames                % Clear stored frames from previous simulations
 
 % Simulation Settings
@@ -48,32 +47,26 @@ ObsModel = GenericObservationModelX(Params_obs);
 ObsModel.Params.H = H_pre;
 ObsModel.Params.R = R_pre;
 
-Params_ctr.xDim = 1;
-Params_ctr.uDim = 1;
-Params_ctr.B    = B_pre;
-CtrModel = LinearNoiselessCtrModelX(Params_ctr); 
-
-
 Q_old = DynModel.Params.Q(1);
 F_old = DynModel.Params.F(1);
 R_old = ObsModel.Params.R(1);
 
 % Generate ground truth and measurements
-% sV = 5;
-% zV = ObsModel.sample(0, sV(1),1);
-% %uV = 2*rand()-1;
-% %uV(1:end) = 0; %[uV(2:end) 0];
-% clear pErr mErr;
-% mErr = zV - sV;
-% for k = 2:N
-%     % Generate new measurement from ground truth
-%     %uV(:,k) = 2*rand()-1;
-%     pErr(k) = DynModel.sys_noise(1,1);
-%     sV(:,k) = DynModel.sys(1,sV(:,k-1),pErr(k)) + CtrModel.ctr(1,uV(:,k));     % save ground truth
-%     zV(:,k) = ObsModel.sample(0, sV(:,k),1);     % generate noisy measurment
-%     mErr(k) = zV(k) - ObsModel.obs(0,sV(k));
-%     
-% end
+sV = 5;
+zV = ObsModel.sample(0, sV(1),1);
+%uV = 2*rand()-1;
+%uV = [uV(2:end) 0];
+clear pErr mErr;
+mErr = zV - sV;
+for k = 2:N
+    % Generate new measurement from ground truth
+    %uV(:,k) = 2*rand()-1;
+    pErr(k) = DynModel.sys_noise(1,1);
+    sV(:,k) = DynModel.sys(1,sV(:,k-1),pErr(k)); %+ CtrModel.ctr(1,uV(:,k));     % save ground truth
+    zV(:,k) = ObsModel.sample(0, sV(:,k),1);     % generate noisy measurment
+    mErr(k) = zV(k) - ObsModel.obs(0,sV(k));
+    
+end
 
 % Comput initial estimates
 z_tilde = zeros(1,N-3);
@@ -81,16 +74,15 @@ for k = 1:N-3
     z_tilde(k) = tilde(zV,k);
 end
 % 
-B_init = (tilde(zV,N-3)-tilde(zV,1))/(N-4);
 F_init = 1;
 H_init = 1;
 Q_init = (1/3 *(var(z_tilde(5:end) - z_tilde(1:end-4)) - var(z_tilde(2:end)-z_tilde(1:end-1))));
 R_init = (1/2*(var(z_tilde(2:end)-z_tilde(1:end-1))-Q_init));
 if(Q_init<0)
-    Q_init = .1;%abs(Q_init);
+    Q_init = 0.1;%abs(Q_init);
 end
 if(R_init<0)
-    R_init = .1;%abs(R_init);%100;
+    R_init = 0.1;%abs(R_init);%100;
 end
 
 % B_init = B_pre();%(tilde(zV,N-3)-tilde(zV,1))/(N-4);
@@ -111,7 +103,6 @@ DynModel.Params.F = @(~) F_init;
 ObsModel.Params.H = @(~) H_init;
 ObsModel.Params.R = @(~) R_init;
 DynModel.Params.Q = @(~) Q_init;
-CtrModel.Params.B = @() B_init;
 
 % Initiate Kalman Filter
 Params_kf.k        = 1;
@@ -119,46 +110,45 @@ Params_kf.x_init   = zV(1); %sV(1)-DynModel.sys_noise(1,1);
 Params_kf.P_init   = DynModel.Params.Q(1);
 Params_kf.DynModel = DynModel;
 Params_kf.ObsModel = ObsModel;
-Params_kf.CtrModel = CtrModel;
 KFilter            = KalmanFilterX(Params_kf);
 
 loglik = [];
 % Store Logs
-% KFilter.Predict();
-% PC = P0*C';
-% R = (C*PC+S);
-% K = PC/R;
-% mu(:,1) = mu0+K*(X(:,1)-C*mu0);
-% V(:,:,1) = (I-K*C)*P0;
-% P(:,:,1) = P0;  % useless, just make a point
-% Amu(:,1) = mu0; % useless, just make a point
-
+% KFilter.Params.y = zV(:,1);
+% KFilter.Params.xPred = Params_kf.x_init;%+KFilter.CtrModel.ctr(1)*KFilter.Params.u; 
+% KFilter.Params.PPred = Params_kf.P_init;
+% KFilter.Params.yPred = KFilter.ObsModel.obs(1,KFilter.Params.xPred);
+% KFilter.Params.S =  KFilter.ObsModel.obs(1)*KFilter.Params.PPred*KFilter.ObsModel.obs(1)' + KFilter.ObsModel.Params.R(1); 
+% KFilter.Params.Pxy = KFilter.Params.PPred*KFilter.ObsModel.obs(1)';
+% KFilter.Update();
+% Log.xFilt(:,1)  = KFilter.Params.x;
+% Log.PPred(:,1)  = KFilter.Params.PPred;
+% Log.estFilt{1}  = KFilter.Params;
+% estFilt = Log.estFilt;
 
 % For all EM iterations
 for EMIter = 1:nEMIter
     
     fprintf('\nEMIter: %d/%d\n', EMIter, nEMIter);
-%     KFilter.Params.u = uV(:,1);
-%     KFilter.Params.y = zV(:,1);
-%     KFilter.Params.xPred = KFilter.Params.x+KFilter.CtrModel.ctr(1)*KFilter.Params.u; 
-%     KFilter.Params.PPred = KFilter.Params.P;
-%     KFilter.Params.yPred = KFilter.ObsModel.obs(1,KFilter.Params.xPred);
-%     KFilter.Params.S =  KFilter.ObsModel.obs(1)*KFilter.Params.PPred*KFilter.ObsModel.obs(1)' + KFilter.ObsModel.Params.R(1); 
-%     KFilter.Params.Pxy = KFilter.Params.PPred*KFilter.ObsModel.obs(1)';
-%     KFilter.Update();
-%     Log.xFilt(:,1)  = KFilter.Params.x;
-%     Log.PPred(:,1)  = KFilter.Params.PPred;
-%     Log.estFilt{1}  = KFilter.Params;
-
+    KFilter.Params.y = zV(:,1);
+    KFilter.Params.xPred = KFilter.Params.x; 
+    KFilter.Params.PPred = KFilter.Params.P;
+    KFilter.Params.yPred = KFilter.ObsModel.obs(1,KFilter.Params.xPred);
+    KFilter.Params.S =  KFilter.ObsModel.obs(1)*KFilter.Params.PPred*KFilter.ObsModel.obs(1)' + KFilter.ObsModel.Params.R(1); 
+    KFilter.Params.Pxy = KFilter.Params.PPred*KFilter.ObsModel.obs(1)';
+    KFilter.Update();
+    Log.xFilt(:,1)  = KFilter.Params.x;
+    Log.PPred(:,1)  = KFilter.Params.PPred;
+    Log.estFilt{1}  = KFilter.Params;
     % FILTERING
     % ===================>
-    meas_lik(EMIter) = 0;
+    
     % For all timesteps
-    for k = 1:N
+    meas_lik(EMIter) = 0;
+    for k = 2:N
         
         % Update KF measurement vector
         KFilter.Params.y = zV(:,k);
-        KFilter.Params.u = uV(:,k);
 
         % Iterate Kalman Filter
         KFilter.Iterate();
@@ -199,39 +189,10 @@ for EMIter = 1:nEMIter
     estSmooth = cell(1,N);
     estSmooth{N}.x = estFilt{N}.x;
     estSmooth{N}.P = estFilt{N}.P;
-    %estSmooth{N}.C = 0;
-    for k=1:N
-       xtt(k)=estFilt{k}.x;
-       Vtt(k)=estFilt{k}.P;
-       if(k<N)  
-           Vtt1(k)=estFilt{k+1}.PPred;
-       end
-       u(k)=estFilt{k}.u;
-       KT(k)=estFilt{k}.K;
-    end
     for k = N-1:-1:1
         [estSmooth{k}.x, estSmooth{k}.P, estSmooth{k}.C] = KalmanFilterX_SmoothRTS_Single(estFilt{k}.x,estFilt{k}.P,estFilt{k+1}.xPred,estFilt{k+1}.PPred, estSmooth{k+1}.x, estSmooth{k+1}.P, KFilter.DynModel.sys());%, KFilter.CtrModel.ctr(), estFilt{k}.u);
     end
-%     model.A = KFilter.DynModel.sys();
-%     model.C = KFilter.ObsModel.obs();
-%     model.G = KFilter.DynModel.Params.Q(1);
-%     model.S = KFilter.ObsModel.Params.R(1);
-%     model.mu0 = Params_kf.x_init;
-%     model.P0 = Params_kf.P_init;
-%     [estSmooth2.x, estSmooth2.P, estSmooth2.C,a,b,c] = kalmanSmoother2(zV,model);
-%     %[estSmooth2.x, estSmooth2.P, estSmooth2.C,a,b,c] = Shuang_KF_Smooth(xtt,Vtt,[0,Vtt1],KFilter.DynModel.sys(),KFilter.ObsModel.obs(),KFilter.CtrModel.ctr(),u,KT);
-%     for k=1:N
-%         estSmooth{k}.x = estSmooth2.x(k);
-%         estSmooth{k}.P = estSmooth2.P(k);
-%         if(k<N)
-%             estSmooth{k}.C = estSmooth2.C(k);
-%         end
-% %         if(estSmooth2.x(k)~=estSmooth{k}.x)
-% %             estSmooth2.x(k)
-% %             estSmooth{k}.x
-% %             dfsd=1;
-% %         end
-%     end
+    
     %smoothed_estimates = FilterList{i}.Filter.Smooth(filtered_estimates);
     xV_smooth = zeros(1,N);
     PV_smooth = zeros(1,N);
@@ -242,7 +203,7 @@ for EMIter = 1:nEMIter
     
     % MAXIMIZATION
     % ===================>
-    [F,Q,H,R,B,EMParams] = KalmanFilterX_LearnEM_Mstep(estFilt, estSmooth,KFilter.DynModel.sys(),KFilter.ObsModel.obs(),KFilter.CtrModel.ctr(),KFilter.DynModel.Params.Q(),KFilter.ObsModel.Params.R());
+    [F,Q,H,R,B,EMParams] = KalmanFilterX_LearnEM_Mstep(estFilt, estSmooth,KFilter.DynModel.sys(),KFilter.ObsModel.obs(),0,KFilter.DynModel.Params.Q(),KFilter.ObsModel.Params.R());
     
     % Update KF instance with optimised parameters
     Params_kf.x_init = xV_smooth(:,1);
@@ -252,13 +213,14 @@ for EMIter = 1:nEMIter
     KFilter.DynModel.Params.Q = @(~)Q;
     %KFilter.ObsModel.Params.H = @(~)H;
     KFilter.ObsModel.Params.R = @(~)R; %diag(diag(R));
-    KFilter.CtrModel.Params.B= @(~)B;
+    %KFilter.CtrModel.Params.B= @(~)B;
     
     % Compute log-likelihood
     loglik_k = EMParams.loglik{1} - EMParams.loglik{2} - EMParams.loglik{3};
 %     loglik_k = computeEMLoglik(Params_kf.x_init, Params_kf.P_init, xV_smooth,zV,KFilter.DynModel.Params.F(),KFilter.ObsModel.Params.H(),...
 %                                 KFilter.DynModel.Params.Q(),KFilter.ObsModel.Params.R(),KFilter.CtrModel.Params.B(),uV);
     loglik(:,EMIter) = cell2mat(EMParams.loglik)';
+    
     % Print debugging
     disp('F H B Q R :');
     disp([F H B Q R]);
@@ -266,7 +228,7 @@ for EMIter = 1:nEMIter
     % Evaluate termination condition
     terminate = false;
     if(EMIter>1)
-        if meas_lik(EMIter)-meas_lik(EMIter-1) < 10*c%*abs(meas_lik(EMIter-1))
+        if meas_lik(EMIter)-meas_lik(EMIter-1) < c%*abs(meas_lik(EMIter-1))
             terminate = true;
         end
 %         [terminate,delta_loglik,positive] = testEMConverged(loglik_k,loglik_km1,c);
@@ -334,12 +296,11 @@ for EMIter = 1:nEMIter
         ylabel(sp4,'pdf(Max loglikelihood)','Interpreter','latex');
         title(sp4,'\textbf{Max loglikelihood evolution}','Interpreter','latex');
         
-        Frames(EMIter) = getframe(gcf);
         pause(.01);
     end
     
     if(terminate)
-        %set(gcf,'color','g')
+        set(gcf,'color','g')
         title(sp1,'\textbf{State evolution (DONE)}','Interpreter','latex')
         break;
     end
@@ -350,9 +311,9 @@ end
 
 if(Record)
     Frames = Frames(2:end);
-    vidObj = VideoWriter(sprintf('em_test_P3.avi'));
+    vidObj = VideoWriter(sprintf('em_test.avi'));
     vidObj.Quality = 100;
-    vidObj.FrameRate = 1;
+    vidObj.FrameRate = 100;
     open(vidObj);
     writeVideo(vidObj, Frames);
     close(vidObj);

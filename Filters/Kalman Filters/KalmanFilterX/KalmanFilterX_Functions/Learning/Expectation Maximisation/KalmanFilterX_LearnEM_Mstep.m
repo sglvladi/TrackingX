@@ -7,7 +7,11 @@ function [Fnew,Qnew,Hnew,Rnew,Bnew,Params] = KalmanFilterX_LearnEM_Mstep(est_f,e
     
     N       = numel(est_f);                     % Number of timesteps
     y       = cellfun(@(x)x.y,est_f,'un',0);    % Observations {N} x (yDim x 1)
-    u       = cellfun(@(x)x.u,est_f,'un',0);    % Control inputs {N{ x (uDim x 1) 
+    if(~isfield(est_f{1},'u'))
+        u       = cellfun(@(x)0,est_f,'un',0);
+    else
+        u       = cellfun(@(x)x.u,est_f,'un',0);    % Control inputs {N{ x (uDim x 1) 
+    end
     V_f     = cellfun(@(x)x.P,est_f,'un',0);    % Filtered co-variences {N} x (xDim x xDim)
     x_s     = cellfun(@(x)x.x,est_s,'un',0);    % Smoothed estimates {N} x (xDim x 1)
     V_s     = cellfun(@(x)x.P,est_s,'un',0);    % Smoothed co-variences {N} x (xDim x xDim)
@@ -24,9 +28,6 @@ function [Fnew,Qnew,Hnew,Rnew,Bnew,Params] = KalmanFilterX_LearnEM_Mstep(est_f,e
     Pt{N}     = V_s{N} + x_s{N}*x_s{N}';
     Pt{N-1}   = V_s{N-1} + x_s{N-1}*x_s{N-1}';    
     
-    Params.loglik = computeEMLoglik(est_f{1}.x, est_f{1}.P, cell2mat(x_s),cell2mat(y),F,H,Q,R,B,cell2mat(u));
-
-
     % Sum components required to compute optimal F
     %  - sumF{1} = sum(P_{t,t-1})
     %  - sumF{2} = sum(P_{t-1})
@@ -56,7 +57,7 @@ function [Fnew,Qnew,Hnew,Rnew,Bnew,Params] = KalmanFilterX_LearnEM_Mstep(est_f,e
     for k = N-1:-1:1
         if(k>1)
             Vt_tm1{k} = V_f{k}*C{k-1}' + C{k}*(Vt_tm1{k+1} - F*V_f{k})*C{k-1}';
-            Pt_tm1{k} = Vt_tm1{k} + x_s{k}*x_s{k-1}';
+            Pt_tm1{k} = C{k-1}*V_s{k} + x_s{k}*x_s{k-1}'; %Vt_tm1{k} + x_s{k}*x_s{k-1}';
             Pt{k-1}   = V_s{k-1} + x_s{k-1}*x_s{k-1}';
         
             sumF{1} = sumF{1} + Pt_tm1{k} - B*u{k}*x_s{k-1}';
@@ -77,12 +78,29 @@ function [Fnew,Qnew,Hnew,Rnew,Bnew,Params] = KalmanFilterX_LearnEM_Mstep(est_f,e
     
     Fnew = sumF{1}/sumF{2};%sumPt_tm1/sumPtm1;
     Hnew = sumH{1}/sumH{2};
-    Bnew = sumB{1}/sumB{2};
+    if(sumB{1}==0)
+        Bnew = 0;
+    else
+        Bnew = sumB{1}/sumB{2};
+    end
     Rnew = sumR/N; Rnew = (Rnew+Rnew')/2;
     Qnew = sumQ/(N-1); Qnew = (Qnew+Qnew')/2;
     Params.Vt_tm1 = Vt_tm1;
     Params.Pt_tm1 = Pt_tm1;
     Params.Pt = Pt;
+    
+    Pt2 = zeros(size(Fnew,1),size(Fnew,2),numel(Pt));
+    for i = 1:numel(Pt)
+        Pt2(:,:,i) = Pt{i};
+    end
+    Pt_tm12 = zeros(size(Fnew,1),size(Fnew,2),numel(Pt_tm1));
+    for i = 2:numel(Pt)
+        Pt_tm12(:,:,i) = Pt_tm1{i};
+    end
+%     Pt2 = cell2mat(cellfun(@(x)x,Pt,'un',0));
+%     Pt_tm12 = cell2mat(cellfun(@(x)x,Pt_tm1,'un',0));
+    Params.loglik = computeEMLoglik(est_f{1}.x, est_f{1}.P, cell2mat(x_s),cell2mat(y),Fnew,Hnew,Qnew,Rnew,Bnew,cell2mat(u),Pt2,Pt_tm12);
+    
     
 %     Params.loglike = -sum((y-H_new*xhat).^2)/(2*R_new) - T/2*log(abs(R_new))...
 %     -1/2*sum((xhat(2:T)-F*xhat(1:T-1)-B*u(1:T-1)).^2)/(2*Q) - (T-1)/2*log(abs(Q))...

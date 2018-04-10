@@ -18,5 +18,5 @@ function [yPred, S, Pxy] = KalmanFilterX_PredictObs(xPred,PPred,H,R)
     % Compute predicted measurement mean and covariance
     yPred   = H*xPred;
     Pxy     = PPred*H'; 
-    S       = H*PPred*H' + R;
+    S       = H*Pxy + R;
 end

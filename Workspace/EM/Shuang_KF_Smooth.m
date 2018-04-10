@@ -13,7 +13,7 @@ end
 %% Another Recursion
 xhat = xtT;
 Pt = VtT + xtT.^2; %size 1*T
-Vtt1T(T) = (1-H*KT)*F*Vtt(T-1);
+Vtt1T(T) = (1-H*KT(T))*F*Vtt(T-1);
 for t = T:-1:3
    Vtt1T(t-1) = Vtt(t-1)*J(t-2) + J(t-1)*(Vtt1T(t)-Vtt(t-1))*J(t-2);  %Equation 3
 end

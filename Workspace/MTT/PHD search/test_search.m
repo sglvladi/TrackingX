@@ -12,7 +12,7 @@ clear M
 %% Clutter settings
 %lambdas = [0.0001,10,50,100,150,200,250,300,350,400,450,500];
 %lambda_count = lambda_count + 1;
-lambdaV = 100; %lambdas(lambda_count); % mean number of clutter points 
+lambdaV = 10; %lambdas(lambda_count); % mean number of clutter points 
 fprintf('STARTING NEW CYCLE for lambda = %d',lambdaV);
 V_bounds = [0 10 0 10];
 %V_bounds = [-1800 2400 -1500 1700];
@@ -32,7 +32,7 @@ CHmodel = ConstantHeadingModelX(Params_ch);
 %% 2D linear-Gaussian Observation Model
 Params_po.xDim = 4;
 Params_po.yDim = 2;
-Params_po.r = .1;
+Params_po.r = .2;
 POmodel = PositionalObsModelX(Params_po);
 
 %% Polar2Cart Observation Model
@@ -83,7 +83,7 @@ Params.Np              = 50000;              % number of particles
 Params.resampling_strategy = 'systematic_resampling'; % resampling strategy
 Params.DynModel = CVmodel;
 Params.ObsModel = POmodel;
-Params.gen_x0 = @(Np)[abs(V_bounds(2)-V_bounds(1))*rand(Np,1)+V_bounds(1),abs(V_bounds(4)-V_bounds(3))*rand(Np,1)+V_bounds(3), zeros(Np,1), zeros(Np,1)] + mvnrnd(zeros(Np,4),CVmodel.Params.Q); % Uniform position and heading, Gaussian speedCVmodel.Params.Q)
+Params.gen_x0 = @(Np)[abs(V_bounds(2)-V_bounds(1))*rand(Np,1)+V_bounds(1),abs(V_bounds(4)-V_bounds(3))*rand(Np,1)+V_bounds(3), zeros(Np,1), zeros(Np,1)] + mvnrnd(zeros(Np,4),CVmodel.Params.Q(1)); % Uniform position and heading, Gaussian speedCVmodel.Params.Q)
 %Params.gen_x0 = @(Np)[abs(V_bounds(2)-V_bounds(1))*rand(Np,1)+V_bounds(1),abs(V_bounds(4)-V_bounds(3))*rand(Np,1)+V_bounds(3), mvnrnd(zeros(Np,1),10), 2*pi*rand(Np,1)]; % Uniform position and heading, Gaussian speed
 %Params.gen_x0 = @(Np) [(V_bounds(2)-V_bounds(1))*rand(Np,1),(V_bounds(4)-V_bounds(3))*rand(Np,1), mvnrnd(zeros(Np,1), CVmodel.Params.q^2), 2*pi*rand(Np,1)]; % Uniform position and heading, Gaussian speed
 Params.particles_init = Params.gen_x0(Params.Np)'; % Generate inital particles as per gen_x0
@@ -148,7 +148,7 @@ for i = 1:N
     
     %% Change JPDA and PHD filter parameters
     jpdaf.Params.DataList = DataList_k; % New observations
-    myphd.Params.lambda = lambdaV/(pi*2500);%(pi/2*14);%V;
+    %myphd.Params.lambda = lambdaV/(pi*2500);%(pi/2*14);%V;
     myphd.Params.y = DataList_k; % New observations
     myphd.Params.k = 1; % Time index
     jpdaf.Params.k = 1; % Time index

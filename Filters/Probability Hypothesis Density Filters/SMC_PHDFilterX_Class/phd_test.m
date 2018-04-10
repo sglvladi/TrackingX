@@ -16,12 +16,14 @@ TrackNum = size(x_true,2);
 
 % Simulation parameters
 % Constant Velocity Model
-CVmodel = ConstantVelocityModelX(4,'q',0.0001,'smartArgs',false);
+ParamsCV.q = 0.0001;
+ParamsCV.xDim = 4;
+CVmodel = ConstantVelocityModelX(ParamsCV);
 
 % % Constant Heading Model
 Params.q_vel = 0.01;
 Params.q_head = 0.3;
-CHmodel = ConstantHeadingModelX('q_vel',0.01,'q_head',0.3,'smartArgs',false);
+CHmodel = ConstantHeadingModelX(Params);
 % 
 % % Constant Heading Model
 % Params.q_vel = 0.01;
@@ -31,8 +33,8 @@ CHmodel = ConstantHeadingModelX('q_vel',0.01,'q_head',0.3,'smartArgs',false);
 % Positional Observation Model
 Params_meas.xDim = 4;
 Params_meas.yDim = 2;
-Params_meas.r = .1;
-obs_model = PositionalObsModelX('xDim',4,'yDim',2,'r',0.1,'smartArgs', false);
+Params_meas.r = .2;
+obs_model = PositionalObsModelX(Params_meas);
 
 % n_x = 4;      % state dimensions
 % q = 0.01;     % std of process noise 
@@ -43,7 +45,7 @@ V = 10^2;     % Volume of surveillance region (10x10 2D-grid)
 V_bounds = [0 10 0 10]; % [x_min x_max y_min y_max]
 
 % Generate observations (Poisson number with rate of lambdaV, positions are uniform over surveillance region)
-[DataList,x1,y1] = gen_obs_cluttered_multi3(TrackNum, x_true, y_true, 0.1, lambdaV, 1); 
+[DataList,x1,y1] = gen_obs_cluttered_multi3(TrackNum, x_true, y_true, 0.2, lambdaV, 1); 
 N=size(DataList,2); % timesteps 
 
 % % Constant Heading (CH) dynamic model
@@ -65,7 +67,7 @@ N=size(DataList,2); % timesteps
 
 % Assign PHD parameter values
 config.k               = 1;                   % initial iteration number
-config.Np              = 100000;              % number of particles
+config.Np              = 50000;              % number of particles
 config.resampling_strategy = 'systematic_resampling'; % resampling strategy
 config.DynModel = CVmodel;
 config.ObsModel = obs_model;
