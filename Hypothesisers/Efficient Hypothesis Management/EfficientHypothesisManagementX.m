@@ -22,6 +22,7 @@ classdef EfficientHypothesisManagementX < HypothesiserX
         LikelihoodMatrix
         AssocWeightsMatrix
         Mode = 'Track-Oriented'
+        timeout = 5
     end
     
     methods
@@ -105,14 +106,20 @@ classdef EfficientHypothesisManagementX < HypothesiserX
                 this.LikelihoodMatrix = LikelihoodMatrix;
             end
             ValidationMatrix = this.LikelihoodMatrix>0;
-            this.NetObj = this.buildNetTO(ValidationMatrix);
-            [AssocWeightsMatrix, this.NetObj] = this.computeAssocWeights(this.NetObj,this.LikelihoodMatrix);
-            this.AssocWeightsMatrix = AssocWeightsMatrix;
+            [this.NetObj, timedOut] = this.buildNetTO(ValidationMatrix, this.timeout);
+            if(timedOut)
+                [NumTracks, NumMeasp1] = size(this.LikelihoodMatrix);
+                AssocWeightsMatrix = [ones(NumTracks,1); zeros(NumTracks,NumMeasp1-1)];
+                this.AssocWeightsMatrix = AssocWeightsMatrix;
+            else
+                [AssocWeightsMatrix, this.NetObj] = this.computeAssocWeights(this.NetObj,this.LikelihoodMatrix);
+                this.AssocWeightsMatrix = AssocWeightsMatrix;
+            end
         end
     end
     
     methods (Static)
-        function NetObj = buildNetTO(ValidationMatrix)
+        function [NetObj,timedOut] = buildNetTO(ValidationMatrix,timeOut)
         % BUILDNETTO Build Track-Oriented (TO) EHM net and compute respective 
         % association probabilities (betta).
         %
@@ -145,7 +152,11 @@ classdef EfficientHypothesisManagementX < HypothesiserX
         %   between these and any entries in the node's MeasIndList.
         %
         % Author: Lyudmil Vladimirov
-
+            
+            % Set timedout to false
+            timedOut = 0;
+            tic;
+            
             % Get number of tracks/layers
             TrackNum = size(ValidationMatrix,1); 
             LayerNum = TrackNum; % Layer 1 is root layer
@@ -191,7 +202,12 @@ classdef EfficientHypothesisManagementX < HypothesiserX
 
                     % For every measurement in M_jm1
                     for i=1:size(M_jm1,2)
-
+                        
+                        if(toc > timeOut)
+                            timedOut = 1;
+                            return;
+                        end
+                        
                         % Get the track index
                         MeasInd = M_jm1(i);
 

@@ -9,8 +9,8 @@
 %   - PHD.BirthScheme = {'Expansion', 5000}
 %
 %% Clear all data and import dataset
-clear all;
-load('radar_ned.mat');
+%clear all;
+%load('cabodegata.mat');
 N = size(DataList,2); % Simulation length
 
 %% Plot & Recording settings
@@ -19,7 +19,7 @@ ShowPlots = 1;              % Set to 0 to prevent showing any plots
 ShowUpdate = 1;             % Set to 0 to skip showing update plots
 
 % Recording settings
-Record = 1;                 % Set to (0|1) to turn video recording (off|on)
+Record = 0;                 % Set to (0|1) to turn video recording (off|on)
 FrameRate = 0.5;            % Number of frames per second
 VideoQuality = 100;         % Set to desired quality percentage
 VideoPathName = "./example_radar.avi"; % Set to the desired path and name of produced recording
@@ -27,18 +27,18 @@ VideoPathName = "./example_radar.avi"; % Set to the desired path and name of pro
 %% Instantiation of necessary components
 
 % Instantiate a Dynamic model (CV model with q = 1 m/s^2)
-dyn = ConstantVelocityModelX_2D('VelocityErrVariance',2);
+dyn = ConstantVelocityModelX_2D('VelocityErrVariance',1);
 dyn.TimeVariant = 2;
 
 % Instantiate an Observation model (Variance of 50m^2 on each coordinate)
-obs = LinGaussObsModelX_2D('NumStateDims',4,'ObsErrVariance',50,'Mapping',[1 3]);
+obs = LinGaussObsModelX_2D('NumStateDims',4,'ObsErrVariance',25,'Mapping',[1 3]);
 
 % Compile the State-Space model
 ssm = StateSpaceModelX(dyn,obs);
 
 % Surveillance region parameters
 V_bounds = [-8154.72944624983;... % X-min | 
-            -212.289393440959;... % X-max | Surveillance region bounding
+            3000;... % X-max | Surveillance region bounding
             -7548.44272179096;... % Y-min | box coordinates (m)
             4355.32645897434]';   % Y-max |
 V = (abs(V_bounds(2)-V_bounds(1))*abs(V_bounds(4)-V_bounds(3))); % Total area of surveillance region
@@ -53,7 +53,7 @@ config.BirthIntFcn = @(Np)[abs(V_bounds(2)-V_bounds(1))*rand(1,Np)+V_bounds(1);.
 config.PriorDistFcn = @ (Np) deal(config.BirthIntFcn(Np), repmat(1/Np, Np, 1)');   % Uniform position and weights.
 config.BirthScheme = {'Expansion', 5000};
 config.ProbOfDeath = 0.005;                                                        % Probability of death = 0.5%
-config.ProbOfDetection = 0.8;                                                      % Probability of detection = 70%
+config.ProbOfDetection = 0.7;                                                      % Probability of detection = 70%
 config.ResamplingScheme = 'Multinomial';                                           % Use Multinomial Resampling
 
 % Instantiate PHD filter
@@ -65,14 +65,14 @@ mypf = ParticleFilterX(ssm);
 % Initiate PDAF parameters
 Params_pdaf.Clusterer = NaiveClustererX();
 Params_pdaf.Gater = EllipsoidalGaterX(2,'ProbOfGating',0.99)';
-Params_pdaf.ProbOfDetect = 0.8;
+Params_pdaf.ProbOfDetect = 0.9;
 mypdaf = JointProbabilisticDataAssocX(Params_pdaf);
 
 % Initiate Track Initiator
 config_ti.Filter = mypf;
 config_ti.PHDFilter = myphd;
 config_ti.ProbOfGating = 0.99;
-config_ti.ProbOfConfirm = 0.9;
+config_ti.ProbOfConfirm = 0.97;
 myti = PhdExistProbTrackInitiatorX(config_ti);
 
 TrackList = [];
@@ -99,7 +99,7 @@ for k=1:N
     fprintf('Iteration = %d/%d\n================>\n',k,N);
 
     % Extract DataList at time k
-    tempDataList = DataList{k}(:,:);
+    tempDataList = DataList{k}(1:2,:);
     tempDataList( :, ~any(tempDataList,1) ) = [];
     
     % Process JPDAF
@@ -141,11 +141,17 @@ for k=1:N
         % Convert measurements to LLA and plot them
         [lat,lon,~] = ned2geodetic(DataList{k}(2,:),...
                                    DataList{k}(1,:),...
-                                   0,50.346069,...
-                                   -4.113670,...
+                                   0,50.36286670714617,...
+                                   -4.156833300366998,...
                                    0,...
                                    referenceEllipsoid('wgs84'));
+%         lat = DataList{k}(3,:);
+%         lon = DataList{k}(4,:);
         plots(end+1) = plot(ax(1), lon,lat,'k*','MarkerSize', 10);
+        plot(ax(1), -4.156833300366998,50.36286670714617,...
+                           '-s','MarkerSize',20,...
+                           'MarkerEdgeColor','red',...
+                           'MarkerFaceColor',[1 .6 .6]);
         
         % Plot all existing tracks
         for j=1:numel(TrackList)
@@ -153,8 +159,8 @@ for k=1:N
             % Convert track trajectory to LLA and plot it
             [lat,lon,~] = ned2geodetic(TrackList{j}.Trajectory(3,:),...
                                        TrackList{j}.Trajectory(1,:),...
-                                       0,50.346069,...
-                                       -4.113670,...
+                                       0,50.36286670714617,...
+                                       -4.156833300366998,...
                                        0,...
                                        referenceEllipsoid('wgs84'));
             plots(end+1) = plot(ax(1), lon,lat,'r','LineWidth',2);
