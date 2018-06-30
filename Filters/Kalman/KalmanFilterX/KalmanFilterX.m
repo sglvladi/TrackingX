@@ -102,6 +102,7 @@ classdef KalmanFilterX < FilterX
             % Otherwise, fall back to input parser
             parser = inputParser;
             parser.KeepUnmatched = true;
+            parser.addRequired('Model');
             parser.addParameter('PriorStateMean',NaN);
             parser.addParameter('PriorStateCovar',NaN);
             parser.parse(varargin{:});
@@ -110,7 +111,7 @@ classdef KalmanFilterX < FilterX
                 this.StateMean = parser.Results.PriorStateMean;
             end
             
-            if(~isnan(parser.Results.priorStateCov))
+            if(~isnan(parser.Results.PriorStateCovar))
                 this.StateCovar  = parser.Results.PriorStateCovar;
             end
         end

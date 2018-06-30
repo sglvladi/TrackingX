@@ -1,10 +1,15 @@
-function [DataList,newGroundTruth] = dataGen(ObsModel, GroundTruth, nTracks, lambda, V_bounds, ObscurRects, increment)
+function [DataList,newGroundTruth, inds] = dataGen(ObsModel, GroundTruth, nTracks, lambda, V_bounds, ObscurRects, increment)
 % DATAGEN Generate measurements from given a set of ground truth data and parameters
 %
 % INPUTS:
 %   - 
 
     % Validate inputs
+%     parser = inputParser;
+%     parser.KeepUnmatched = true;
+%     parser.addParameter('PriorStateMean',NaN);
+%     parser.addParameter('PriorStateCovar',NaN);
+%             parser.parse(varargin{:});
     if(nargin<7);   increment     = 1; end
     if(nargin<6);   ObscurRects   = []; end
     if(nargin<5);   V_bounds      = []; end
@@ -17,6 +22,7 @@ function [DataList,newGroundTruth] = dataGen(ObsModel, GroundTruth, nTracks, lam
     newGroundTruth  = cell(1,nTimesteps);
     
     ki = 1;
+    inds = [];
     for k=1:increment:numel(GroundTruth)
         
         % Compute number of tracks and clutter measurements
@@ -50,11 +56,12 @@ function [DataList,newGroundTruth] = dataGen(ObsModel, GroundTruth, nTracks, lam
         % Generate clutter measurements
         for j=nTracks+1:nTracks+nClutter
             if(isa(ObsModel,'Polar2CartGaussModelX'))
-                DataList{ki}(:,j) = [unifrnd(0,pi/2); unifrnd(0,14)];
+                DataList{ki}(:,j) = [unifrnd(0,pi/2); unifrnd(0,2000)];
             else
                 DataList{ki}(:,j) = ObsModel.obs(0,[unifrnd(V_bounds(1),V_bounds(2)); unifrnd(V_bounds(3),V_bounds(4)); 0; 0]);
             end
         end
         ki = ki + 1;
+        inds = union(inds,k);
     end
 end

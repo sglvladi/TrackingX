@@ -86,7 +86,7 @@ classdef PhdExistProbTrackInitiatorX < TrackInitiatorX
             % 3) Compute Existence Probabilities
             for trackInd = 1:numTracks
                 TrackList{trackInd}.ProbOfExist = (1 - this.PHDFilter.ProbOfDeath)*TrackList{trackInd}.ProbOfExist;
-                 denom = sum(this.AssocWeightsMatrix(trackInd,:))*TrackList{trackInd}.ProbOfExist + this.AssocWeightsMatrix(trackInd,1)*(1-TrackList{trackInd}.ProbOfExist)/((1-this.PHDFilter.ProbOfDetection*this.ProbOfGating));
+                 denom = sum(this.AssocWeightsMatrix(trackInd,:))*TrackList{trackInd}.ProbOfExist + this.AssocWeightsMatrix(trackInd,1)*(1-TrackList{trackInd}.ProbOfExist);%/((1-this.PHDFilter.ProbOfDetection*this.ProbOfGating));
                  TrackList{trackInd}.ProbOfExist = (sum(this.AssocWeightsMatrix(trackInd,:))*TrackList{trackInd}.ProbOfExist)/denom;
             end
 
@@ -104,6 +104,7 @@ classdef PhdExistProbTrackInitiatorX < TrackInitiatorX
                 end
                 rhi(measInd) = rhi_tmp;
             end
+            rhi = rhi==1;
 
             % Set PHD Filter measurement and weights
             this.PHDFilter.MeasurementList = MeasurementList;
@@ -154,7 +155,7 @@ classdef PhdExistProbTrackInitiatorX < TrackInitiatorX
             this.PHDFilter.update();
             
             for trackInd = 1:numTracks
-                if(TrackList{trackInd}.ProbOfExist<0.1)
+                if(TrackList{trackInd}.ProbOfExist<0.2)
                    TrackList{trackInd} = [];
                 end
             end

@@ -607,7 +607,8 @@ classdef ExtendedKalmanFilterX<KalmanFilterX
             xT   = fun(x);
             xDim    = numel(x);
             h       = xDim*eps;
-            Jac     = imag(fun(x(:,ones(1,xDim))+eye(xDim)*h*1i))./h;
+            Jac = matlabshared.tracking.internal.numericJacobian(fun, {x});
+            %Jac     = imag(fun(x(:,ones(1,xDim))+eye(xDim)*h*1i))./h;
         end
     end
 end

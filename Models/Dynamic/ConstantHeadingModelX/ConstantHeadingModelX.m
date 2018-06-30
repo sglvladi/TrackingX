@@ -90,6 +90,7 @@ classdef ConstantHeadingModelX <  DynamicModelX
                 if(isstruct(varargin{1}))
                     this.VelocityErrVariance = varargin{1}.VelocityErrVariance;
                     this.HeadingErrVariance = varargin{1}.HeadingErrVariance;
+                    this.TimeVariant = varargin{1}.TimeVariant;
                     return;
                 end
             end
@@ -99,14 +100,14 @@ classdef ConstantHeadingModelX <  DynamicModelX
             parser.KeepUnmatched = true;
             parser.addOptional('VelocityErrVariance',[]);
             parser.addOptional('HeadingErrVariance',[]);
+            parser.addOptional('TimeVariant',1);
             parser.parse(varargin{:});
             
             this.VelocityErrVariance = parser.Results.VelocityErrVariance;
             this.HeadingErrVariance = parser.Results.HeadingErrVariance;
+            this.TimeVariant = parser.Results.TimeVariant;
             
             this.NumStateDims = 4;
-            
-            this.TimeVariant = 1;
             
         end
         

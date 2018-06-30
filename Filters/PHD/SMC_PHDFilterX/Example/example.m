@@ -49,7 +49,7 @@ config.BirthIntFcn = @(Np) [(V_bounds(2)-V_bounds(1))*rand(Np,1), mvnrnd(zeros(N
 config.PriorDistFcn = @ (Np) deal(config.BirthIntFcn(Np), repmat(1/Np, Np, 1)');
 config.BirthScheme = {'Mixture', 0.01};
 %config.BirthScheme = {'Expansion', 500};
-config.ProbOfDeath = 0.005;
+config.ProbOfDeath = 0.10;
 config.ProbOfDetection = 0.9;
 config.ClutterRate = lambdaV/V;
 config.ResamplingScheme = 'Multinomial';
@@ -131,8 +131,8 @@ for k=1:N
         colormap(ax(2), jet(3000))
         set(h, 'edgecolor','none')
         hold on;
-        plot(ax(2), myphd.PredParticles(1,:), myphd.PredParticles(3,:), '.')
-        hold on;
+        %plot(ax(2), myphd.PredParticles(1,:), myphd.PredParticles(3,:), '.')
+        %hold on;
         plot(ax(2), myphd.MeasurementList(1,:), myphd.MeasurementList(2,:), 'y*');
         axis(ax(2), [V_bounds 0 10]);
         str = sprintf('PHD intensity (Prediction)');
@@ -184,8 +184,8 @@ for k=1:N
         colormap(ax(2), jet(3000))
         %set(h, 'edgecolor','none')
         hold on;
-        plot(ax(2), myphd.Particles(1,:), myphd.Particles(3,:), '.')
-        hold on;
+%         plot(ax(2), myphd.Particles(1,:), myphd.Particles(3,:), '.')
+%         hold on;
         plot(ax(2), myphd.MeasurementList(1,:), myphd.MeasurementList(2,:), 'y*');
         axis(ax(2), [V_bounds]);
         str = sprintf('PHD intensity (Update)');

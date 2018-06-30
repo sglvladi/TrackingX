@@ -184,7 +184,7 @@ classdef ParticleFilterX < FilterX
                             config.PriorDistFcn(this.NumParticles);
                     elseif ((isfield(config,'PriorParticles'))&&(isfield(config,'PriorParticles')))
                          this.Particles = config.PriorParticles;
-                         this.Weights = config.PriotWeights;
+                         this.Weights = config.PriorWeights;
                     end
                      if (isfield(config,'Resampler'))
                          this.Resampler = config.Resampler;
@@ -206,6 +206,7 @@ classdef ParticleFilterX < FilterX
             
             % Otherwise, fall back to input parser
             parser = inputParser;
+            parser.addRequired('ssm');
             parser.KeepUnmatched = true;
             parser.parse(varargin{:});
             config = parser.Unmatched;
@@ -217,7 +218,7 @@ classdef ParticleFilterX < FilterX
                     config.PriorDistFcn(this.NumParticles);
             elseif ((isfield(config,'PriorParticles'))&&(isfield(config,'PriorParticles')))
                  this.Particles = config.PriorParticles;
-                 this.Weights = config.PriotWeights;
+                 this.Weights = config.PriorWeights;
             end
             if (isfield(config,'Resampler'))
                  this.Resampler = config.Resampler;

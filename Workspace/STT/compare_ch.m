@@ -2,8 +2,11 @@
 SHOW_PLOTS = 0;
 SHOW_UPDATE = 1;
 SHOW_ARENA = 0;
-NUM_SIMS = 300;
+NUM_SIMS = 10;
 V_BOUNDS = [0 25 0 15];
+
+% Load dataset
+load('3_robots.mat');
 
 % Instantiate a Dynamic model
 dyn = ConstantHeadingModelX('VelocityErrVariance',0.0001, 'HeadingErrVariance',0.05);
@@ -61,11 +64,12 @@ end
 for simIter = 1:NUM_SIMS
     
     
-    measurementsCellArray = dataGen(obs,GroundTruth,1);
+    [measurementsCellArray,~,inds] = dataGen(obs,GroundTruth,1,0,[],[],2);
+    N = numel(measurementsCellArray);
     % Generate ground truth and measurements
     for k = 1:N
         % Generate new measurement from ground truth
-        truth(:,k) = [x_true(k+2,1); y_true(k+2,1)];   
+        truth(:,k) = [x_true(inds(k),1); y_true(inds(k),1)];   
         measurement(:,k) = measurementsCellArray{k}; 
     end
     

@@ -81,6 +81,7 @@ classdef UnscentedKalmanFilterX < KalmanFilterX
                 % Otherwise, fall back to input parser
                 parser = inputParser;
                 parser.KeepUnmatched = true;
+                parser.addRequired('Model');
                 parser.addParameter('Alpha',NaN);
                 parser.addParameter('Kappa',NaN);
                 parser.addParameter('Beta',NaN);

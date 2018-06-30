@@ -22,7 +22,7 @@ FilterList = [];
 FilterList{end+1} = KalmanFilterX(ssm);
 FilterList{end+1} = ExtendedKalmanFilterX(ssm);
 FilterList{end+1} = UnscentedKalmanFilterX(ssm);
-FilterList{end+1} = ParticleFilterX(ssm);
+FilterList{end+1} = ParticleFilterX(ssm,'NumParticles',10000);
 FilterList{end+1} = ExtendedParticleFilterX(ssm);
 FilterList{end+1} = UnscentedParticleFilterX(ssm);
 

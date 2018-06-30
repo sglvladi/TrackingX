@@ -1,13 +1,16 @@
 %% Plot settings
-ShowPlots = 1;
+ShowPlots = 0;
 ShowArena = 1;
 SkipFrames = 0;
+
+% Load dataset
+load('3_robots.mat');
 
 % Instantiate a Dynamic model
 dyn = ConstantVelocityModelX_2D('VelocityErrVariance',0.0001);
 
 % Instantiate an Observation model
-obs = LinGaussObsModelX_2D('NumStateDims',4,'ObsErrVariance',0.05,'Mapping',[1 3]);
+obs = LinGaussObsModelX_2D('NumStateDims',4,'ObsErrVariance',0.1,'Mapping',[1 3]);
 
 % Compile the State-Space model
 ssm = StateSpaceModelX(dyn,obs);
@@ -27,13 +30,19 @@ NumTracks = 3;
 
 % Initiate TrackList
 for i=1:NumTracks
-    Params_kf.priorStateMean = [GroundTruth{1}(1,i); 0; GroundTruth{1}(2,i); 0];
-    Params_kf.priorStateCovar = dyn.covariance(); %blkdiag(POmodel.Params.R(1)/2, 2^2, 2*pi);%CVmodel.Params.Q(1);
-    Params_kf.Model = ssm;
     TrackList{i} = TrackX();
     TrackList{i}.addprop('Filter');
-    TrackList{i}.Filter = UnscentedKalmanFilterX(Params_kf);
-    %TrackList{i}.TrackObj = ParticleFilterX(Params_pf);%UKalmanFilterX(Params_kf, CHmodel, POmodel);% 
+    
+    Params_kf.PriorStateMean = [GroundTruth{1}(1,i); 0; GroundTruth{1}(2,i); 0];
+    Params_kf.PriorStateCovar = dyn.covariance(); %blkdiag(POmodel.Params.R(1)/2, 2^2, 2*pi);%CVmodel.Params.Q(1);
+    Params_kf.Model = ssm;
+    TrackList{i}.Filter = ExtendedKalmanFilterX(Params_kf);
+    
+%     Params_pf.Model = ssm;
+%     Params_pf.NumParticles = 5000;
+%     Params_pf.PriorParticles = mvnrnd([GroundTruth{1}(1,i); 0; GroundTruth{1}(2,i); 0]', dyn.covariance(), Params_pf.NumParticles)';
+%     Params_pf.PriorWeights = ones(1,Params_pf.NumParticles)./Params_pf.NumParticles;
+%     TrackList{i}.Filter = ParticleFilterX(Params_pf);%UKalmanFilterX(Params_kf, CHmodel, POmodel);% 
 end
 
 %% Initiate PDAF parameters
@@ -149,3 +158,5 @@ figure
 subplot(2,2,[1 2]), plot(1:k,ospa_vals(1:k,1));
 subplot(2,2,3), plot(1:k,ospa_vals(1:k,2));
 subplot(2,2,4), plot(1:k,ospa_vals(1:k,3));
+
+disp(mean(ospa_vals(:,1),1));
