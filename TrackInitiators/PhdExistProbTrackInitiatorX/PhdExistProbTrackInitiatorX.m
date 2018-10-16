@@ -54,7 +54,7 @@ classdef PhdExistProbTrackInitiatorX < TrackInitiatorX
             parser = inputParser;
             parser.KeepUnmatched = true;
             parser.parse(varargin{:});
-            config = varargin{1};
+            config = parser.Results;
             this.PHDFilter = config.PHDFilter;
             this.Filter = config.Filter;
             this.ProbOfGating = config.ProbOfGating;
@@ -83,13 +83,14 @@ classdef PhdExistProbTrackInitiatorX < TrackInitiatorX
             numTracks = numel(TrackList);
             numMeas   = size(MeasurementList,2);
 
+            
             % 3) Compute Existence Probabilities
-            for trackInd = 1:numTracks
-                TrackList{trackInd}.ProbOfExist = (1 - this.PHDFilter.ProbOfDeath)*TrackList{trackInd}.ProbOfExist;
-                 denom = sum(this.AssocWeightsMatrix(trackInd,:))*TrackList{trackInd}.ProbOfExist + this.AssocWeightsMatrix(trackInd,1)*(1-TrackList{trackInd}.ProbOfExist);%/((1-this.PHDFilter.ProbOfDetection*this.ProbOfGating));
-                 TrackList{trackInd}.ProbOfExist = (sum(this.AssocWeightsMatrix(trackInd,:))*TrackList{trackInd}.ProbOfExist)/denom;
-            end
-
+%             for trackInd = 1:numel(TrackList)
+%                 TrackList{trackInd}.ProbOfExist = (1 - this.PHDFilter.ProbOfDeath)*TrackList{trackInd}.ProbOfExist;
+%                 denom = sum(this.AssocWeightsMatrix(trackInd,:))*TrackList{trackInd}.ProbOfExist + this.AssocWeightsMatrix(trackInd,1)*(1-TrackList{trackInd}.ProbOfExist);%/((1-this.PHDFilter.ProbOfDetection*this.ProbOfGating));
+%                 TrackList{trackInd}.ProbOfExist = (sum(this.AssocWeightsMatrix(trackInd,:))*TrackList{trackInd}.ProbOfExist)/denom;
+%             end
+            
             % Predict the PHD filter
             this.PHDFilter.predict();
 
@@ -155,12 +156,19 @@ classdef PhdExistProbTrackInitiatorX < TrackInitiatorX
             this.PHDFilter.update();
             
             for trackInd = 1:numTracks
-                if(TrackList{trackInd}.ProbOfExist<0.2)
+                if(TrackList{trackInd}.ProbOfExist<0.1)
                    TrackList{trackInd} = [];
                 end
             end
             if(numel(TrackList))
                 TrackList = TrackList(~cellfun('isempty',TrackList));
+            end
+            
+            % 3) Compute Existence Probabilities
+            for trackInd = 1:numel(TrackList)
+                TrackList{trackInd}.ProbOfExist = (1 - this.PHDFilter.ProbOfDeath)*TrackList{trackInd}.ProbOfExist;
+%                 denom = sum(this.AssocWeightsMatrix(trackInd,:))*TrackList{trackInd}.ProbOfExist + this.AssocWeightsMatrix(trackInd,1)*(1-TrackList{trackInd}.ProbOfExist);%/((1-this.PHDFilter.ProbOfDetection*this.ProbOfGating));
+%                 TrackList{trackInd}.ProbOfExist = (sum(this.AssocWeightsMatrix(trackInd,:))*TrackList{trackInd}.ProbOfExist)/denom;
             end
         end 
     end

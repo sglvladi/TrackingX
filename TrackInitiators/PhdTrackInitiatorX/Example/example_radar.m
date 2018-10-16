@@ -69,7 +69,7 @@ config.BirthIntFcn = @(Np)[abs(V_bounds(2)-V_bounds(1))*rand(1,Np)+V_bounds(1);.
                            5*rand(1,Np)];                                        % X and Y.
 config.PriorDistFcn = @ (Np) deal(config.BirthIntFcn(Np), repmat(1/Np, Np, 1)');   % Uniform position and weights.
 config.BirthScheme = {'Expansion', 0.1*config.NumParticles};
-config.ProbOfDeath = 0.20;                                                        % Probability of death = 0.5%
+config.ProbOfDeath = 0.005;                                                        % Probability of death = 0.5%
 config.ProbOfDetection = 0.9;                                                      % Probability of detection = 70%
 config.ResamplingScheme = 'Multinomial';                                           % Use Multinomial Resampling
 
@@ -82,8 +82,8 @@ mypf = ParticleFilterX(ssm);
 % Initiate PDAF parameters
 Params_pdaf.Clusterer = NaiveClustererX();
 Params_pdaf.Gater = EllipsoidalGaterX(2,'ProbOfGating',0.99)';
-Params_pdaf.ProbOfDetect = 0.9;
-mypdaf = JointProbabilisticDataAssocX(Params_pdaf);
+Params_pdaf.ProbOfDetect = 0.6;
+mypdaf = JointIntegratedProbabilisticDataAssocX(Params_pdaf);
 
 % Initiate Track Initiator
 config_ti.Filter = mypf;
@@ -128,12 +128,6 @@ for k=1:N
     mypdaf.associate();    
     mypdaf.updateTracks();
     
-    % Perform Track initiation
-    myti.MeasurementList = tempDataList; % New observations
-    myti.PHDFilter.ClutterRate = size(myti.MeasurementList,2)/V;
-    myti.TrackList = TrackList;
-    myti.AssocWeightsMatrix = mypdaf.AssocWeightsMatrix;
-    TrackList = myti.initiateTracks();
     tic;
     
     % Append state to target trajectories
@@ -244,6 +238,13 @@ for k=1:N
             F(k) = getframe(ax(1));
         end
     end
+    
+    % Perform Track initiation
+    myti.MeasurementList = tempDataList; % New observations
+    myti.PHDFilter.ClutterRate = size(myti.MeasurementList,2)/V;
+    myti.TrackList = TrackList;
+    myti.AssocWeightsMatrix = mypdaf.AssocWeightsMatrix;
+    TrackList = myti.initiateTracks();
 end
 
 % Create video file and write to it

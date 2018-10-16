@@ -23,12 +23,12 @@ NumIter = size(GroundTruth,2);
 NumTracks = 2;
 
 % Generate DataList
-%[DataList,x1,y1] = gen_obs_cluttered_multi2(NumTracks, x_true, y_true, sqrt(obs.ObsErrVariance), [0 10 0 10], 50, 1);
+[DataList,x1,y1] = gen_obs_cluttered_multi2(NumTracks, x_true, y_true, sqrt(obs.ObsErrVariance), [0 10 0 10], 10, 1, 1);
 
 % Initiate TrackList
 for i=1:NumTracks
-    Params_kf.priorStateMean = [GroundTruth{1}(1,i); 0; GroundTruth{1}(2,i); 0];
-    Params_kf.priorStateCovar = dyn.covariance(); %blkdiag(POmodel.Params.R(1)/2, 2^2, 2*pi);%CVmodel.Params.Q(1);
+    Params_kf.PriorStateMean = [GroundTruth{1}(1,i); 0; GroundTruth{1}(2,i); 0];
+    Params_kf.PriorStateCovar = dyn.covariance(); %blkdiag(POmodel.Params.R(1)/2, 2^2, 2*pi);%CVmodel.Params.Q(1);
     Params_kf.Model = ssm;
     TrackList{i} = TrackX();
     TrackList{i}.addprop('Filter');
@@ -47,6 +47,7 @@ Params_pdaf.ProbOfDetect = 0.9;
 %% Instantiate PDAF
 pdaf = JointProbabilisticDataAssocX(Params_pdaf);
 pdaf.TrackList = TrackList;
+%pdaf.ClutterDensity = 10/100;
 pdaf.MeasurementList = DataList{1}(:,:); 
 
 %% Instantiate Log to store output

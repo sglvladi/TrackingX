@@ -185,6 +185,17 @@ classdef ParticleFilterX < FilterX
                     elseif ((isfield(config,'PriorParticles'))&&(isfield(config,'PriorParticles')))
                          this.Particles = config.PriorParticles;
                          this.Weights = config.PriorWeights;
+                    elseif (isfield(varargin{1},'PriorStateMean')) || (isfield(varargin{1},'PriorStateCovar'))
+                        stateMean = zeros(this.Model.Dyn.NumStateDims,1); %varargin{1}.PriorStateMean;
+                        stateCovar  = zeros(this.Model.Dyn.NumStateDims); %varargin{1}.PriorStateCovar;
+                        if (isfield(varargin{1},'PriorStateMean'))
+                            stateMean = varargin{1}.PriorStateMean;
+                        end
+                        if (isfield(varargin{1},'PriorStateCovar'))
+                            stateCovar  = varargin{1}.PriorStateCovar;
+                        end
+                        [this.Particles,this.Weights] = ...
+                            mvnrnd(stateMean,stateCovar,this.NumParticles);
                     end
                      if (isfield(config,'Resampler'))
                          this.Resampler = config.Resampler;
@@ -216,9 +227,21 @@ classdef ParticleFilterX < FilterX
             if (isfield(config,'PriorDistFcn'))
                 [this.Particles,this.Weights] = ...
                     config.PriorDistFcn(this.NumParticles);
-            elseif ((isfield(config,'PriorParticles'))&&(isfield(config,'PriorParticles')))
+            elseif ((isfield(config,'PriorParticles'))&&(isfield(config,'PriorWeights')))
                  this.Particles = config.PriorParticles;
                  this.Weights = config.PriorWeights;
+            elseif ((isfield(config,'PriorStateMean')) || (isfield(config,'PriorStateCovar')))
+                stateMean = zeros(this.Model.Dyn.NumStateDims,1); %varargin{1}.PriorStateMean;
+                stateCovar  = zeros(this.Model.Dyn.NumStateDims); %varargin{1}.PriorStateCovar;
+                if (isfield(config,'PriorStateMean'))
+                    stateMean = config.PriorStateMean;
+                end
+                if (isfield(config,'PriorStateCovar'))
+                    stateCovar  = config.PriorStateCovar;
+                end
+                [this.Particles] = ...
+                    mvnrnd(stateMean,stateCovar,this.NumParticles)';
+                this.Weights = ones(1,this.NumParticles)/this.NumParticles;
             end
             if (isfield(config,'Resampler'))
                  this.Resampler = config.Resampler;
@@ -317,6 +340,12 @@ classdef ParticleFilterX < FilterX
                     elseif ((isfield(config,'priorParticles'))&&(isfield(config,'priorParticles')))
                          this.Particles = config.PriorParticles;
                          this.Weights = config.PriotWeights;
+                    elseif (isfield(config,'PriorStateMean')) && (isfield(config,'PriorStateCovar'))
+                        stateMean = config.PriorStateMean;
+                        stateCovar  = config.PriorStateCovar;
+                        [this.Particles] = ...
+                            mvnrnd(stateMean,stateCovar,this.NumParticles)';
+                        this.Weights = ones(1,this.NumParticles)/this.NumParticles;
                     end
                      if (isfield(config,'Resampler'))
                          this.Resampler = config.Resampler;
@@ -338,6 +367,7 @@ classdef ParticleFilterX < FilterX
             
             % Otherwise, fall back to input parser
             parser = inputParser;
+            parser.addRequired('ssm');
             parser.KeepUnmatched = true;
             parser.parse(varargin{:});
             config = parser.Unmatched;
@@ -353,6 +383,12 @@ classdef ParticleFilterX < FilterX
             elseif ((isfield(config,'priorParticles'))&&(isfield(config,'priorParticles')))
                  this.Particles = config.PriorParticles;
                  this.Weights = config.PriotWeights;
+            elseif (isfield(config,'PriorStateMean')) && (isfield(config,'PriorStateCovar'))
+                stateMean = config.PriorStateMean;
+                stateCovar  = config.PriorStateCovar;
+                [this.Particles] = ...
+                    mvnrnd(stateMean,stateCovar,this.NumParticles)';
+                this.Weights = ones(1,this.NumParticles)/this.NumParticles;
             end
             if (isfield(config,'Resampler'))
                  this.Resampler = config.Resampler;

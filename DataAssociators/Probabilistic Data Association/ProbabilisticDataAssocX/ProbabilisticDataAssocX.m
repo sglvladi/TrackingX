@@ -192,7 +192,8 @@ classdef ProbabilisticDataAssocX < DataAssociatorX
         %   in jpda.TrackList.
         %
         %   See also ProbabilisticDataAssocX/initialise, ProbabilisticDataAssocX/updateTracks.
-        
+            
+            this.NumTracks = numel(this.TrackList);
             if(~isempty(this.TrackList))
                 % Compute weights and update each track
                 for trackInd=1:this.NumTracks
@@ -229,8 +230,17 @@ classdef ProbabilisticDataAssocX < DataAssociatorX
     methods (Access = protected)
         
         function performGating(this)
-            % Validation matix and volume
-            [this.ValidationMatrix, this.GateVolumes] = this.Gater.gate(this.TrackList,this.MeasurementList);
+            if(isa(this.Gater,'EllipsoidalGaterX'))
+                % Validation matix and volume
+                [this.ValidationMatrix, this.GateVolumes] = this.Gater.gate(this.TrackList,this.MeasurementList);
+            elseif(isa(this.Gater,'BoundingBoxGaterX'))
+                % Validation matix and volume
+                [this.ValidationMatrix, this.GateVolumes] = this.Gater.gate(this.TrackList,this.MeasurementList);
+%                 this.GateVolumes = 1/size(this.TrackList,2) * ones(1,size(this.TrackList,2));
+            else
+                this.ValidationMatrix = ones(size(this.TrackList,2),size(this.MeasurementList,2));
+                this.GateVolumes = 1/size(this.TrackList,2) * ones(1,size(this.TrackList,2));
+            end
             for trackInd = 1:this.NumTracks
                 if(~isprop(this.TrackList{trackInd},'GateVolume'))
                     this.TrackList{trackInd}.addprop('GateVolume');
@@ -304,11 +314,16 @@ classdef ProbabilisticDataAssocX < DataAssociatorX
                     if(isempty(this.ClutterDensity))
                         clutterDensity = numel(obsIndList)/this.GateVolumes(trackInd);
                     else
-                        clutterDensity = this.ClutterDensity*this.GateVolumes(trackInd);
+                        clutterDensity = this.ClutterDensity;
+                    end
+                    if(isa(this.Gater,'EllipsoidalGaterX'))
+                        ProbOfGating = this.Gater.ProbOfGating;
+                    else
+                        ProbOfGating = 1;
                     end
                     this.AssocLikelihoodMatrix(trackInd,:) = ...
-                        [clutterDensity*(1-this.ProbOfDetect*this.Gater.ProbOfGating), ...
-                        this.ProbOfDetect*this.Gater.ProbOfGating*this.LikelihoodMatrix(trackInd,:)];
+                        [clutterDensity*(1-this.ProbOfDetect*ProbOfGating), ...
+                        this.ProbOfDetect*ProbOfGating*this.LikelihoodMatrix(trackInd,:)];
                     this.AssocWeightsMatrix(trackInd,:) = this.Hypothesiser.hypothesise(this.AssocLikelihoodMatrix(trackInd,:));
                 end
             end          

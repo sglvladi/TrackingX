@@ -22,7 +22,7 @@ tot_ellapsed = 0;
 dyn = ConstantVelocityModelX_2D('VelocityErrVariance',0.0001);
 
 % Instantiate an Observation model
-obs = LinGaussObsModelX_2D('NumStateDims',4,'ObsErrVariance',0.04,'Mapping',[1 3]);
+obs = LinGaussObsModelX_2D('NumStateDims',4,'ObsErrVariance',0.02,'Mapping',[1 3]);
 
 % Compile the State-Space model
 ssm = StateSpaceModelX(dyn,obs);
@@ -31,13 +31,14 @@ ssm = StateSpaceModelX(dyn,obs);
 % q = 0.01;     % std of process noise 
 % n_y = 2;      % measurement dimensions
 % r = 0.1;      % std of measurement noise
-lambdaV = 50; % Expected number of clutter measurements over entire surveillance region
+lambdaV = 10; % Expected number of clutter measurements over entire surveillance region
 V = 10^2;     % Volume of surveillance region (10x10 2D-grid)
 V_bounds = [0 10 0 10]; % [x_min x_max y_min y_max]
 
 % Generate observations (Poisson number with rate of lambdaV, positions are uniform over surveillance region)
 numTrueTracks = 3;
-[DataList,x1,y1] = gen_obs_cluttered_multi2(numTrueTracks, x_true, y_true, 0.2, V_bounds, lambdaV, 1); 
+[DataList,x1,y1] = gen_obs_cluttered_multi2(numTrueTracks, x_true, y_true, sqrt(obs.ObsErrVariance), ...
+                                            V_bounds, lambdaV, 1,0.9); 
 N=size(DataList,2); % timesteps 
 
 % Assign PHD parameter values
@@ -62,10 +63,10 @@ myphd = SMC_PHDFilterX(config);
 mypf = ParticleFilterX(ssm);
 
 % Initiate PDAF parameters
-Params_pdaf.Clusterer = NaiveClustererX();
+%Params_pdaf.Clusterer = NaiveClustererX();
 Params_pdaf.Gater = EllipsoidalGaterX(2,'ProbOfGating',0.998)';
-Params_pdaf.ProbOfDetect = 0.9;
-mypdaf = JointProbabilisticDataAssocX(Params_pdaf);
+Params_pdaf.ProbOfDetect = 0.8;
+mypdaf = JointIntegratedProbabilisticDataAssocX(Params_pdaf);
 mypdaf.MeasurementList = DataList{1}(:,:); 
 
 % Initiate Track Initiator
@@ -123,13 +124,6 @@ for k=1:N
     end
     data_plot = plot(ax(1), DataList{k}(1,:),DataList{k}(2,:),'k*','MarkerSize', 10);
     
-    % Perform Track initiation
-    myti.MeasurementList = tempDataList; % New observations
-    myti.TrackList = TrackList;
-    myti.AssocWeightsMatrix = mypdaf.AssocWeightsMatrix;
-    TrackList = myti.initiateTracks();
-    tic;
-    
     % Plot prediction step results
     if(ShowPlots && ShowPrediction)
         % Plot data
@@ -177,19 +171,17 @@ for k=1:N
         title(ax(2),str)
         pause(0.01)
     end
-        
-    % Update PHD filter
-    %myphd.update();
-    ellapsed = toc;
-    tot_ellapsed = tot_ellapsed + ellapsed;
+    
+    %ellapsed = toc;    
+    %tot_ellapsed = tot_ellapsed + ellapsed;
     fprintf("Estimated number of targets: %f\n", myphd.NumTargets);
-    fprintf("Ellapsed time: %f\n", ellapsed);
+    %fprintf("Ellapsed time: %f\n", ellapsed);
     for j=1:numel(TrackList)
         fprintf("Track %d: %f\n", TrackList{j}.TrackID, TrackList{j}.ProbOfExist);
     end
     disp("");
     % Plot update step results
-    if(ShowPlots && ShowUpdate)
+    if(ShowPlots && ShowUpdate && k>1)
         % Plot data
         cla(ax(1));
          % Flip the image upside down before showing it
@@ -211,7 +203,7 @@ for k=1:N
             if j==2
                 set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
             end
-            h2 = plot_gaussian_ellipsoid(TrackList{j}.Filter.StateMean([1 3]), TrackList{j}.Filter.StateCovar([1 3],[1 3]),1,20,ax(1));
+            h2 = plot_gaussian_ellipsoid(TrackList{j}.Filter.StateMean([1 3]), abs(TrackList{j}.Filter.StateCovar([1 3],[1 3])),'r',1,20,ax(1));
             set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off'); % Exclude line from legend
             text(ax(1),TrackList{j}.Filter.StateMean(1)+0.25,TrackList{j}.Filter.StateMean(3)-0.25,int2str(TrackList{j}.TrackID));
             text(ax(1),TrackList{j}.Filter.StateMean(1)+0.25,TrackList{j}.Filter.StateMean(3)-.35,num2str(TrackList{j}.ProbOfExist,2));
@@ -244,4 +236,11 @@ for k=1:N
         title(ax(2),str)
         pause(0.01)
     end
+    
+    % Perform Track initiation
+    myti.MeasurementList = tempDataList; % New observations
+    myti.TrackList = TrackList;
+    myti.AssocWeightsMatrix = mypdaf.AssocWeightsMatrix;
+    TrackList = myti.initiateTracks();
+    tic;
 end

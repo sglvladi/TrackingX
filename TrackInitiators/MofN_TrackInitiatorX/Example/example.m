@@ -22,7 +22,7 @@ tot_ellapsed = 0;
 dyn = ConstantVelocityModelX_2D('VelocityErrVariance',0.0001);
 
 % Instantiate an Observation model
-obs = LinGaussObsModelX_2D('NumStateDims',4,'ObsErrVariance',0.04,'Mapping',[1 3]);
+obs = LinGaussObsModelX_2D('NumStateDims',4,'ObsErrVariance',0.02,'Mapping',[1 3]);
 
 % Compile the State-Space model
 ssm = StateSpaceModelX(dyn,obs);
@@ -37,42 +37,36 @@ V_bounds = [0 10 0 10]; % [x_min x_max y_min y_max]
 
 % Generate observations (Poisson number with rate of lambdaV, positions are uniform over surveillance region)
 numTrueTracks = 3;
-[DataList,x1,y1] = gen_obs_cluttered_multi2(numTrueTracks, x_true, y_true, 0.2, V_bounds, lambdaV, 1,1); 
+[DataList,x1,y1] = gen_obs_cluttered_multi2(numTrueTracks, x_true, y_true, sqrt(obs.ObsErrVariance), V_bounds, lambdaV, 1); 
 N=size(DataList,2); % timesteps 
 
-% Assign PHD parameter values
-config.NumParticles = 20000;              % number of particles
-config.Model = ssm;
-q = dyn.covariance();
-%config.BirthIntFcn = @(Np) [(V_bounds(2)-V_bounds(1))*rand(Np,1), mvnrnd(zeros(Np,1), q(3,3)'),(V_bounds(4)-V_bounds(3))*rand(Np,1),mvnrnd(zeros(Np,1), q(4,4)')]'; % Uniform position and heading, Gaussian speed
-config.BirthIntFcn = @(Np) [(V_bounds(2)-V_bounds(1))*rand(Np,1), mvnrnd(zeros(Np,1), 0.05'),(V_bounds(4)-V_bounds(3))*rand(Np,1),mvnrnd(zeros(Np,1), 0.05')]'; % Uniform position and heading, Gaussian speed
-config.PriorDistFcn = @ (Np) deal(config.BirthIntFcn(Np), repmat(1/Np, Np, 1)');
-config.BirthScheme = {'Mixture', 0.01};
-%config.BirthScheme = {'Expansion', 500};
-config.ProbOfDeath = 0.005;
-config.ProbOfDetection = 0.9;
-config.ClutterRate = lambdaV/V;
-config.ResamplingScheme = 'Multinomial';
-
-% Instantiate PHD filter
-myphd = SMC_PHDFilterX(config);
-
 % Instantiate PF filter
+kf = KalmanFilterX(ssm);
+obs_covar= obs.covariance();
+kf.StateCovar = dyn.covariance() + blkdiag(obs_covar(1,1), 0, obs_covar(2,2),0);
 mypf = ParticleFilterX(ssm);
 
+% Initiate PDAF parameters
+Params_jpdaf.Clusterer = NaiveClustererX();
+Params_jpdaf.Gater = EllipsoidalGaterX(2,'ProbOfGating',0.998)';
+Params_jpdaf.ProbOfDetect = 0.9;
+mypdaf = JointProbabilisticDataAssocX(Params_jpdaf);
+mypdaf.MeasurementList = DataList{1}(:,:); 
+
+% Initiate Track Initiator
 % Initiate PDAF parameters
 Params_pdaf.Clusterer = NaiveClustererX();
 Params_pdaf.Gater = EllipsoidalGaterX(2,'ProbOfGating',0.998)';
 Params_pdaf.ProbOfDetect = 0.9;
-mypdaf = JointProbabilisticDataAssocX(Params_pdaf);
-mypdaf.MeasurementList = DataList{1}(:,:); 
-
-% Initiate Track Initiator
-config_ti.Filter = mypf;
-config_ti.PHDFilter = myphd;
-config_ti.ProbOfGating = 0.998;
-config_ti.ProbOfConfirm = 0.8;
-myti = PhdExistProbTrackInitiatorX(config_ti);
+pdaf = ProbabilisticDataAssocX(Params_pdaf);
+pdaf.MeasurementList = DataList{1}(:,:); 
+config_ti.InitFilter = kf;
+config_ti.DataAssociator = pdaf;
+config_ti.ConfirmThreshold = [8,10];
+config_ti.DeleteThreshold = [5,10];
+CovarThreshold = 4*kf.StateCovar;
+config_ti.CustomDeleteConditionFcn = @(x,t) t.Filter.StateCovar(1,1)>CovarThreshold(1,1) || t.Filter.StateCovar(3,3)>CovarThreshold(3,3);
+myti = MofN_TrackInitiatorX(config_ti);
 
 TrackList = [];
 
@@ -122,8 +116,15 @@ for k=1:N
     end
     data_plot = plot(ax(1), DataList{k}(1,:),DataList{k}(2,:),'k*','MarkerSize', 10);
     
+    % Perform Track initiation
+%     myti.MeasurementList = tempDataList; % New observations
+%     myti.TrackList = TrackList;
+%     myti.AssocWeightsMatrix = mypdaf.AssocWeightsMatrix;
+    [TrackList, TentativeTrackList] = myti.initiateTracks(mypdaf.TrackList, tempDataList, mypdaf.AssocWeightsMatrix);
+    tic;
+    
     % Plot prediction step results
-    if(ShowPlots && ShowPrediction && k>1)
+    if(ShowPlots && ShowPrediction)
         % Plot data
         cla(ax(1));
          % Flip the image upside down before showing it
@@ -174,14 +175,13 @@ for k=1:N
     %myphd.update();
     ellapsed = toc;
     tot_ellapsed = tot_ellapsed + ellapsed;
-    fprintf("Estimated number of targets: %f\n", myphd.NumTargets);
     fprintf("Ellapsed time: %f\n", ellapsed);
-    for j=1:numel(TrackList)
-        fprintf("Track %d: %f\n", TrackList{j}.TrackID, TrackList{j}.ProbOfExist);
-    end
+%     for j=1:numel(TrackList)
+%         fprintf("Track %d: %f\n", TrackList{j}.TrackID, TrackList{j}.ProbOfExist);
+%     end
     disp("");
     % Plot update step results
-    if(ShowPlots && ShowUpdate&& k>1)
+    if(ShowPlots && ShowUpdate)
         % Plot data
         cla(ax(1));
          % Flip the image upside down before showing it
@@ -204,9 +204,19 @@ for k=1:N
                 set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
             end
             h2 = plot_gaussian_ellipsoid(TrackList{j}.Filter.StateMean([1 3]), TrackList{j}.Filter.StateCovar([1 3],[1 3]),'r',1,20,ax(1));
-            set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off'); % Exclude line from legend
-            text(ax(1),TrackList{j}.Filter.StateMean(1)+0.25,TrackList{j}.Filter.StateMean(3)-0.25,int2str(TrackList{j}.TrackID));
-            text(ax(1),TrackList{j}.Filter.StateMean(1)+0.25,TrackList{j}.Filter.StateMean(3)-.35,num2str(TrackList{j}.ProbOfExist,2));
+%             set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off'); % Exclude line from legend
+%             text(ax(1),TrackList{j}.Filter.StateMean(1)+0.25,TrackList{j}.Filter.StateMean(3)-0.25,int2str(TrackList{j}.TrackID));
+%             text(ax(1),TrackList{j}.Filter.StateMean(1)+0.25,TrackList{j}.Filter.StateMean(3)-.35,num2str(TrackList{j}.ProbOfExist,2));
+        end
+        for j=1:numel(TentativeTrackList)
+            h2 = plot(ax(1), TentativeTrackList{j}.Filter.StateMean(1),TentativeTrackList{j}.Filter.StateMean(3),'.','LineWidth',1);
+            if j==2
+                set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
+            end
+            h2 = plot_gaussian_ellipsoid(TentativeTrackList{j}.Filter.StateMean([1 3]), TentativeTrackList{j}.Filter.StateCovar([1 3],[1 3]),'g',1,20,ax(1));
+%             set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off'); % Exclude line from legend
+%             text(ax(1),TrackList{j}.Filter.StateMean(1)+0.25,TrackList{j}.Filter.StateMean(3)-0.25,int2str(TrackList{j}.TrackID));
+%             text(ax(1),TrackList{j}.Filter.StateMean(1)+0.25,TrackList{j}.Filter.StateMean(3)-.35,num2str(TrackList{j}.ProbOfExist,2));
         end
         % set the y-axis back to normal.
         set(ax(1),'ydir','normal');
@@ -217,30 +227,23 @@ for k=1:N
         axis(ax(1),V_bounds)
             
         % Plot PHD
-        cla(ax(2), 'reset');
-        [bandwidth,density,X,Y]=kde2d(myphd.Particles([1,3],:)');
-        %contour3(X,Y,density,50);
-        h = surf(ax(2),X,Y,density);        
-        shading interp
-        colormap(ax(2), jet(3000))
-        %set(h, 'edgecolor','none')
-        hold on;
-        plot(ax(2), myphd.Particles(1,:), myphd.Particles(3,:), '.')
-        hold on;
-        plot(ax(2), myphd.MeasurementList(1,:), myphd.MeasurementList(2,:), 'y*');
-        axis(ax(2), [V_bounds]);
-        str = sprintf('PHD intensity (Update)');
-        xlabel(ax(2),'X position (m)')
-        ylabel(ax(2),'Y position (m)')
-        zlabel(ax(2),'Intensity')
-        title(ax(2),str)
-        pause(0.01)
+%         cla(ax(2), 'reset');
+%         [bandwidth,density,X,Y]=kde2d(myphd.Particles([1,3],:)');
+%         %contour3(X,Y,density,50);
+%         h = surf(ax(2),X,Y,density);        
+%         shading interp
+%         colormap(ax(2), jet(3000))
+%         %set(h, 'edgecolor','none')
+%         hold on;
+%         plot(ax(2), myphd.Particles(1,:), myphd.Particles(3,:), '.')
+%         hold on;
+%         plot(ax(2), myphd.MeasurementList(1,:), myphd.MeasurementList(2,:), 'y*');
+%         axis(ax(2), [V_bounds]);
+%         str = sprintf('PHD intensity (Update)');
+%         xlabel(ax(2),'X position (m)')
+%         ylabel(ax(2),'Y position (m)')
+%         zlabel(ax(2),'Intensity')
+%         title(ax(2),str)
+         pause(0.01)
     end
-    
-    % Perform Track initiation
-    myti.MeasurementList = tempDataList; % New observations
-    myti.TrackList = TrackList;
-    myti.AssocWeightsMatrix = mypdaf.AssocWeightsMatrix;
-    TrackList = myti.initiateTracks();
-    tic;
 end

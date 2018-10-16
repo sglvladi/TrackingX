@@ -26,7 +26,7 @@ NumIter = size(GroundTruth,2);
 NumTracks = 3;
 
 % Generate DataList
-[DataList,x1,y1] = gen_obs_cluttered_multi2(NumTracks, x_true, y_true, sqrt(obs.ObsErrVariance), [0 10 0 10], 10, 1, 1);
+[DataList,x1,y1] = gen_obs_cluttered_multi2(NumTracks, x_true, y_true, sqrt(obs.ObsErrVariance), [0 10 0 10], 10, 1);
 
 % Initiate TrackList
 for i=1:NumTracks
