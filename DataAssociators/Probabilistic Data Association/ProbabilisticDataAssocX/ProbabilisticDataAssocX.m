@@ -76,6 +76,9 @@ classdef ProbabilisticDataAssocX < DataAssociatorX
                     if (isfield(config,'ProbOfDetect'))
                         this.ProbOfDetect  = config.ProbOfDetect;
                     end
+                    if (isfield(config,'Hypothesiser'))
+                        this.Hypothesiser  = config.Hypothesiser;
+                    end
                 end
                 return;
             end
@@ -93,6 +96,9 @@ classdef ProbabilisticDataAssocX < DataAssociatorX
             end
             if (isfield(config,'ProbOfDetect'))
                 this.ProbOfDetect  = config.ProbOfDetect;
+            end
+            if (isfield(config,'Hypothesiser'))
+                this.Hypothesiser  = config.Hypothesiser;
             end
         end
         
@@ -127,6 +133,9 @@ classdef ProbabilisticDataAssocX < DataAssociatorX
                     if (isfield(config,'ProbOfDetect'))
                         this.ProbOfDetect  = config.ProbOfDetect;
                     end
+                    if (isfield(config,'Hypothesiser'))
+                        this.Hypothesiser  = config.Hypothesiser;
+                    end
                 end
                 return;
             end
@@ -144,6 +153,9 @@ classdef ProbabilisticDataAssocX < DataAssociatorX
             end
             if (isfield(config,'ProbOfDetect'))
                 this.ProbOfDetect  = config.ProbOfDetect;
+            end
+            if (isfield(config,'Hypothesiser'))
+                this.Hypothesiser  = config.Hypothesiser;
             end
         end
         
@@ -176,7 +188,7 @@ classdef ProbabilisticDataAssocX < DataAssociatorX
                 associate@DataAssociatorX(this);
                                     
             else
-                fprintf('No tracks where found. Skipping JPDAF association step...\n');
+%                 fprintf('No tracks where found. Skipping JPDAF association step...\n');
                 this.ValidationMatrix = zeros(1, size(this.MeasurementList,2));
                 this.ClusterList = [];
                 this.UnassocTrackInds = [];
@@ -200,7 +212,7 @@ classdef ProbabilisticDataAssocX < DataAssociatorX
                     this.TrackList{trackInd}.Filter.predict();
                 end    
             else
-                fprintf('No tracks where found. Skipping JPDAF prediction step...\n');
+%                 fprintf('No tracks where found. Skipping JPDAF prediction step...\n');
             end
         end
         
@@ -221,7 +233,7 @@ classdef ProbabilisticDataAssocX < DataAssociatorX
                     this.TrackList{trackInd}.Filter.updatePDA(assocWeights);
                 end    
             else
-                fprintf('No tracks where found. Skipping JPDAF Update step...\n');
+%                 fprintf('No tracks where found. Skipping JPDAF Update step...\n');
             end
         end
         

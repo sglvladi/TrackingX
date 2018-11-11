@@ -63,6 +63,9 @@ classdef JointProbabilisticDataAssocX < ProbabilisticDataAssocX
                     if (isfield(config,'ProbOfDetect'))
                         this.ProbOfDetect  = config.ProbOfDetect;
                     end
+                    if (isfield(config,'Hypothesiser'))
+                        this.Hypothesiser  = config.Hypothesiser;
+                    end
                     if (isfield(config,'ClutterDensity'))
                         this.ClutterDensity  = config.ClutterDensity;
                     end
@@ -83,6 +86,9 @@ classdef JointProbabilisticDataAssocX < ProbabilisticDataAssocX
             end
             if (isfield(config,'ProbOfDetect'))
                 this.ProbOfDetect  = config.ProbOfDetect;
+            end
+            if (isfield(config,'Hypothesiser'))
+                this.Hypothesiser  = config.Hypothesiser;
             end
             if (isfield(config,'ClutterDensity'))
                 this.ClutterDensity  = config.ClutterDensity;
@@ -120,6 +126,9 @@ classdef JointProbabilisticDataAssocX < ProbabilisticDataAssocX
                     if (isfield(config,'ProbOfDetect'))
                         this.ProbOfDetect  = config.ProbOfDetect;
                     end
+                    if (isfield(config,'Hypothesiser'))
+                        this.Hypothesiser  = config.Hypothesiser;
+                    end
                     if (isfield(config,'ClutterDensity'))
                         this.ClutterDensity  = config.ClutterDensity;
                     end
@@ -140,6 +149,9 @@ classdef JointProbabilisticDataAssocX < ProbabilisticDataAssocX
             end
             if (isfield(config,'ProbOfDetect'))
                 this.ProbOfDetect  = config.ProbOfDetect;
+            end
+            if (isfield(config,'Hypothesiser'))
+                this.Hypothesiser  = config.Hypothesiser;
             end
             if (isfield(config,'ClutterDensity'))
                 this.ClutterDensity  = config.ClutterDensity;

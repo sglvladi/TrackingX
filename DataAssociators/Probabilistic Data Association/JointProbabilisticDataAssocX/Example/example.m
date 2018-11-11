@@ -10,7 +10,7 @@ load('3_robots.mat');
 dyn = ConstantVelocityModelX_2D('VelocityErrVariance',0.0001);
 
 % Instantiate an Observation model
-obs = LinGaussObsModelX_2D('NumStateDims',4,'ObsErrVariance',0.1,'Mapping',[1 3]);
+obs = LinGaussObsModelX_2D('NumStateDims',4,'ObsErrVariance',0.01,'Mapping',[1 3]);
 
 % Compile the State-Space model
 ssm = StateSpaceModelX(dyn,obs);
@@ -33,20 +33,21 @@ for i=1:NumTracks
     TrackList{i} = TrackX();
     TrackList{i}.addprop('Filter');
     
-    Params_kf.PriorStateMean = [GroundTruth{1}(1,i); 0; GroundTruth{1}(2,i); 0];
-    Params_kf.PriorStateCovar = dyn.covariance(); %blkdiag(POmodel.Params.R(1)/2, 2^2, 2*pi);%CVmodel.Params.Q(1);
-    Params_kf.Model = ssm;
-    TrackList{i}.Filter = ExtendedKalmanFilterX(Params_kf);
+%     Params_kf.PriorStateMean = [GroundTruth{1}(1,i); 0; GroundTruth{1}(2,i); 0];
+%     Params_kf.PriorStateCovar = dyn.covariance(); %blkdiag(POmodel.Params.R(1)/2, 2^2, 2*pi);%CVmodel.Params.Q(1);
+%     Params_kf.Model = ssm;
+%     TrackList{i}.Filter = ExtendedKalmanFilterX(Params_kf);
     
-%     Params_pf.Model = ssm;
-%     Params_pf.NumParticles = 5000;
-%     Params_pf.PriorParticles = mvnrnd([GroundTruth{1}(1,i); 0; GroundTruth{1}(2,i); 0]', dyn.covariance(), Params_pf.NumParticles)';
-%     Params_pf.PriorWeights = ones(1,Params_pf.NumParticles)./Params_pf.NumParticles;
-%     TrackList{i}.Filter = ParticleFilterX(Params_pf);%UKalmanFilterX(Params_kf, CHmodel, POmodel);% 
+    Params_pf.Model = ssm;
+    Params_pf.NumParticles = 2000;
+    Params_pf.PriorParticles = mvnrnd([GroundTruth{1}(1,i); 0; GroundTruth{1}(2,i); 0]', dyn.covariance(), Params_pf.NumParticles)';
+    Params_pf.PriorWeights = ones(1,Params_pf.NumParticles)./Params_pf.NumParticles;
+    TrackList{i}.Filter = ParticleFilterX(Params_pf);%UKalmanFilterX(Params_kf, CHmodel, POmodel);% 
 end
 
 %% Initiate PDAF parameters
 Params_jpdaf.Clusterer = NaiveClustererX();
+%Params_jpdaf.Hypothesiser = LoopyBeliefPropagationX('ConvergeThreshold',10^(-3));
 Params_jpdaf.Gater = EllipsoidalGaterX(2,'GateLevel',10)';
 Params_jpdaf.ProbOfDetect = 0.9;
 
@@ -124,7 +125,7 @@ for i = 1:N
                 h2 = plot(Logs{j}.Groundtruth.State(1,i),Logs{j}.Groundtruth.State(2,i),'bo','MarkerSize', 10);
                 set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off'); % Exclude line from legend
                 h3 = plot(Logs{j}.Estimates.StateMean(1,1:i),Logs{j}.Estimates.StateMean(3,1:i),'r.-','LineWidth',1);
-                h4=plot_gaussian_ellipsoid(Logs{j}.Estimates.StateMean([1 3],i), Logs{j}.Estimates.StateCovar([1 3],[1 3],i));
+%                h4=plot_gaussian_ellipsoid(Logs{j}.Estimates.StateMean([1 3],i), Logs{j}.Estimates.StateCovar([1 3],[1 3],i));
             end
             h2 = plot(DataList{i}(1,:),DataList{i}(2,:),'k*','MarkerSize', 10);
                 % set the y-axis back to normal.

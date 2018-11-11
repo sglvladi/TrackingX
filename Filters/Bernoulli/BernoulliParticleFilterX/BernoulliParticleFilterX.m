@@ -1,11 +1,10 @@
-classdef SMC_PHDFilterX < FilterX
-% SMC_PHDFilterX class
+classdef BernoulliParticleFilterX < FilterX
+% BernoulliParticleFilterX class
 %
-% Summary of SMC_PHDFilterX:
-% This is a class implementation of a Sequential Monte Carlo (SMC) Probabilistic
-% Hypothesis Density (PHD) Filter.
+% Summary of BernoulliParticleFilterX:
+% This is a class implementation of a Bernoulli Particle Filter [1].
 %
-% SMC_PHDFilterX Properties:
+% BernoulliParticleFilterX Properties:
 %   + NumParticles - The number of particles employed by the PHD Filter
 %   + Particles - A (NumStateDims x NumParticles) matrix used to store 
 %                       the last computed/set filtered particles  
@@ -34,19 +33,19 @@ classdef SMC_PHDFilterX < FilterX
 %                 Resampler is provided, then it will override any choice
 %                 specified within the ResamplingScheme. ResamplingPolicy
 %                 will not be affected.
-%   + BirthScheme - A (1 x 3) cell array, specifying the particle birth
-%                   scheme. BirthScheme{1} should be a string which can be
-%                   set to either "Mixture", in which case BirthScheme{2}
+%   + BirthModel - A (1 x 3) cell array, specifying the particle birth
+%                   scheme. BirthModel{1} should be a string which can be
+%                   set to either "Mixture", in which case BirthModel{2}
 %                   should specify the probability of birth of new particles,
-%                   or "Expansion", in which case BirthScheme{2} should
+%                   or "Expansion", in which case BirthModel{2} should
 %                   specify the number of particles to be "birthed" at
 %                   each iteration of the filter.
-%                   Default BirthScheme = {"Mixture",0.5} meaning that
+%                   Default BirthModel = {"Mixture",0.5} meaning that
 %                   particles are birthed using the mixture scheme, with
 %                   a birth probability of 50%.
 %   + BirthIntFcn - A function handle, which when called generates a set 
 %                   of initial particles and weights.
-%   + ProbOfDeath - The probability that a target may cease to exist
+%   + ProbOfSurvive - The probability that a target may cease to exist
 %                   between consecutive iterations of the filter.
 %   + ProbOfDetection - The probablity that a target will be detected in
 %                       a given measurement scan.
@@ -56,17 +55,15 @@ classdef SMC_PHDFilterX < FilterX
 %       + Obs - Object handle to ObservationModelX SubClass 
 %       + Ctr - Object handle to ControlModelX SubClass 
 %
-% SMC_PHDFilterX Methods:
-%   + SMC_PHDFilterX - Constructor method
-%   + predict - Performs SMC_PHD prediction step
-%   + update - Performs SMC_PHD update step
+% BernoulliParticleFilterX Methods:
+%   + BernoulliParticleFilterX - Constructor method
+%   + predict - Performs Bernoulli prediction step
+%   + update - Performs Bernoulli update step
 %
 % (+) denotes puplic properties/methods
 % (¬) denotes dependent properties
 %
-% [1]  B. N. Vo, S. Singh and A. Doucet, "Sequential Monte Carlo methods for multitarget filtering with random finite sets," in IEEE Transactions on Aerospace and Electronic Systems, vol. 41, no. 4, pp. 1224-1245, Oct. 2005.
-% [2]  P. Horridge and S. Maskell,  “Using a probabilistic hypothesis density filter to confirm tracks in a multi-target environment,” in2011 Jahrestagung der Gesellschaft fr Informatik, October 2011.
-% [3]  B. ngu Vo and S. Singh, “Sequential monte carlo implementation of the phd filter for multi-targettracking,” inIn Proceedings of the Sixth International Conference on Information Fusion, pp. 792–799, 2003.
+% [1]  Risti, Branko & Vo, Ba-Ngu & Vo, Ba-Ngu & Farina, Alfonso. (2013). A Tutorial on Bernoulli Filters: Theory, Implementation and Applications. IEEE Transactions on Signal Processing. 61. 10.1109/TSP.2013.2257765. 
 %
 % See also ParticleFilterX, KalmanFilerX.
 
@@ -79,22 +76,26 @@ classdef SMC_PHDFilterX < FilterX
         NumMeasurements
         NumTargets = 0
         Particles     
-        Weights     
+        Weights
+        ProbOfExistence
+        BirthParticles = []
+        BirthWeights = []
         PredParticles   
-        PredWeights    
+        PredWeights
+        PredProbOfExistence
         MeasurementList
         ResamplingScheme = 'Systematic'
         ResamplingPolicy = {'TimeInterval',1}                    
         Resampler        
-        BirthScheme = {'Mixture',0.5};
-        BirthIntFcn 
-        ProbOfDeath  
+        BirthModel
+        ProbOfBirth
+        ProbOfSurvive  
         ProbOfDetection 
-        ClutterRate 
+        ClutterRate
+        ClutterIntFcn
         MeasLikelihood
         MeasWeights = 1;
         WeightsPerMeasurement
-        e_k
     end
     
     properties (Access=protected)
@@ -102,8 +103,8 @@ classdef SMC_PHDFilterX < FilterX
     end
     
     methods
-        function this = SMC_PHDFilterX(varargin)
-        % SMC_PHDFilterX - Constructor method
+        function this = BernoulliParticleFilterX(varargin)
+        % BernoulliParticleFilterX - Constructor method
         %   
         % Parameters
         % ----------
@@ -145,20 +146,20 @@ classdef SMC_PHDFilterX < FilterX
         %   An object handle to a ResamplerX subclass. If a Resampler is provided,
         %   then it will override any choice specified within the ResamplingScheme. 
         %   ResamplingPolicy will not be affected.
-        % BirthScheme: (1 x 2) cell array
-        %   Specifies the particle birth scheme. BirthScheme{1} should be 
+        % BirthModel: (1 x 2) cell array
+        %   Specifies the particle birth scheme. BirthModel{1} should be 
         %   a string which can be set to either:
-        %       1) "Mixture", in which case BirthScheme{2} should specify the
+        %       1) "Mixture", in which case BirthModel{2} should specify the
         %          probability of birth of new particles, or
-        %       2) "Expansion", in which case BirthScheme{2} should specify 
+        %       2) "Expansion", in which case BirthModel{2} should specify 
         %          the number of particles to be "birthed" at each iteration 
         %          of the filter.
-        %   (default BirthScheme = {"Mixture",0.5} implying that particles 
+        %   (default BirthModel = {"Mixture",0.5} implying that particles 
         %    are born using the mixture scheme, with a birth probability of 50%)
         % BirthIntFcn: function handle
         %   A function handle, [parts, weights] = BirthIntFcn(NumParticles), 
         %   which when called generates a set of initial particles and weights.
-        % ProbOfDeath: scalar
+        % ProbOfSurvive: scalar
         %   The probability that a target may cease to exist between consecutive 
         %   iterations of the filter.
         % ProbOfDetection: scalar
@@ -168,21 +169,21 @@ classdef SMC_PHDFilterX < FilterX
         %
         % Usage
         % -----
-        % * phd = SMC_PHDFilterX() returns an unconfigured object 
+        % * phd = BernoulliParticleFilterX() returns an unconfigured object 
         %   handle. Note that the object will need to be configured at a 
         %   later instance before any call is made to it's methods.
-        % * phd = SMC_PHDFilterX(ssm) returns an object handle,
+        % * phd = BernoulliParticleFilterX(ssm) returns an object handle,
         %   preconfigured with the provided StateSpaceModelX object handle ssm.
-        % * phd = SMC_PHDFilterX(ssm,priorParticles,priorWeights) 
+        % * phd = BernoulliParticleFilterX(ssm,priorParticles,priorWeights) 
         %   returns an object handle, preconfigured with the provided  
         %   StateSpaceModel object handle ssm and the prior information   
         %   about the state, provided in the form of the priorParticles 
         %   and priorWeights variables.
-        % * phd = SMC_PHDFilterX(ssm,priorDistFcn) returns an object
+        % * phd = BernoulliParticleFilterX(ssm,priorDistFcn) returns an object
         %   handle, preconfigured with the provided StateSpaceModel object 
         %   handle ssm and the prior information about the state, provided  
         %   in the form of the priorDistFcn function.
-        % * phd = SMC_PHDFilterX(___,Name,Value,___) instantiates an  
+        % * phd = BernoulliParticleFilterX(___,Name,Value,___) instantiates an  
         %   object handle, configured with the options specified by one or 
         %   more Name,Value pair arguments.
         %
@@ -190,8 +191,7 @@ classdef SMC_PHDFilterX < FilterX
             
             % Call SuperClass method
             this@FilterX(varargin{:});
-            
-            this.e_k = 0.5*ones(1,this.NumParticles);
+           
             if(nargin==0)
                 this.Resampler = SystematicResamplerX();
                 return;
@@ -225,14 +225,11 @@ classdef SMC_PHDFilterX < FilterX
                      if (isfield(config,'ResamplingPolicy'))
                          this.ResamplingPolicy = config.ResamplingPolicy;
                      end
-                     if (isfield(config,'BirthScheme'))
-                         this.BirthScheme = config.BirthScheme;
+                     if (isfield(config,'BirthModel'))
+                         this.BirthModel = config.BirthModel;
                      end
-                     if (isfield(config,'BirthIntFcn'))
-                         this.BirthIntFcn = config.BirthIntFcn;
-                     end
-                     if (isfield(config,'ProbOfDeath'))
-                         this.ProbOfDeath = config.ProbOfDeath;
+                     if (isfield(config,'ProbOfSurvive'))
+                         this.ProbOfSurvive = config.ProbOfSurvive;
                      end
                      if (isfield(config,'ProbOfDetection'))
                          this.ProbOfDetection = config.ProbOfDetection;
@@ -240,8 +237,13 @@ classdef SMC_PHDFilterX < FilterX
                      if (isfield(config,'ClutterRate'))
                          this.ClutterRate = config.ClutterRate;
                      end
+                     if (isfield(config,'ClutterIntFcn'))
+                         this.ClutterIntFcn = config.ClutterIntFcn;
+                     end
+                     if (isfield(config,'ProbOfExistence'))
+                         this.ProbOfExistence = config.ProbOfExistence;
+                     end
                 end
-                this.e_k = 0.5*ones(1,this.NumParticles);
                 return;
             end
             
@@ -274,14 +276,11 @@ classdef SMC_PHDFilterX < FilterX
              if (isfield(config,'ResamplingPolicy'))
                  this.ResamplingPolicy = config.ResamplingPolicy;
              end
-             if (isfield(config,'BirthScheme'))
-                 this.BirthScheme = config.BirthScheme;
+             if (isfield(config,'BirthModel'))
+                 this.BirthModel = config.BirthModel;
              end
-             if (isfield(config,'BirthIntFcn'))
-                 this.BirthIntFcn = config.BirthIntFcn;
-             end
-             if (isfield(config,'ProbOfDeath'))
-                 this.ProbOfDeath = config.ProbOfDeath;
+             if (isfield(config,'ProbOfSurvive'))
+                 this.ProbOfSurvive = config.ProbOfSurvive;
              end
              if (isfield(config,'ProbOfDetection'))
                  this.ProbOfDetection = config.ProbOfDetection;
@@ -289,11 +288,16 @@ classdef SMC_PHDFilterX < FilterX
              if (isfield(config,'ClutterRate'))
                  this.ClutterRate = config.ClutterRate;
              end
-             this.e_k = 0.5*ones(1,this.NumParticles);
+             if (isfield(config,'ClutterIntFcn'))
+                 this.ClutterIntFcn = config.ClutterIntFcn;
+             end
+             if (isfield(config,'ProbOfExistence'))
+                 this.ProbOfExistence = config.ProbOfExistence;
+             end
         end
         
         function initialise(this,varargin)
-        % INITIALISE Initialise the SMC PHD Filter with a certain 
+        % INITIALISE Initialise the Bernoulli Filter with a certain 
         % set of parameters.  
         %   
         % Parameters
@@ -336,20 +340,20 @@ classdef SMC_PHDFilterX < FilterX
         %   An object handle to a ResamplerX subclass. If a Resampler is provided,
         %   then it will override any choice specified within the ResamplingScheme. 
         %   ResamplingPolicy will not be affected.
-        % BirthScheme: (1 x 2) cell array
-        %   Specifies the particle birth scheme. BirthScheme{1} should be 
+        % BirthModel: (1 x 2) cell array
+        %   Specifies the particle birth scheme. BirthModel{1} should be 
         %   a string which can be set to either:
-        %       1) "Mixture", in which case BirthScheme{2} should specify the
+        %       1) "Mixture", in which case BirthModel{2} should specify the
         %          probability of birth of new particles, or
-        %       2) "Expansion", in which case BirthScheme{2} should specify 
+        %       2) "Expansion", in which case BirthModel{2} should specify 
         %          the number of particles to be "birthed" at each iteration 
         %          of the filter.
-        %   (default BirthScheme = {"Mixture",0.5} implying that particles 
+        %   (default BirthModel = {"Mixture",0.5} implying that particles 
         %    are born using the mixture scheme, with a birth probability of 50%)
         % BirthIntFcn: function handle
         %   A function handle, [parts, weights] = BirthIntFcn(NumParticles), 
         %   which when called generates a set of initial particles and weights.
-        % ProbOfDeath: scalar
+        % ProbOfSurvive: scalar
         %   The probability that a target may cease to exist between consecutive 
         %   iterations of the filter.
         % ProbOfDetection: scalar
@@ -359,13 +363,13 @@ classdef SMC_PHDFilterX < FilterX
         %
         % Usage
         % ----- 
-        % * initialise(phd,ssm) initialises the SMC_PHDFilterX object 
+        % * initialise(phd,ssm) initialises the BernoulliParticleFilterX object 
         %   phd with the provided StateSpaceModelX object ssm.
         % * initialise(phd,priorParticles,priorWeights)initialises the 
-        %   SMC_PHDFilterX object pf with the provided StateSpaceModel     
+        %   BernoulliParticleFilterX object pf with the provided StateSpaceModel     
         %   object ssm and the prior information about the state, provided in  
         %   the form  of the priorParticles and priorWeights variables.
-        % * initialise(phd,ssm,priorDistFcn) initialises the SMC_PHDFilterX
+        % * initialise(phd,ssm,priorDistFcn) initialises the BernoulliParticleFilterX
         %   object pf with the provided StateSpaceModel object handle ssm
         %   and the prior information about the state, provided in the form 
         %   of the priorDistFcn function.
@@ -375,7 +379,6 @@ classdef SMC_PHDFilterX < FilterX
         %
         %  See also predict, update.   
                         
-             this.e_k = 0.5*ones(1,this.NumParticles);
             % First check to see if a structure was received
             if(nargin==1)
                 if(isstruct(varargin{1}))
@@ -407,17 +410,23 @@ classdef SMC_PHDFilterX < FilterX
                     if (isfield(config,'ResamplingPolicy'))
                         this.ResamplingPolicy = config.ResamplingPolicy;
                     end
-                    if (isfield(config,'BirthScheme'))
-                        this.BirthScheme = config.BirthScheme;
+                    if (isfield(config,'BirthModel'))
+                        this.BirthModel = config.BirthModel;
                     end
-                    if (isfield(config,'BirthIntFcn'))
-                        this.BirthIntFcn = config.BirthIntFcn;
-                    end
-                    if (isfield(config,'ProbOfDeath'))
-                        this.ProbOfDeath = config.ProbOfDeath;
+                    if (isfield(config,'ProbOfSurvive'))
+                        this.ProbOfSurvive = config.ProbOfSurvive;
                     end
                     if (isfield(config,'ProbOfDetection'))
                         this.ProbOfDetection = config.ProbOfDetection;
+                    end
+                    if (isfield(config,'ClutterRate'))
+                         this.ClutterRate = config.ClutterRate;
+                    end
+                    if (isfield(config,'ClutterIntFcn'))
+                         this.ClutterIntFcn = config.ClutterIntFcn;
+                    end
+                    if (isfield(config,'ProbOfExistence'))
+                         this.ProbOfExistence = config.ProbOfExistence;
                     end
                     return;
                 end
@@ -452,30 +461,30 @@ classdef SMC_PHDFilterX < FilterX
              if (isfield(config,'ResamplingPolicy'))
                  this.ResamplingPolicy = config.ResamplingPolicy;
              end
-             if (isfield(config,'BirthScheme'))
-                 this.BirthScheme = config.BirthScheme;
+             if (isfield(config,'BirthModel'))
+                 this.BirthModel = config.BirthModel;
              end
-             if (isfield(config,'BirthIntFcn'))
-                 this.BirthIntFcn = config.BirthIntFcn;
-             end
-             if (isfield(config,'ProbOfDeath'))
-                 this.ProbOfDeath = config.ProbOfDeath;
+             if (isfield(config,'ProbOfSurvive'))
+                 this.ProbOfSurvive = config.ProbOfSurvive;
              end
              if (isfield(config,'ProbOfDetection'))
                  this.ProbOfDetection = config.ProbOfDetection;
              end
+             if (isfield(config,'ProbOfExistence'))
+                 this.ProbOfExistence = config.ProbOfExistence;
+             end
         end
         
         function predict(this)
-        % PREDICT Perform SMC PHD Filter prediction step
+        % PREDICT Perform Bernoulli Filter prediction step
         %   
         % Usage
         % -----
-        % * predict(this) calculates the predicted PHD
+        % * predict(this) calculates the predicted Bernoulli PDF
         %
         % More details
         % ------------
-        % * SMC_PHDFilterX uses the Model class property, which should 
+        % * BernoulliParticleFilterX uses the Model class property, which should 
         %   be an instance of the TrackingX.Models.StateSpaceModel class, in order
         %   to extract information regarding the underlying state-space model.
         % * State prediction is performed using the Model.Dyn property,
@@ -494,73 +503,71 @@ classdef SMC_PHDFilterX < FilterX
             
             % reset measLikelihood matrix
             this.pmeasLikelihood_ = [];
-        
-            % Propagate old (k-1) particles and generate new birth particles
-            if(strcmp(this.BirthScheme(1), 'Expansion')) 
-                % Expansion method is equivalent to Eqs. (25-26) of [1]
-                % assuming that:
-                %  -> e_k|k-1(?) = 1-pDeath
-                %  -> b_k|k-1(x|?) = 0 (No spawned targets)
-                %  -> q_k(x_k|x_k-1,Z_k) = f_k|k-1(x|?)  
-                %  i.e. (25) = (1-pDeath)*w_k-1^i
-                % and
-                %  -> ?_k(x_k) = 0.2*p_k(x_k|Z_k)
-                %  i.e  (26) = 0.2/Jk
-                
-                Jk = this.BirthScheme{2};
             
+            % Compute predicted probability of Existence - (28) of [1]
+            this.PredProbOfExistence = this.BirthModel.ProbOfBirth*(1-this.ProbOfExistence)...
+                                        + this.ProbOfSurvive*this.ProbOfExistence;
+            
+            % Propagate old (k-1) particles and generate new birth particles
+            if(strcmp(this.BirthModel.Schema, 'Expansion')) 
+                
+                this.NumParticles = size(this.Particles,2);
+                if(this.BirthModel.Jk<1)
+                    Jk = ceil(this.BirthModel.Jk*this.NumParticles);
+                else
+                    Jk = this.BirthModel.Jk;
+                end
+                
                 % Expand number of particles to accomodate for births
                 this.PredParticles = [this.Particles, zeros(size(this.Particles, 1), Jk)]; 
                 this.PredWeights = [this.Weights, zeros(1, Jk)];
                 this.NumParticlesTotal = this.NumParticles + Jk;  
-
-                % Generate Np normally predicted particles
-                this.PredParticles(:,1:this.NumParticles) = ...
-                    this.Model.Dyn.feval(this.Particles(:,1:this.NumParticles), ...
-                        this.Model.Dyn.random(this.NumParticles)); 
+                
+                % Generate birth particles
+                [birthParticles, birthWeights] = this.BirthModel.BirthIntFcn(Jk);
+                this.PredParticles(:,this.NumParticles+1:end) = birthParticles;
+                
+                % Predict all particles - (81) of [1]
+                this.PredParticles = this.Model.Dyn.feval(this.PredParticles, this.Model.Dyn.random(this.NumParticlesTotal)); 
+                
+                % Predict weights - (82) of [1]
                 this.PredWeights(:,1:this.NumParticles) = ...
-                    (1-this.ProbOfDeath)* this.Weights(:,1:this.NumParticles);
-
-                % Generate birth particles 
-                this.PredParticles(:,this.NumParticles+1:end) = this.BirthIntFcn(Jk);
-                this.PredWeights(:,this.NumParticles+1:end) = 0.2/Jk;
-                this.e_k = [this.e_k ones(1, Jk)*0.5];
-                this.e_k = this.e_k*(1-this.ProbOfDeath);
+                    this.ProbOfSurvive*(this.ProbOfExistence/this.PredProbOfExistence)*this.Weights(:,1:this.NumParticles);
+                this.PredWeights(:,this.NumParticles+1:end) = ...
+                    this.BirthModel.ProbOfBirth*(1-this.ProbOfExistence)*birthWeights/(this.PredProbOfExistence*Jk);
                 
-            elseif(strcmp(this.BirthScheme(1), 'Mixture'))
-                % Mixture method is equivalent to the one proposed in Section 5 of [2]
-                
-                % Compute mixture components
-                a = this.BirthScheme{2};
-                b = (1-this.ProbOfDeath);
-                Np_n = binornd(this.NumParticles,b/(a+b)); % Number of normally predicted particles
-                Np_b = this.NumParticles - Np_n; % Number of birth particles
+            else
+                % Propagate old (k-1) particles and generate new birth particles
+                this.NumParticles = size(this.Particles,2);
 
-                % Generate normally predicted particles 
-                if(Np_n)
-                    this.PredParticles(:,1:Np_n) = ...
-                        this.Model.Dyn.feval(this.Particles(:,1:Np_n), ...
-                            this.Model.Dyn.random(Np_n)); % Simply propagate all particles
+                % Copy over particles from last timestep
+                this.PredParticles = this.Particles; 
+                this.PredWeights = this.Weights;  
+
+                % Append any birth particles
+                if(size(this.BirthParticles,2)>0)
+                    this.PredParticles = [this.PredParticles, this.BirthParticles];
+                    this.PredWeights = [this.PredWeights, this.BirthWeights]; 
                 end
 
-                % Generate birth particles 
-                if(Np_b>0)
-                    this.PredParticles(:,Np_n+1:this.NumParticles) = this.BirthIntFcn(Np_b);
+                this.NumParticlesTotal = size(this.PredParticles,2); 
+
+                % Predict all particles - (81) of [1]
+                this.PredParticles = this.Model.Dyn.feval(this.PredParticles, this.Model.Dyn.random(this.NumParticlesTotal)); 
+
+                % Predict weights - (82) of [1]
+                this.PredWeights(:,1:this.NumParticles) = ...
+                    this.ProbOfSurvive*(this.ProbOfExistence/this.PredProbOfExistence)*this.Weights(:,1:this.NumParticles);
+
+                if(size(this.BirthParticles,2)>0)
+                    this.PredWeights(:,this.NumParticles+1:end) = ...
+                        this.BirthModel.ProbOfBirth*(1-this.ProbOfExistence)*this.BirthWeights/(this.PredProbOfExistence);
                 end
-                this.PredWeights = this.Weights * (1-this.ProbOfDeath);
-                this.PredWeights(:, Np_n+1:this.NumParticles) = 0.2/(Np_b); % Assign weights to birth particles
-                %this.PredWeights = this.PredWeights 
-                this.e_k(:, Np_n+1:this.NumParticles) = this.BirthScheme{2};
-                this.NumParticlesTotal = this.NumParticles;
-                this.e_k = this.e_k*(1-this.ProbOfDeath);% + this.BirthScheme{2};
             end
         end
         
-        % Update function
-        % ----------------
-        % Performs the relevant SMC PHD update algo, based on the selected .type
-        function idx = update(this)
-        % UPDATE Perform SMC PHD update step
+        function update(this)
+        % UPDATE Perform Bernoulli Filter update step
         %
         % Usage
         % -----
@@ -572,66 +579,35 @@ classdef SMC_PHDFilterX < FilterX
             
             % Compute g(z|x) matrix as in [1] 
             g = this.MeasLikelihood;
-                        
-            % Compute C_k(z) Eq. (27) of [1]  
-            Ck = zeros(1,this.NumMeasurements);
-            for i = 1:this.NumMeasurements   % for all measurements
-                Ck(i) = sum(this.ProbOfDetection*g(i,:).*this.PredWeights,2);
-            end
+
+             % Approximate integral I_1 - (84) of [1]
+            I_1 = sum(this.ProbOfDetection*this.PredWeights);
             
-            % Calculate w^{n,i} Eq. (20) of [2]
-            this.WeightsPerMeasurement = zeros(this.NumMeasurements, this.NumParticlesTotal);
-            if(this.NumMeasurements>0)
-                this.WeightsPerMeasurement = (this.ProbOfDetection*g./repmat((this.ClutterRate+Ck)',1,size(g,2))).*this.PredWeights;
-            end
-%             for i = 1:this.NumMeasurements
-%                 this.WeightsPerMeasurement(i,:) = (this.ProbOfDetection*g(i,:)/(this.ClutterRate+Ck(i))).*this.PredWeights;
-%             end
-            this.WeightsPerMeasurement = this.MeasWeights'.*this.WeightsPerMeasurement;
+            % Approximate integral I_2(z) - (85) of [1]
+            I_2 = sum(this.ProbOfDetection*g.*this.PredWeights,2);
             
-%             betta = zeros(this.NumMeasurements+1,this.NumParticlesTotal);
-%             betta(1,:) = (1-this.ProbOfDetection)/this.NumParticlesTotal;
-%             for j = 1:this.NumMeasurements
-%                 betta(j+1,:) = this.ProbOfDetection*g(j,:)/this.ClutterRate;
-%             end
-%             Lj = 1 + (1-this.ProbOfDetection) + sum(betta(2:end,:),1);
-%             betta = betta./(sum(betta,1));
-%             lambda = betta(1,:)/this.NumMeasurements;
-%             e_ij = (lambda+betta(2:end,:)).*this.e_k./(this.e_k + betta(1,:).*(1-this.e_k)/(1-this.ProbOfDetection));
-%             m_ij = mean(e_ij,2);      
-%             try
-%                 this.e_k = this.e_k./(this.e_k + (1-this.e_k)./Lj);
-%             catch
-%                 
-%             end
-            % Calculate pi Eq. (21) of [2]
-%             p_i = sum(this.WeightsPerMeasurement,2);
-%             p_i = zeros(1,this.NumMeasurements);
-%             for i = 1:this.NumMeasurements
-%                 p_i(i)= sum(this.WeightsPerMeasurement(i,:),2);
-%                 if(p_i(i)>0.8)
-%                     %warning('Detected target %d! %f - %f = %f %%',i,p_i(i),sum(this.WeightsPerMeasurement(i,:).*this.e_k), (p_i(i)-sum(this.WeightsPerMeasurement(i,:).*this.e_k))/p_i(i)*100);
-%                 end
-%             end
+            % Compute ?k approximation - (86) of [1]
+            D_k = I_1 - sum(I_2./(this.ClutterRate.*this.ClutterIntFcn(this.MeasurementList))');
             
-            % Update weights Eq. (28) of [1]
-            this.Weights = (1-this.ProbOfDetection)*this.PredWeights + sum(this.WeightsPerMeasurement,1);
-                 
-%             this.e_k = ((1-this.ProbOfDetection)*this.ClutterRate+sum(this.ProbOfDetection*g,1)).*this.e_k...
-%                        ./(((1-this.ProbOfDetection)*this.ClutterRate+sum(this.ProbOfDetection*g,1)).*this.e_k ...
-%                            + this.ClutterRate*(1-this.e_k));
+            % Update existence probability - (56) of [1] 
+            this.ProbOfExistence = (1-D_k)*this.PredProbOfExistence/(1-this.PredProbOfExistence*D_k);
             
-            %e_i = p_i(ones(1,this.NumParticles),:)'.*g./(sum(g,2));
+            % Update weights - (87) of [1]
+            this.Weights = (1-this.ProbOfDetection + this.ProbOfDetection*sum(g./(this.ClutterRate.*this.ClutterIntFcn(this.MeasurementList))')).*this.PredWeights;
             
-            % Resample (equivalent to Step 3 of [1]
-            %this.Weights = this.Weights .* this.e_k;
-            this.NumTargets = sum(this.Weights,2); % Compute total mass
+            % Normalise weights 
+            this.Weights = this.Weights./sum(this.Weights);
+            
+            % Resample
             this.Particles = this.PredParticles;
             [this.Particles, this.Weights, idx] = ...
                 this.Resampler.resample(this.Particles, ...
-                    (this.Weights/this.NumTargets),this.NumParticles); % Resample
-            this.Weights = this.Weights*this.NumTargets; % Rescale
-%            this.e_k = this.e_k(:,idx);
+                    this.Weights,this.NumParticles);
+                
+            if(~strcmp(this.BirthModel.Schema, 'Expansion'))
+                % Generate birth particles
+                [this.BirthParticles, this.BirthWeights] = this.BirthModel.BirthIntFcn(this.MeasurementList);
+            end
         end
     
         function MeasLikelihood = get.MeasLikelihood(this)

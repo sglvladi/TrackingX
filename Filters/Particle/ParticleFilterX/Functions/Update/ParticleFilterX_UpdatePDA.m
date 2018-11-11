@@ -41,6 +41,9 @@ function [newWeights] = ParticleFilterX_UpdatePDA(lik,y,parts,weights,W,Likeliho
     ExpectedLikelihoodMatrix = LikelihoodMatrix.*repmat(W(2:end)',1,Np);
     expectedLikelihoods = sum(ExpectedLikelihoodMatrix,1);
     el = sum(expectedLikelihoods,2)/sum(W(2:end)) - sum(expectedLikelihoods,2);
+    if(isnan(el))
+        el = eps;
+    end
     ExpectedLikelihoodMatrix = [repmat(el/Np,1,Np); ExpectedLikelihoodMatrix];
     expectedLikelihoods = sum(ExpectedLikelihoodMatrix,1);
 

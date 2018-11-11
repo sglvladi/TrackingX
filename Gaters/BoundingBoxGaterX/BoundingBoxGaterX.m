@@ -129,7 +129,7 @@ classdef BoundingBoxGaterX <GaterX
                     intersect_1 = intersect_1./(PredMeasMean(3)*PredMeasMean(4));
                     intersect_2 = rectint(MeasurementList', PredMeasMean')';
                     intersect_2 = intersect_2./(MeasurementList(3,:).*MeasurementList(4,:));
-                    ValidationMatrix(trackInd,:) = (intersect_1>this.OverlapThresh & intersect_2>this.OverlapThresh);
+                    ValidationMatrix(trackInd,:) = (intersect_1>this.OverlapThresh | intersect_2>this.OverlapThresh);
                 end
                 GateVolumes(trackInd) = PredMeasMean(3)*PredMeasMean(4);
             end

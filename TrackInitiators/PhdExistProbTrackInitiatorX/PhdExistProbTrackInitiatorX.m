@@ -105,7 +105,7 @@ classdef PhdExistProbTrackInitiatorX < TrackInitiatorX
                 end
                 rhi(measInd) = rhi_tmp;
             end
-            rhi = rhi==1;
+            %rhi = rhi==1;
 
             % Set PHD Filter measurement and weights
             this.PHDFilter.MeasurementList = MeasurementList;

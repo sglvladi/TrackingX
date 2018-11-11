@@ -8,17 +8,18 @@
 %  * The "gen_obs_cluttered_multi3" function takes as an input the ground truth data, including information about the measurement noise and clutter rate
 %     and then produces 1xNk cell array of corrupted and cluttered measurements, Nk being the total number of timesteps
 
-load('3_robots.mat');
+load('example.mat');
 tot_elapsed = 0;
 % Plot settings
 ShowPlots = 1;              % Set to 0 to hide plots
 ShowPrediction = 0;         % Set to 0 to skip showing prediction
 ShowUpdate = 1;             % Set to 0 to skip showing update
-TrackNum = size(x_true,2);
+TrackNum = 1;
 
 tot_ellapsed = 0;
 
 % Instantiate a Dynamic model
+dyn = ConstantHeadingModelX(
 dyn = ConstantVelocityModelX_2D('VelocityErrVariance',0.0001);
 
 % Instantiate an Observation model
@@ -36,47 +37,30 @@ V = 10^2;     % Volume of surveillance region (10x10 2D-grid)
 V_bounds = [0 10 0 10]; % [x_min x_max y_min y_max]
 
 % Generate observations (Poisson number with rate of lambdaV, positions are uniform over surveillance region)
-numTrueTracks = 3;
-[DataList,x1,y1] = gen_obs_cluttered_multi2(numTrueTracks, x_true, y_true, sqrt(obs.ObsErrVariance), ...
-                                            V_bounds, lambdaV, 1,0.9); 
+[DataList,x1,y1] = gen_obs_cluttered_multi2(TrackNum, x_true, y_true, sqrt(0.02), V_bounds, lambdaV, 1, .8); 
 N=size(DataList,2); % timesteps 
 
 % Assign PHD parameter values
-config.NumParticles = 20000;              % number of particles
+config.NumParticles = 10000;              % number of particles
 config.Model = ssm;
 q = dyn.covariance();
 %config.BirthIntFcn = @(Np) [(V_bounds(2)-V_bounds(1))*rand(Np,1), mvnrnd(zeros(Np,1), q(3,3)'),(V_bounds(4)-V_bounds(3))*rand(Np,1),mvnrnd(zeros(Np,1), q(4,4)')]'; % Uniform position and heading, Gaussian speed
-config.BirthIntFcn = @(Np) [(V_bounds(2)-V_bounds(1))*rand(Np,1), mvnrnd(zeros(Np,1), 0.05'),(V_bounds(4)-V_bounds(3))*rand(Np,1),mvnrnd(zeros(Np,1), 0.05')]'; % Uniform position and heading, Gaussian speed
-
-config.PriorDistFcn = @ (Np) deal(config.BirthIntFcn(Np), repmat(1/Np, Np, 1)');
-config.BirthScheme = {'Mixture', 0.01};
-%config.BirthScheme = {'Expansion', 500};
-config.ProbOfDeath = 0.005;
-config.ProbOfDetection = 0.9;
-config.ClutterRate = lambdaV/V;
+PriorDistFcn = @(Np) deal([(V_bounds(2)-V_bounds(1))*rand(Np,1), mvnrnd(zeros(Np,1), 0.05'),(V_bounds(4)-V_bounds(3))*rand(Np,1),mvnrnd(zeros(Np,1), 0.05')]',repmat(0.2/Np,1,Np)); % Uniform position and heading, Gaussian speed
+% BirthIntFcn = @(meas) deal([mvnrnd(meas(1,:)',obs.covariance(),10), mvnrnd(zeros(size(meas,2),1), 0.05',10),mvnrnd(meas(3,:)',obs.covariance(),10),mvnrnd(zeros(size(meas,2),1), 0.05',10)]',repmat(1/Np,1,Np)); % Uniform position and heading, Gaussian speed
+config.PriorDistFcn = @ (Np) PriorDistFcn(Np);
+config.BirthModel.ProbOfBirth = 0.005;
+config.BirthModel.BirthIntFcn = @ (Np) PriorDistFcn(Np);
+config.BirthModel.Schema = 'Expansion';
+config.BirthModel.Jk = 0.1;
+config.ProbOfSurvive = 0.9;
+config.ProbOfDetection = 0.7;
+config.ClutterRate = lambdaV;
+config.ClutterIntFcn = @(z) repmat(1/V,1,size(z,2));
 config.ResamplingScheme = 'Multinomial';
+config.ProbOfExistence = 0.5;
 
 % Instantiate PHD filter
-myphd = SMC_PHDFilterX(config);
-
-% Instantiate PF filter
-mypf = ParticleFilterX(ssm);
-
-% Initiate PDAF parameters
-%Params_pdaf.Clusterer = NaiveClustererX();
-Params_pdaf.Gater = EllipsoidalGaterX(2,'ProbOfGating',0.998)';
-Params_pdaf.ProbOfDetect = 0.8;
-mypdaf = JointIntegratedProbabilisticDataAssocX(Params_pdaf);
-mypdaf.MeasurementList = DataList{1}(:,:); 
-
-% Initiate Track Initiator
-config_ti.Filter = mypf;
-config_ti.PHDFilter = myphd;
-config_ti.ProbOfGating = 0.998;
-config_ti.ProbOfConfirm = 0.8;
-myti = PhdExistProbTrackInitiatorX_2(config_ti);
-
-TrackList = [];
+mybpf = BernoulliParticleFilterX(config);
 
 % Create figure windows
 if(ShowPlots)
@@ -103,33 +87,25 @@ end
 % ===================>
 for k=1:N
     fprintf('Iteration = %d/%d\n================>\n',k,N);
-    if(k==92)
     
-    end
     % Extract DataList at time k
     tempDataList = DataList{k}(:,:);
-    tempDataList( :, ~any(tempDataList,1) ) = [];
+    tempDataList( :, ~any(tempDataList,1) ) = [];       
     
-    % Process JPDAF
-    mypdaf.MeasurementList = tempDataList;
-    mypdaf.TrackList = TrackList;
-    for j=1:numel(TrackList)
-        mypdaf.TrackList{j}.Filter.predict();
-    end
-    mypdaf.associate();    
-    mypdaf.updateTracks();
+    % Change PHD filter parameters
+    mybpf.MeasurementList = tempDataList; % New observations
+    %mybpf.ClutterRate = (size(tempDataList,2)-mybpf.NumTargets)/V;
     
-    if(exist('data_plot','var'))
-        delete(data_plot);
-    end
-    data_plot = plot(ax(1), DataList{k}(1,:),DataList{k}(2,:),'k*','MarkerSize', 10);
+    tic;
+    % Predict PHD filter
+    mybpf.predict();
     
     % Plot prediction step results
     if(ShowPlots && ShowPrediction)
         % Plot data
         cla(ax(1));
          % Flip the image upside down before showing it
-        imagesc(ax(1),[min_x max_x], [min_y max_y], flipud(img));
+% %         imagesc(ax(1),[min_x max_x], [min_y max_y], flipud(img));
 
         % NOTE: if your image is RGB, you should use flipdim(img, 1) instead of flipud.
         hold on;
@@ -142,7 +118,8 @@ for k=1:N
             h2 = plot(ax(1), x_true(k,j),y_true(k,j),'bo','MarkerSize', 10);
             set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off'); % Exclude line from legend
         end
-
+        
+        plot(ax(1), mybpf.MeasurementList(1,:), mybpf.MeasurementList(2,:), 'r*');
         % set the y-axis back to normal.
         set(ax(1),'ydir','normal');
         str = sprintf('Robot positions (Prediction)');
@@ -153,16 +130,16 @@ for k=1:N
             
         % Plot PHD
         cla(ax(2), 'reset');
-        [bandwidth,density,X,Y]=kde2d(myphd.PredParticles([1,3],:)');
+        [bandwidth,density,X,Y]=kde2d(mybpf.PredParticles([1,3],:)');
         %contour3(X,Y,density,50);
         h = surf(ax(2),X,Y,density);
         shading interp
         colormap(ax(2), jet(3000))
         set(h, 'edgecolor','none')
         hold on;
-        plot(ax(2), myphd.PredParticles(1,:), myphd.PredParticles(3,:), '.')
-        hold on;
-        plot(ax(2), myphd.MeasurementList(1,:), myphd.MeasurementList(2,:), 'y*');
+        %plot(ax(2), mybpf.PredParticles(1,:), mybpf.PredParticles(3,:), '.')
+        %hold on;
+        plot(ax(2), mybpf.MeasurementList(1,:), mybpf.MeasurementList(2,:), 'y*');
         axis(ax(2), [V_bounds 0 10]);
         str = sprintf('PHD intensity (Prediction)');
         xlabel(ax(2),'X position (m)')
@@ -171,45 +148,36 @@ for k=1:N
         title(ax(2),str)
         pause(0.01)
     end
-    
-    %ellapsed = toc;    
-    %tot_ellapsed = tot_ellapsed + ellapsed;
-    fprintf("Estimated number of targets: %f\n", myphd.NumTargets);
-    %fprintf("Ellapsed time: %f\n", ellapsed);
-    for j=1:numel(TrackList)
-        fprintf("Track %d: %f\n", TrackList{j}.TrackID, TrackList{j}.ProbOfExist);
-    end
-    disp("");
+        
+    % Update PHD filter
+    mybpf.update();
+    ellapsed = toc;
+    tot_ellapsed = tot_ellapsed + ellapsed;
+    fprintf("Probability of existence: %f\n", mybpf.ProbOfExistence);
+    fprintf("Ellapsed time: %f\n\n", ellapsed);
     % Plot update step results
-    if(ShowPlots && ShowUpdate && k>1)
+    if(ShowPlots && ShowUpdate)
         % Plot data
         cla(ax(1));
          % Flip the image upside down before showing it
-        imagesc(ax(1),[min_x max_x], [min_y max_y], flipud(img));
 
         % NOTE: if your image is RGB, you should use flipdim(img, 1) instead of flipud.
         hold on;
-        data_plot = plot(ax(1), DataList{k}(1,:),DataList{k}(2,:),'k*','MarkerSize', 10);
-        for j=1:numTrueTracks
-            h2 = plot(ax(1), x_true(1:k,j),y_true(1:k,j),'b.-','LineWidth',1);
-            if j==2
-                set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
-            end
-            h2 = plot(ax(1), x_true(k,j),y_true(k,j),'bo','MarkerSize', 10);
-            set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off'); % Exclude line from legend
-        end
-        for j=1:numel(TrackList)
-            h2 = plot(ax(1), TrackList{j}.Filter.StateMean(1),TrackList{j}.Filter.StateMean(3),'.','LineWidth',1);
-            if j==2
-                set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
-            end
-            h2 = plot_gaussian_ellipsoid(TrackList{j}.Filter.StateMean([1 3]), abs(TrackList{j}.Filter.StateCovar([1 3],[1 3])),'r',1,20,ax(1));
-            set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off'); % Exclude line from legend
-            text(ax(1),TrackList{j}.Filter.StateMean(1)+0.25,TrackList{j}.Filter.StateMean(3)-0.25,int2str(TrackList{j}.TrackID));
-            text(ax(1),TrackList{j}.Filter.StateMean(1)+0.25,TrackList{j}.Filter.StateMean(3)-.35,num2str(TrackList{j}.ProbOfExist,2));
-        end
+        h2 = plot(ax(1), DataList{k}(1,:),DataList{k}(2,:),'k*','MarkerSize', 10);
+%         for j=1:TrackNum
+%             h2 = plot(ax(1), x_true(1:k,j),y_true(1:k,j),'b.-','LineWidth',1);
+%             if j==2
+%                 set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
+%             end
+%             h2 = plot(ax(1), x_true(k,j),y_true(k,j),'bo','MarkerSize', 10);
+%             set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off'); % Exclude line from legend
+%         end
+        %h2 = plot(ax(1), mybpf.Particles(1,:), mybpf.Particles(3,:), '.');
+        h2 = plot_gaussian_ellipsoid(mean(mybpf.Particles([1,3],:),2),weightedcov(mybpf.Particles([1,3],:),mybpf.Weights),'r',1,50,ax(1));
+        hold on;
+        %plot(ax(1), mybpf.MeasurementList(1,:), mybpf.MeasurementList(2,:), 'r*');
         % set the y-axis back to normal.
-        set(ax(1),'ydir','normal');
+        %set(ax(1),'ydir','normal');
         str = sprintf('Robot positions (Update)');
         title(ax(1),str)
         xlabel('X position (m)')
@@ -218,16 +186,16 @@ for k=1:N
             
         % Plot PHD
         cla(ax(2), 'reset');
-        [bandwidth,density,X,Y]=kde2d(myphd.Particles([1,3],:)');
+        [bandwidth,density,X,Y]=kde2d(mybpf.Particles([1,3],:)');
         %contour3(X,Y,density,50);
         h = surf(ax(2),X,Y,density);        
         shading interp
         colormap(ax(2), jet(3000))
         %set(h, 'edgecolor','none')
         hold on;
-        plot(ax(2), myphd.Particles(1,:), myphd.Particles(3,:), '.')
-        hold on;
-        plot(ax(2), myphd.MeasurementList(1,:), myphd.MeasurementList(2,:), 'y*');
+%         plot(ax(2), mybpf.Particles(1,:), mybpf.Particles(3,:), '.')
+%         hold on;
+        plot(ax(2), mybpf.MeasurementList(1,:), mybpf.MeasurementList(2,:), 'y*');
         axis(ax(2), [V_bounds]);
         str = sprintf('PHD intensity (Update)');
         xlabel(ax(2),'X position (m)')
@@ -236,11 +204,13 @@ for k=1:N
         title(ax(2),str)
         pause(0.01)
     end
-    
-    % Perform Track initiation
-    myti.MeasurementList = tempDataList; % New observations
-    myti.TrackList = TrackList;
-    myti.AssocWeightsMatrix = mypdaf.AssocWeightsMatrix;
-    TrackList = myti.initiateTracks();
-    tic;
+end
+
+function [birthParticles, birthWeights] = BirthIntFcn(measurements)
+    obs = LinGaussObsModelX_2D('NumStateDims',4,'ObsErrVariance',0.02,'Mapping',[1 3]);
+    birthParticles = zeros(4,10*size(measurements,2));
+    for i=1:size(measurements,2)
+        birthParticles(:,i:i+9) = [mvnrnd(measurements(1,i)',0.02,10)'; mvnrnd(0, 0.05,10)'; mvnrnd(measurements(2,i)',0.02,10)'; mvnrnd(0, 0.05',10)'];
+    end
+    birthWeights = repmat(1/(10*size(measurements,2)),1,10*size(measurements,2));
 end

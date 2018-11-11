@@ -295,7 +295,7 @@ classdef KalmanFilterX < FilterX
             H = this.Model.Obs.heval();
             R = this.Model.Obs.covariance();
             % Perform prediction
-            [this.PredMeasMean, this.InnovErrCovar, this.CrossCovar] = ...
+            [this.PredMeasMean, this.InnovErrCovar, this.KalmanGain] = ...
                 this.predictObs_(this.PredStateMean, this.PredStateCovar, H, R); 
         end
         
@@ -319,14 +319,14 @@ classdef KalmanFilterX < FilterX
 %             end
             
             if(isempty(this.PredMeasMean)||isempty(this.InnovErrCovar)||isempty(this.CrossCovar))
-                [this.PredMeasMean, this.InnovErrCovar, this.CrossCovar] = ...
+                [this.PredMeasMean, this.InnovErrCovar, this.KalmanGain] = ...
                     this.predictObs_(this.PredStateMean,this.PredStateCovar,this.Model.Obs.heval(),this.Model.Obs.covariance());
             end     
         
             % Perform single measurement update
-            [this.StateMean, this.StateCovar, this.KalmanGain] = ...
+            [this.StateMean, this.StateCovar] = ...
                 this.update_(this.PredStateMean,this.PredStateCovar,...
-                                     this.Measurement,this.PredMeasMean,this.InnovErrCovar,this.CrossCovar);
+                                     this.Measurement,this.PredMeasMean,this.InnovErrCovar,this.KalmanGain);
                                  
             update@FilterX(this);
         end
@@ -359,9 +359,9 @@ classdef KalmanFilterX < FilterX
                 assocWeights = [0, ones(1,NumData)/NumData]; % (1 x Nm+1)
             end
             
-            [this.StateMean,this.StateCovar,this.KalmanGain] = ...
+            [this.StateMean,this.StateCovar] = ...
                 this.updatePDA_(this.PredStateMean,this.PredStateCovar,this.Measurement,...
-                                        assocWeights,this.PredMeasMean,this.InnovErrCovar,this.CrossCovar);
+                                        assocWeights,this.PredMeasMean,this.InnovErrCovar,this.KalmanGain);
         end
         
         function smoothedEstimates = smooth(this, filteredEstimates, interval)
@@ -413,7 +413,7 @@ classdef KalmanFilterX < FilterX
     
     methods (Static)
         
-        function [xPred, PPred, yPred, S, Pxy] = predict_(x,P,F,Q,H,R,u,B,O)
+        function [xPred, PPred, yPred, S, K] = predict_(x,P,F,Q,H,R,u,B,O)
         % PREDICT_ Perform the discrete-time KF state and measurement
         % prediction steps, under the assumption of additive process noise.
         %
@@ -470,7 +470,7 @@ classdef KalmanFilterX < FilterX
             end
 
            [xPred, PPred] = KalmanFilterX.predictState_(x,P,F,Q,u,B,O);
-           [yPred, S, Pxy] = KalmanFilterX.predictObs_(xPred,PPred,H,R);
+           [yPred, S, K] = KalmanFilterX.predictObs_(xPred,PPred,H,R);
         end
         
         function [xPred, PPred] = predictState_(x,P,F,Q,u,B,Qu)
@@ -524,7 +524,7 @@ classdef KalmanFilterX < FilterX
             PPred =F*P*F' + Q + B*Qu*B';
         end
 
-        function [yPred, S, Pxy] = predictObs_(xPred,PPred,H,R)
+        function [yPred, S, K] = predictObs_(xPred,PPred,H,R)
         % PREDICTOBS_ Perform the discrete-time KF observation prediction 
         % step, under the assumption of additive process noise.
         %
@@ -554,11 +554,12 @@ classdef KalmanFilterX < FilterX
 
             % Compute predicted measurement mean and covariance
             yPred   = H*xPred;
-            Pxy     = PPred*H'; 
+            Pxy     = PPred*H';
             S       = H*PPred*H' + R;
+            K       = Pxy/(S);
         end
 
-        function [x,P,K] = update_(xPred,PPred,y,yPred,S,Pxy)
+        function [x,P] = update_(xPred,PPred,y,yPred,S,K)
         % UPDATE_ Perform the discrete-time KF update step, under the  
         % assumption of additive process noisem for a single measurement.
         %
@@ -590,15 +591,12 @@ classdef KalmanFilterX < FilterX
         %
         %October 2017 Lyudmil Vladimirov, University of Liverpool.
 
-            % Compute the Kalman gain
-            K = Pxy/(S);
-
             % Compute the filtered estimates
             x = xPred + K * (y - yPred);
             P = PPred - K*S*K';
         end
 
-        function [x,P,K] = updatePDA_(xPred,PPred,Y,W,yPred,S,Pxy)
+        function [x,P] = updatePDA_(xPred,PPred,Y,W,yPred,S,K)
         % UPDATEPDA_ Perform the discrete-time Probabilistic Data 
         % Association (PDA) KF update step, under the assumption of additive process 
         % noise, for multiple measurements (as a Gaussian Mixture)
@@ -635,20 +633,29 @@ classdef KalmanFilterX < FilterX
         %October 2017 Lyudmil Vladimirov, University of Liverpool.
 
             % Get size of observation vector
-            [yDim,nY] = size(Y);
-
-            % Compute Kalman gain
-            K = Pxy/S;  
-
-            % Compute innovation mean and (cross) covariance
-            innov_err       = Y - yPred(:,ones(1,nY));
-            tot_innov_err   = innov_err*W(2:end)';
-            Pc              = PPred - K*S*K';
-            Pgag            = K*((innov_err.*W(ones(yDim,1),2:end))*innov_err' - tot_innov_err*tot_innov_err')*K';
-
-            % Compute filtered estimates
-            x    = xPred + K*tot_innov_err;  
-            P    = W(1)*PPred + (1-W(1))*Pc + Pgag;
+            nY = size(Y,2);
+            
+            innov_err = Y - yPred;
+            xupd = [xPred, xPred + K*innov_err];
+            Pplus = PPred - K*S*K';
+            
+            x = xupd*W';
+            v_x = x - xupd;
+            P = W(1)*(PPred + v_x(:,1)*v_x(:,1)');
+            for j = 2:nY+1
+                P = P + W(j)*(Pplus + v_x(:,j)*v_x(:,j)');
+            end
+            
+%             % Compute innovation mean and (cross) covariance
+%             innov_err       = Y - yPred(:,ones(1,nY));
+%             tot_innov_err   = innov_err*W(2:end)';
+%             Pc              = PPred - K*S*K';
+%             Pgag            = K*((innov_err.*W(ones(yDim,1),2:end))*innov_err' - tot_innov_err*tot_innov_err')*K';
+% 
+%             % Compute filtered estimates
+%             x    = xPred + K*tot_innov_err;  
+%             P    = W(1)*PPred + (1-W(1))*Pc + Pgag;
+%             P    = (P+P')/2;
         end
     end
 end

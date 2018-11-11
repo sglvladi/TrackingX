@@ -109,7 +109,7 @@ classdef EfficientHypothesisManagementX < HypothesiserX
             [this.NetObj, timedOut] = this.buildNetTO(ValidationMatrix, this.timeout);
             if(timedOut)
                 [NumTracks, NumMeasp1] = size(this.LikelihoodMatrix);
-                AssocWeightsMatrix = [ones(NumTracks,1); zeros(NumTracks,NumMeasp1-1)];
+                AssocWeightsMatrix = [ones(NumTracks,1), zeros(NumTracks,NumMeasp1-1)];
                 this.AssocWeightsMatrix = AssocWeightsMatrix;
             else
                 [AssocWeightsMatrix, this.NetObj] = this.computeAssocWeights(this.NetObj,this.LikelihoodMatrix);
