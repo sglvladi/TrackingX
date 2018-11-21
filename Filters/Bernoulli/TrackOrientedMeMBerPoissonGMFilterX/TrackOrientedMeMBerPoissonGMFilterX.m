@@ -47,9 +47,6 @@ classdef TrackOrientedMeMBerPoissonGMFilterX < FilterX
     end
     properties
         Filter
-        Prediction
-        Posterior
-        MeasurementList
         BirthModel
         ProbOfBirth
         ProbOfSurvive  

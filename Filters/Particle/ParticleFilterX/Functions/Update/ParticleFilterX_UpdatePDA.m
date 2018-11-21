@@ -35,21 +35,17 @@ function [newWeights] = ParticleFilterX_UpdatePDA(lik,y,parts,weights,W,Likeliho
         LikelihoodMatrix = lik(y, parts);
     end
     
-    Np = length(weights);  % Np = number of particles
+    numMeasurements = size(y,2);
     
-    % Compute expected likelihoods
-    ExpectedLikelihoodMatrix = LikelihoodMatrix.*repmat(W(2:end)',1,Np);
-    expectedLikelihoods = sum(ExpectedLikelihoodMatrix,1);
-    el = sum(expectedLikelihoods,2)/sum(W(2:end)) - sum(expectedLikelihoods,2);
-    if(isnan(el))
-        el = eps;
+    if(numMeasurements==0)
+        newWeights = weights;
+        return;
+    else
+        Ck = sum(LikelihoodMatrix.*weights,2);
+        weightsPerMeasurement = LikelihoodMatrix./Ck.*weights;
+        newWeights = W(1)*weights + sum(W(2:end)'.*weightsPerMeasurement,1);
+
+        % Normalize weight vector
+        newWeights = newWeights./sum(newWeights,2);
     end
-    ExpectedLikelihoodMatrix = [repmat(el/Np,1,Np); ExpectedLikelihoodMatrix];
-    expectedLikelihoods = sum(ExpectedLikelihoodMatrix,1);
-
-    % Update particle weights
-    newWeights = weights .* expectedLikelihoods;
-
-    % Normalize weight vector
-    newWeights = newWeights./sum(newWeights,2);
 end

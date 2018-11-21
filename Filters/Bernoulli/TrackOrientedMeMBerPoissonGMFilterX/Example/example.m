@@ -26,10 +26,10 @@ VideoQuality = 100;         % Set to desired quality percentage
 VideoPathName = 'tomb_tracks_only.avi'; % Set to the desired path and name of produced recording
 
 % Instantiate a Dynamic model
-dyn = ConstantVelocityModelX_2D('VelocityErrVariance',0.0001);
+dyn = ConstantVelocityX('NumDims',2,'VelocityErrVariance',0.0001);
 
 % Instantiate an Observation model
-obs = LinGaussObsModelX_2D('NumStateDims',4,'ObsErrVariance',0.01,'Mapping',[1 3]);
+obs = LinearGaussianX('NumStateDims',4,'NumMeasDims',2,'MeasurementErrVariance',0.01,'Mapping',[1 3]);
 
 % Compile the State-Space model
 ssm = StateSpaceModelX(dyn,obs);
@@ -40,25 +40,31 @@ lambdaV = 10; % Expected number of clutter measurements over entire surveillance
 lambda = lambdaV/V;
 
 % Generate observations (Poisson number with rate of lambdaV, positions are uniform over surveillance region)
-[DataList,x1,y1] = gen_obs_cluttered_multi2(NumTracks, x_true, y_true, sqrt(obs.ObsErrVariance), V_bounds, lambdaV, 1, 1); 
+[DataList,x1,y1] = gen_obs_cluttered_multi2(NumTracks, x_true, y_true, sqrt(obs.MeasurementErrVariance(1)), V_bounds, lambdaV, 1, 1); 
 N=size(DataList,2); % timesteps 
 
 % Assign PHD parameter values
 config.Model = ssm;
 config.BirthModel.ProbOfBirth = 0.005;
 xb = [5;0;5;0];
+means = [ 1 9 9 1; 0 0 0 0; 1 1 9 9; 0 0 0 0];
+covars = repmat(diag([2,0.1,2,0.1]),1,1,4);
+weights = [.25, .25, .25, .25];
+BirthDensity = GaussianMixtureX(means,covars,weights);
 Pb = diag([10,0.1,10,0.1]);
 lambdab = 0.05;
-config.BirthModel.BirthIntFcn = @ () deal(xb,Pb,lambdab);
+config.BirthModel.BirthIntFcn = @ () GaussianMixtureX(xb,Pb,lambdab);
 config.ProbOfSurvive = 0.9;
 config.ProbOfDetection = 0.9;
 config.ClutterIntFcn = @(z) lambda;
 
 % Instantiate PHD filter
 filter = TrackOrientedMeMBerPoissonGMFilterX(config);
-filter.Posterior.Poisson{1}.Mean = xb;
-filter.Posterior.Poisson{1}.Covar = Pb;
-filter.Posterior.Poisson{1}.Weight = 3;
+filter.Posterior.Poisson = GaussianMixtureX(xb,Pb,3);
+
+% filter.Posterior.Poisson{1}.Mean = xb;
+% filter.Posterior.Poisson{1}.Covar = Pb;
+% filter.Posterior.Poisson{1}.Weight = 3;
 
 % Create figure windows
 if(ShowPlots)

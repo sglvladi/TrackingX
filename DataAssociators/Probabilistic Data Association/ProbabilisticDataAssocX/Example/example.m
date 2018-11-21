@@ -3,52 +3,50 @@ ShowPlots = 1;
 ShowArena = 1;
 SkipFrames = 0;
 
-% Instantiate a Dynamic model
-dyn = ConstantVelocityModelX_2D('VelocityErrVariance',0.0001);
+% Instantiate a Transitionamic model
+transition_model = ConstantVelocityX('NumDims',2,'VelocityErrVariance',0.0001);
 
-% Instantiate an Observation model
-obs = LinGaussObsModelX_2D('NumStateDims',4,'ObsErrVariance',0.04,'Mapping',[1 3]);
+% Instantiate a Measurement model
+measurement_model = LinearGaussianX('NumMeasDims',2,'NumStateDims',4,'MeasurementErrVariance',0.02,'Mapping',[1 3]);
+%obs = RangeBearing2CartesianX('NumStateDims',4,'MeasurementErrVariance',[0.001,0.02],'Mapping',[1 3]);
+
+% Instantiate a clutter model
+clutter_model = PoissonRateUniformPositionX('ClutterRate',0,'Limits',[0 10; 0 10]);
 
 % Compile the State-Space model
-ssm = StateSpaceModelX(dyn,obs);
-
-% Instantiate a Kalman Filter object
-kf = KalmanFilterX(ssm);
+ssm = StateSpaceModelX(transition_model,measurement_model,'Clutter',clutter_model);
 
 % Extract the ground truth data from the example workspace
-%load('example.mat');
+load('example.mat');
 NumIter = size(GroundTruth,2);
 
 % Set NumTracks
-NumTracks = 2;
+NumTracks = 3;
 
 % Generate DataList
-[DataList,x1,y1] = gen_obs_cluttered_multi2(NumTracks, x_true, y_true, sqrt(obs.ObsErrVariance), [0 10 0 10], 10, 1, 1);
+meas_simulator = MeasurementSimulatorX('Model',ssm);
+%[DataList, nGroundTruth] = meas_simulator.simulate(GroundTruth);
 
 % Initiate TrackList
+TrackList = cell(1,NumTracks);
 for i=1:NumTracks
-    Params_kf.PriorStateMean = [GroundTruth{1}(1,i); 0; GroundTruth{1}(2,i); 0];
-    Params_kf.PriorStateCovar = dyn.covariance(); %blkdiag(POmodel.Params.R(1)/2, 2^2, 2*pi);%CVmodel.Params.Q(1);
-    Params_kf.Model = ssm;
+    xPrior = [GroundTruth{1}(1,i); 0; GroundTruth{1}(2,i); 0];
+    PPrior = 10*transition_model.covar();
+    StatePrior = GaussianStateX(xPrior,PPrior);
     TrackList{i} = TrackX();
     TrackList{i}.addprop('Filter');
-    TrackList{i}.Filter = KalmanFilterX(Params_kf);
-    
-    %TrackList{i}.Filter = ExtendedParticleFilterX(ssm);
-    %TrackList{i}.Filter.initialise('NumParticles', 5000, 'PriorDistFcn',@(N)deal(mvnrnd(Params_kf.priorStateMean(:,ones(1,N))',Params_kf.priorStateCovar)',1/N*ones(1,N)));
-    %TrackList{i}.TrackObj = ParticleFilterX(Params_pf);%UKalmanFilterX(Params_kf, CHmodel, POmodel);% 
+    TrackList{i}.Filter = KalmanFilterX('Model',ssm,'StatePrior',StatePrior); 
 end
 
 %% Initiate PDAF parameters
-Params_pdaf.Clusterer = NaiveClustererX();
-Params_pdaf.Gater = EllipsoidalGaterX(2,'GateLevel',10)';
-Params_pdaf.ProbOfDetect = 0.9;
+config.ClutterModel = clutter_model;
+config.Clusterer = NaiveClustererX();
+config.Gater = EllipsoidalGaterX(2,'GateLevel',10)';
+config.DetectionProbability = 0.9;
 
 %% Instantiate PDAF
-pdaf = JointProbabilisticDataAssocX(Params_pdaf);
+pdaf = ProbabilisticDataAssocX(config);
 pdaf.TrackList = TrackList;
-%pdaf.ClutterDensity = 10/100;
-pdaf.MeasurementList = DataList{1}(:,:); 
 
 %% Instantiate Log to store output
 N=size(DataList,2);
@@ -84,8 +82,7 @@ end
 exec_time = 0;
 for i = 1:N
     % Remove null measurements   
-    pdaf.MeasurementList = DataList{i}(:,:);
-    pdaf.MeasurementList( :, ~any(pdaf.MeasurementList,1) ) = [];
+    pdaf.MeasurementList = DataList{i};
     
     for j=1:NumTracks
         pdaf.TrackList{j}.Filter.predict();
@@ -96,8 +93,8 @@ for i = 1:N
         
     %store Logs
     for j=1:NumTracks
-        Logs{j}.Estimates.StateMean(:,i) = pdaf.TrackList{j}.Filter.StateMean;
-        Logs{j}.Estimates.StateCovar(:,:,i) = pdaf.TrackList{j}.Filter.StateCovar;
+        Logs{j}.Estimates.StateMean(:,i) = pdaf.TrackList{j}.Filter.StatePosterior.Mean;
+        Logs{j}.Estimates.StateCovar(:,:,i) = pdaf.TrackList{j}.Filter.StatePosterior.Covar;
         Logs{j}.Groundtruth.State(:,i) = GroundTruth{i}(:,j);
     end
 

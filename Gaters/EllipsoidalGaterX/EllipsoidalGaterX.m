@@ -7,7 +7,7 @@ classdef EllipsoidalGaterX <GaterX
 % EllipsoidalGaterX Properties:
 %   + GateLevel - The desired number of standard deviations (away from the
 %                 mean), which should be used as a threshold
-%   + ProbOfGating - The normalised percentage of the predicted measurement
+%   + GatingProbability - The normalised percentage of the predicted measurement
 %                    pdf, that should be incorporated in the validation
 %                    region (i.e. th probability of gating)
 %
@@ -18,12 +18,12 @@ classdef EllipsoidalGaterX <GaterX
 % See also SystematicResamplerX
     properties 
         GateLevel
-        ProbOfGating 
+        GatingProbability 
         Mapping
     end
     
     properties (SetAccess = immutable)
-        NumObsDims
+        NumMeasDims
         C = [2, pi, 4*pi/3, pi^2/2, 8*pi^2/15, pi^3/6, 16*pi^3/105, pi^4/24, 32*pi/945];
         % n-dim ellipsoid volumes up to 9-dims, as taken from
         % [http://oaji.net/articles/2014/1420-1415594291.pdf]
@@ -35,19 +35,19 @@ classdef EllipsoidalGaterX <GaterX
         % 
         % Parameters
         % ----------
-        % NumObsDims: scalar
+        % NumMeasDims: scalar
         %   The number of observation dimensions, i.e. the dimensionality
         %   of the gate. For example, 1 = range, 2 = ellipse, 3 = ellipsoid
         % GateLevel: scalar, optional
         %   The desired number of standard deviations (away from the mean),
         %   which should be used as a gating threshold. If supplied, any
-        %   value supplied for ProbOfGating will be overriden and
+        %   value supplied for GatingProbability will be overriden and
         %   recomputed based on this value.
-        % ProbOfGating: normalised scalar, optional
+        % GatingProbability: normalised scalar, optional
         %   The normalised ([0,1]) percentage of the predicted measurement 
         %   pdf, that should be incorporated in the validation region 
         %   (i.e. the probability of gating)
-        % Mapping: (NumObsDimsx2) array specifying the mapping between
+        % Mapping: (NumMeasDimsx2) array specifying the mapping between
         %   state and measurement vectors, used to perform the gating.
         %   For example, we may have a state vector of the form
         %       x = [x_pos, x_vel, y_pos, y_vel]'
@@ -59,54 +59,54 @@ classdef EllipsoidalGaterX <GaterX
         %   i.e. y(1)->x(1) and y(2)->y(2)
         % Usage
         % -----
-        % * eg = EllipsoidalGaterX(NumObsDims, 'GateLevel', GateLevel) returns  
+        % * eg = EllipsoidalGaterX(NumMeasDims, 'GateLevel', GateLevel) returns  
         %   an object configured to exclude any measurements falling further 
         %   that GateLevel standard deviations from a track's predicted measurement 
-        %   mean. NumObsDims specifies the dimensionality of the measurements.
-        % * eg = EllipsoidalGaterX(NumObsDims, 'ProbOfGating',ProbOfGating) returns an object
-        %   configured to associate measurements which fall within the ProbOfGating 
+        %   mean. NumMeasDims specifies the dimensionality of the measurements.
+        % * eg = EllipsoidalGaterX(NumMeasDims, 'GatingProbability',GatingProbability) returns an object
+        %   configured to associate measurements which fall within the GatingProbability 
         %   percentile of the track's predicted measurement innovation covariance.
-        %   NumObsDims specifies the dimensionality of the measurements.
-        % * eg = EllipsoidalGaterX('NumObsDims', NumObsDims, ___) is also valid
+        %   NumMeasDims specifies the dimensionality of the measurements.
+        % * eg = EllipsoidalGaterX('NumMeasDims', NumMeasDims, ___) is also valid
         %
-        % NOTE: Either GateLevel or ProbOfGating can be passed as input
+        % NOTE: Either GateLevel or GatingProbability can be passed as input
         % arguments to the constructor, but NOT BOTH. This is done to
         % ensure 
         %
         % See also EllipsoidalGaterX/validate
             
             parser = inputParser;
-            parser.addOptional('NumObsDims',[]);
+            parser.addOptional('NumMeasDims',[]);
             parser.KeepUnmatched = true;
             parser.parse(varargin{:});
             
-            if(isfield(parser.Results,'NumObsDims'))
-                if(~isempty(parser.Results.NumObsDims))
-                    this.NumObsDims = parser.Results.NumObsDims;
+            if(isfield(parser.Results,'NumMeasDims'))
+                if(~isempty(parser.Results.NumMeasDims))
+                    this.NumMeasDims = parser.Results.NumMeasDims;
                 else
-                    error('ELLIPSGATER:MISSINGNOBS','NumObsDims must be a scalar (non-empty)');
+                    error('ELLIPSGATER:MISSINGNOBS','NumMeasDims must be a scalar (non-empty)');
                 end
             else
-                error('ELLIPSGATER:MISSINGNOBS','NumObsDims must be a scalar (non-empty)');
+                error('ELLIPSGATER:MISSINGNOBS','NumMeasDims must be a scalar (non-empty)');
             end
             
             config = parser.Unmatched;
             fields = fieldnames(config);
             if(numel(fields)>1)
-                error('ELLIPSGATER:INVCONSTRARGS','Either GateLevel or ProbOfGating can be passed as input arguments to the constructor, but NOT BOTH.');
+                error('ELLIPSGATER:INVCONSTRARGS','Either GateLevel or GatingProbability can be passed as input arguments to the constructor, but NOT BOTH.');
             end
             fieldname = fields{1};
             if(strcmp(fieldname,'GateLevel'))
                 this.GateLevel = config.GateLevel;
-                this.ProbOfGating = chi2cdf(this.GateLevel,this.NumObsDims);
-            elseif(strcmp(fieldname,'ProbOfGating'))
-                this.ProbOfGating = config.ProbOfGating;
-                this.GateLevel = chi2inv(this.ProbOfGating,this.NumObsDims);
+                this.GatingProbability = chi2cdf(this.GateLevel,this.NumMeasDims);
+            elseif(strcmp(fieldname,'GatingProbability'))
+                this.GatingProbability = config.GatingProbability;
+                this.GateLevel = chi2inv(this.GatingProbability,this.NumMeasDims);
             end
             if(strcmp(fieldname,'Mapping'))
                 this.Mapping = config.Mapping;
             else
-                this.Mapping = [1:this.NumObsDims;1:this.NumObsDims]';
+                this.Mapping = [1:this.NumMeasDims;1:this.NumMeasDims]';
             end
         end
         
@@ -122,17 +122,17 @@ classdef EllipsoidalGaterX <GaterX
         %   object. It is required that each TrackX object should have a FilterX
         %   object as a property.
         % TrackPredMeasMeans: matrix, optional
-        %   A (NumObsDims x NumTracks) matrix, where each ith column represents
+        %   A (NumMeasDims x NumTracks) matrix, where each ith column represents
         %   the predicted measurement mean for the ith track. Can be used,
         %   in combination with TrackInnovErrCovars (see below), instead of
         %   a TrackList (see above).
         % TrackInnovErrCovars: matrix, optional
-        %   A (NumObsDims x NumObsDims x NumTracks) matrix, where each
+        %   A (NumMeasDims x NumMeasDims x NumTracks) matrix, where each
         %   (:,:,i) page represents the innovation covariance matrix for
         %   the ith track. Can be used, in combination with TrackInnovErrCovars
         %   (see above), instead of a TrackList (see above).
         % MeasurementList: matrix
-        %   A (NumObsDims x NumMeasurements) matrix, where each jth column
+        %   A (NumMeasDims x NumMeasurements) matrix, where each jth column
         %   corresponds to the jth measurement.
         %
         % Usage
@@ -141,17 +141,17 @@ classdef EllipsoidalGaterX <GaterX
         %   returns the (NumTracks x NumMeasurements) validation matrix 
         %   ValidationMatrix indicating the valid associations between tracks  
         %   in TrackList (1 x NumTracks array of TrackX objects) and measurements 
-        %   in MeasurmentList (NumObsDims x NumMeasurements matrix), as well as a 
+        %   in MeasurmentList (NumMeasDims x NumMeasurements matrix), as well as a 
         %   (1 x NumTracks) vector GateVolumes, containing the volume of the computed
         %   gate for each track.
         % * [ValidationMatrix, GateVolumes] = ...
         %   gate(this,TrackPredMeasMeans,TrackInnovErrCovars,MeasurementList)
         %   returns the (NumTracks x NumMeasurements) validation matrix 
         %   ValidationMatrix indicating the valid associations between tracks  
-        %   in with predicted measurement means given by the (NumObsDims x NumTracks)
+        %   in with predicted measurement means given by the (NumMeasDims x NumTracks)
         %   TrackPredMeasMeans matrix, innovation covariances given by the 
-        %   (NumObsDims x NumObsDims x NumTracks) TrackInnovErrCovars matrix, and  
-        %   measurements in MeasurmentList (NumObsDims x NumMeasurements matrix), as well as a 
+        %   (NumMeasDims x NumMeasDims x NumTracks) TrackInnovErrCovars matrix, and  
+        %   measurements in MeasurmentList (NumMeasDims x NumMeasurements matrix), as well as a 
         %   (1 x NumTracks) vector GateVolumes, containing the volume of the computed
         %   gate for each track.
         %
@@ -160,43 +160,38 @@ classdef EllipsoidalGaterX <GaterX
             if(nargin == 3)
                 TrackList = varargin{1};
                 MeasurementList = varargin{2};
-                NumTracks = numel(TrackList);
+                numTracks = numel(TrackList);
             else
-                TrackPredMeasMeans = varargin{1};
-                TrackInnovErrCovars = varargin{2};
-                MeasurementList = varargin{3};
-                NumTracks = size(TrackPredMeasMeans,2);
+                MeasurementPredictions = varargin{1};
+                MeasurementList = varargin{2};
+                numTracks = size(TrackPredMeasMeans,2);
             end
             
-            [NumObsDims, NumMeasurements] = size(MeasurementList);
-
-%             if(NumObsDims ~= this.NumObsDims)
-%                 error('ELLIPSGATER:INVMEASDIMS','The number of rows in MeasurementList must be equal to this.NumObsDims');
-%             end
+            numMeasurements = size(MeasurementList,2);
              
             % Pre-allocate memory
-            GateVolumes = zeros(1,NumTracks); 
-            ValidationMatrix = zeros(NumTracks,NumMeasurements);    
+            GateVolumes = zeros(1,numTracks); 
+            ValidationMatrix = zeros(numTracks,numMeasurements);    
             
             % Construct Validation and GateVolumes Matrices
-            for trackInd = 1:NumTracks
+            for trackInd = 1:numTracks
                 
                 if(nargin==3)
                     % Store pointer to track
                     Track = TrackList{trackInd};
 
                     % Extract predicted measurement and innovation covariance from filter
-                    PredMeasMean = Track.Filter.PredMeasMean(this.Mapping(:,2));
-                    InnovErrCovar = Track.Filter.InnovErrCovar(this.Mapping(:,2),this.Mapping(:,2));
+                    PredMeasMean = Track.Filter.MeasurementPrediction.Mean(this.Mapping(:,2));
+                    InnovErrCovar = Track.Filter.MeasurementPrediction.Covar(this.Mapping(:,2),this.Mapping(:,2));
                 else
                     % Extract predicted measurement and innovation covariance from filter
-                    PredMeasMean = TrackPredMeasMeans(this.Mapping(:,2),trackInd);
-                    InnovErrCovar = TrackInnovErrCovars(this.Mapping(:,2),this.Mapping(:,2),trackInd);
+%                     PredMeasMean = TrackPredMeasMeans(this.Mapping(:,2),trackInd);
+%                     InnovErrCovar = TrackInnovErrCovars(this.Mapping(:,2),this.Mapping(:,2),trackInd);
                 end
                 
                 % Perform Gating
-                C = this.C(this.NumObsDims);
-                GateVolumes(trackInd) = C*this.GateLevel^(this.NumObsDims/2)*det(InnovErrCovar)^(1/2);    
+                c = this.C(this.NumMeasDims);
+                GateVolumes(trackInd) = c*this.GateLevel^(this.NumMeasDims/2)*det(InnovErrCovar)^(1/2);    
                 if(numel(MeasurementList)>0)
                     ValidationMatrix(trackInd,:) = this.mahalDist(MeasurementList(this.Mapping(:,2),:), PredMeasMean, InnovErrCovar, 2) < this.GateLevel;
                 end

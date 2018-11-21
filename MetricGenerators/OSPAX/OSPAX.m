@@ -47,7 +47,7 @@ classdef OSPAX < MetricGeneratorX
         end
     end
 
-    methods (Access = private)
+    methods (Static)
     
         function [dist, varargout]= ospa_dist(X,Y,c,p)
             % This is the MATLAB code for OSPA distance proposed in

@@ -45,54 +45,12 @@ classdef JointProbabilisticDataAssocX < ProbabilisticDataAssocX
         %                       perform gating of measurements. Default = None
         % * Clusterer           (ClustererX) A clusterer object which should be used to  
         %                       perform clustering of tracks. Default = None
-        % * ProbOfDetect        (scalar) The target detection probability
+        % * DetectionProbability        (scalar) The target detection probability
         % * ClutterDensity      (scalar) The spatial density of clutter
         %
         %  See also JointProbabilisticDataAssocX/associate, JointProbabilisticDataAssocX/updateTracks.   
                     
-            % First check to see if a structure was received
-            if(nargin==1)
-                if(isstruct(varargin{1}))
-                    config = varargin{1};
-                    if (isfield(config,'Gater'))
-                        this.Gater  = config.Gater;
-                    end
-                    if (isfield(config,'Clusterer'))
-                        this.Clusterer  = config.Clusterer;
-                    end
-                    if (isfield(config,'ProbOfDetect'))
-                        this.ProbOfDetect  = config.ProbOfDetect;
-                    end
-                    if (isfield(config,'Hypothesiser'))
-                        this.Hypothesiser  = config.Hypothesiser;
-                    end
-                    if (isfield(config,'ClutterDensity'))
-                        this.ClutterDensity  = config.ClutterDensity;
-                    end
-                end
-                return;
-            end
-            
-            % Otherwise, fall back to input parser
-            parser = inputParser;
-            parser.KeepUnmatched = true;
-            parser.parse(varargin{:});
-            config = parser.Results;
-            if (isfield(config,'Gater'))
-                this.Gater  = config.Gater;
-            end
-            if (isfield(config,'Clusterer'))
-                this.Clusterer  = config.Clusterer;
-            end
-            if (isfield(config,'ProbOfDetect'))
-                this.ProbOfDetect  = config.ProbOfDetect;
-            end
-            if (isfield(config,'Hypothesiser'))
-                this.Hypothesiser  = config.Hypothesiser;
-            end
-            if (isfield(config,'ClutterDensity'))
-                this.ClutterDensity  = config.ClutterDensity;
-            end
+            this@ProbabilisticDataAssocX(varargin{:});
         end
         
         function initialise(this,varargin)
@@ -113,49 +71,7 @@ classdef JointProbabilisticDataAssocX < ProbabilisticDataAssocX
         %
         %  See also JointProbabilisticDataAssocX/associate, JointProbabilisticDataAssocX/updateTracks.   
                     
-            % First check to see if a structure was received
-            if(nargin==1)
-                if(isstruct(varargin{1}))
-                    config = varargin{1};
-                    if (isfield(config,'Gater'))
-                        this.Gater  = config.Gater;
-                    end
-                    if (isfield(config,'Clusterer'))
-                        this.Clusterer  = config.Clusterer;
-                    end
-                    if (isfield(config,'ProbOfDetect'))
-                        this.ProbOfDetect  = config.ProbOfDetect;
-                    end
-                    if (isfield(config,'Hypothesiser'))
-                        this.Hypothesiser  = config.Hypothesiser;
-                    end
-                    if (isfield(config,'ClutterDensity'))
-                        this.ClutterDensity  = config.ClutterDensity;
-                    end
-                end
-                return;
-            end
-            
-            % Otherwise, fall back to input parser
-            parser = inputParser;
-            parser.KeepUnmatched = true;
-            parser.parse(varargin{:});
-            config = parser.Results;
-            if (isfield(config,'Gater'))
-                this.Gater  = config.Gater;
-            end
-            if (isfield(config,'Clusterer'))
-                this.Clusterer  = config.Clusterer;
-            end
-            if (isfield(config,'ProbOfDetect'))
-                this.ProbOfDetect  = config.ProbOfDetect;
-            end
-            if (isfield(config,'Hypothesiser'))
-                this.Hypothesiser  = config.Hypothesiser;
-            end
-            if (isfield(config,'ClutterDensity'))
-                this.ClutterDensity  = config.ClutterDensity;
-            end
+            initialise@ProbabilisticDataAssocX(this,varargin{:});
         end
         
         function associate(this,TrackList,MeasurementList)
@@ -237,36 +153,41 @@ classdef JointProbabilisticDataAssocX < ProbabilisticDataAssocX
         end
         
         function evaluateAssociations(this)
-            this.NumTracks = numel(this.TrackList);
-            this.NumMeas = size(this.ValidationMatrix,2);
+            
+            numTracks = this.NumTracks;
+            numMeasurements = this.NumMeasurements;
+            
+            this.AssocLikelihoodMatrix = [ones(numTracks,1), zeros(numTracks,numMeasurements)];
+            this.AssocWeightsMatrix = [ones(numTracks,1), zeros(numTracks,numMeasurements)];
             
             if(sum(sum(this.ValidationMatrix))==0)
-                this.AssocLikelihoodMatrix = [ones(this.NumTracks,1) zeros(this.NumTracks,this.NumMeas)];
-                this.AssocWeightsMatrix = [ones(this.NumTracks,1) zeros(this.NumTracks,this.NumMeas)];
                 return;
             else
                 if(isempty(this.Clusterer))
-                    % Compute New Track/False Alarm density for the cluster
-                    if(isempty(this.ClutterDensity))
-                        clutterDensity = sum(sum(this.ValidationMatrix))/sum(this.GateVolumes);
-                    else
-                        clutterDensity = this.ClutterDensity;
-                    end
-                    if(clutterDensity==0)
-                        clutterDensity = eps;
-                    end
-                    
+                                        
                     if(isa(this.Gater,'EllipsoidalGaterX'))
-                        ProbOfGating = this.Gater.ProbOfGating;
+                        GatingProbability = this.Gater.GatingProbability;
                     else
-                        ProbOfGating = 1;
+                        GatingProbability = 1;
                     end
                     
+                    for trackInd = 1:numTracks
+                        % Compute New Track/False Alarm density for the cluster
+                        if(isempty(this.ClutterModel))
+                            if(isempty(this.GateVolumes))
+                                error('Cannot perform non-parametric (J)PDA as no gater has been set and thus gate volumes cannot be computed.. TODO: Allow for search space volume (V) to be set in the future');
+                            end
+                            clutterDensity = GatingProbability*numMeasurements/sum(this.GateVolumes);
+                        else
+                            clutterDensity = this.ClutterModel.pdf(this.TrackList{trackInd}.Filter.MeasurementPrediction.Mean);
+                        end
+                        if(clutterDensity==0)
+                            clutterDensity = eps;
+                        end
+                       this.AssocLikelihoodMatrix(trackInd,1) = clutterDensity*(1-this.DetectionProbability*GatingProbability);
+                    end
                     
-                    this.AssocLikelihoodMatrix = ...
-                        [ones(this.NumTracks,1)*clutterDensity*(1-this.ProbOfDetect*ProbOfGating), ...
-                         this.ProbOfDetect*ProbOfGating*this.LikelihoodMatrix];
-                    
+                    this.AssocLikelihoodMatrix(trackInd,2:end) = this.DetectionProbability*GatingProbability*this.LikelihoodMatrix;
                     
                     this.AssocWeightsMatrix = this.Hypothesiser.hypothesise(this.AssocLikelihoodMatrix);                                                           
                     
@@ -275,48 +196,54 @@ classdef JointProbabilisticDataAssocX < ProbabilisticDataAssocX
                     [this.ClusterList, this.UnassocTrackInds] = this.Clusterer.cluster(this.ValidationMatrix);
 
                     % Allocate memory for association weights and fill in weights for unassociated tracks
-                    this.AssocWeightsMatrix = zeros(this.NumTracks, this.NumMeas+1); % Dummy measurement weights at index 1
+                    this.AssocWeightsMatrix = zeros(numTracks, numMeasurements+1); % Dummy measurement weights at index 1
                     this.AssocWeightsMatrix(this.UnassocTrackInds,1) = 1;
 
                     % Create Hypothesis net for each cluster and populate association weights matrix
                     NumClusters = numel(this.ClusterList);
+                    if NumClusters<3 && isempty(this.UnassocTrackInds)
+                    end
                     for clusterInd=1:NumClusters
                         
                         % Extract track and measurement list for cluster
-                        ObsIndList = this.ClusterList{clusterInd}.ObsIndList;
+                        MeasIndList = this.ClusterList{clusterInd}.MeasIndList;
                         TrackIndList = this.ClusterList{clusterInd}.TrackIndList;
+                        numClusterMeasurements = length(MeasIndList);
+                        numClusterTracks = length(TrackIndList);
                         
-                        % Compute New Track/False Alarm density for the cluster
-                        if(isempty(this.ClutterDensity))
-                            this.ClusterList{clusterInd}.ClutterDensity = ...
-                            sum(sum(this.ValidationMatrix(TrackIndList,:)))...
-                            /sum(this.GateVolumes(TrackIndList));
+                        % Compute probability of gating
+                        if(isa(this.Gater,'EllipsoidalGaterX'))
+                            GatingProbability = this.Gater.GatingProbability;
                         else
-                            this.ClusterList{clusterInd}.ClutterDensity = this.ClutterDensity;
+                            GatingProbability = 1;
                         end
-                        for t = 1:numel(TrackIndList)
+                        
+                        this.ClusterList{clusterInd}.AssocLikelihoodMatrix = ...
+                            zeros(numClusterTracks, numClusterMeasurements+1);
+                            
+                        % Compute New Track/False Alarm density for the cluster
+                        for t = 1:numClusterTracks
                             trackInd = TrackIndList(t);
                             if(~isprop(this.TrackList{trackInd},'ClutterDensity'))
                                this.TrackList{trackInd}.addprop('ClutterDensity');
                             end
-                            this.TrackList{trackInd}.ClutterDensity = this.ClusterList{clusterInd}.ClutterDensity; 
-                        end
-                        if(this.ClusterList{clusterInd}.ClutterDensity==0)
-                            this.ClusterList{clusterInd}.ClutterDensity = 1;
-                        end
-                        
-                        % Compute probability of gating
-                        if(isa(this.Gater,'EllipsoidalGaterX'))
-                            ProbOfGating = this.Gater.ProbOfGating;
-                        else
-                            ProbOfGating = 1;
+                            if(isempty(this.ClutterModel))
+                                if(isempty(this.GateVolumes))
+                                    error('Cannot perform non-parametric (J)PDA as no gater has been set and thus gate volumes cannot be computed.. TODO: Allow for search space volume (V) to be set in the future');
+                                end
+                                clutterDensity = ...
+                                    GatingProbability*numClusterMeasurements/sum(this.GateVolumes(TrackIndList));
+                            else
+                                clutterDensity = this.ClutterModel.pdf(this.TrackList{trackInd}.Filter.MeasurementPrediction.Mean);
+                            end
+                            this.ClusterList{clusterInd}.AssocLikelihoodMatrix(t,1) = clutterDensity*(1-this.DetectionProbability*GatingProbability);
+                            this.TrackList{trackInd}.ClutterDensity = clutterDensity; 
                         end
                         
                         % Compute likelihood matrix
-                        this.ClusterList{clusterInd}.AssocLikelihoodMatrix = ...
-                            [ones(numel(TrackIndList),1)*this.ClusterList{clusterInd}.ClutterDensity*(1-this.ProbOfDetect*ProbOfGating), ...
-                            this.ProbOfDetect*ProbOfGating*this.LikelihoodMatrix(TrackIndList,ObsIndList)];
-                        this.AssocLikelihoodMatrix(TrackIndList,[1 ObsIndList+1]) = ...
+                        this.ClusterList{clusterInd}.AssocLikelihoodMatrix(:,2:end) = ...
+                            this.DetectionProbability*GatingProbability*this.LikelihoodMatrix(TrackIndList,MeasIndList);
+                        this.AssocLikelihoodMatrix(TrackIndList,[1 MeasIndList+1]) = ...
                             this.ClusterList{clusterInd}.AssocLikelihoodMatrix;
                         
                         % Compute association weights
@@ -325,7 +252,7 @@ classdef JointProbabilisticDataAssocX < ProbabilisticDataAssocX
                         
                         % Store cluster association weights in global
                         % associatiopn weights matrix
-                        this.AssocWeightsMatrix(TrackIndList, [1 ObsIndList+1]) = ...
+                        this.AssocWeightsMatrix(TrackIndList, [1 MeasIndList+1]) = ...
                             this.ClusterList{clusterInd}.AssocWeightsMatrix./sum(this.ClusterList{clusterInd}.AssocWeightsMatrix,2);
                         
                     end 

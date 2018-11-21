@@ -5,7 +5,7 @@ classdef NaiveClustererX < ClustererX
 % This is a class implementation of a naive clusterer.
 %
 % NaiveClustererX Properties:
-%   + NumObsDims - The number of observation dimensions.
+%   + NumMeasDims - The number of observation dimensions.
 %
 % NaiveClustererX Methods:
 %   + NaiveClustererX  - Constructor method
@@ -18,7 +18,7 @@ classdef NaiveClustererX < ClustererX
     end
     
     properties (SetAccess = immutable)
-        NumObsDims
+        NumMeasDims
     end
     
     methods
@@ -50,7 +50,7 @@ classdef NaiveClustererX < ClustererX
         % ClusterList: cell vector
         %   A (1 x Nc) cell vector, where each cell represents one of Nc Cluster
         %   objects, with the following fields:
-        %       - ObsIndList: A list of the indices of all measurements
+        %       - MeasIndList: A list of the indices of all measurements
         %                     contained within the cluster.
         %       - TrackIndList: A list of indices of all tracks belonging
         %                       to the cluster.
@@ -68,7 +68,7 @@ classdef NaiveClustererX < ClustererX
         %   ValidationMatrix).
         %   ClusterList is a list of Cluster objects, where each cluster
         %   object has two properties:
-        %       - ObsIndList: A list of the indices of all measurements
+        %       - MeasIndList: A list of the indices of all measurements
         %                     contained within the cluster.
         %       - TrackIndList: A list of indices of all tracks belonging
         %                       to the cluster.
@@ -81,22 +81,22 @@ classdef NaiveClustererX < ClustererX
             % Form clusters of tracks sharing measurements
             UnassocTrackInds = [];
             ClusterList = [];
-            ClusterObj.ObsIndList = [];
+            ClusterObj.MeasIndList = [];
             ClusterObj.TrackIndList = [];
             
             % Iterate over all tracks
             for trackInd=1:NumTracks 
                 % Extract valid measurement indices
-                validObsInds = find(ValidationMatrix(trackInd,:));
+                validMeasInds = find(ValidationMatrix(trackInd,:));
 
                 % If there exist valid measurements
-                if (~isempty(validObsInds)) 
+                if (~isempty(validMeasInds)) 
                     
                     % Check if matched measurements are members of any clusters
                     NumClusters = numel(ClusterList);
                     matchedClusterIndFlags = zeros(1, NumClusters); 
                     for ClusterInd=1:NumClusters
-                        if (sum(ismember(validObsInds, ClusterList{ClusterInd}.ObsIndList)))
+                        if (sum(ismember(validMeasInds, ClusterList{ClusterInd}.MeasIndList)))
                             matchedClusterIndFlags(ClusterInd) = 1; % Store matched cluster ids
                         end   
                     end
@@ -108,10 +108,10 @@ classdef NaiveClustererX < ClustererX
                     switch(NumMatchedClusters)
                         case(1)
                             ClusterList{matchedClusterInds}.TrackIndList = union(ClusterList{matchedClusterInds}.TrackIndList, trackInd);
-                            ClusterList{matchedClusterInds}.ObsIndList = union(ClusterList{matchedClusterInds}.ObsIndList, validObsInds);
+                            ClusterList{matchedClusterInds}.MeasIndList = union(ClusterList{matchedClusterInds}.MeasIndList, validMeasInds);
                         case(0)
                             ClusterObj.TrackIndList = trackInd;
-                            ClusterObj.ObsIndList = validObsInds;
+                            ClusterObj.MeasIndList = validMeasInds;
                             ClusterList{end+1} = ClusterObj;
                         otherwise
                             % Start from last cluster, joining each one with the previous
@@ -120,16 +120,16 @@ classdef NaiveClustererX < ClustererX
                                 ClusterList{matchedClusterInds(matchedClusterInd)}.TrackIndList = ...
                                     union(ClusterList{matchedClusterInds(matchedClusterInd)}.TrackIndList, ...
                                         ClusterList{matchedClusterInds(matchedClusterInd+1)}.TrackIndList);
-                                ClusterList{matchedClusterInds(matchedClusterInd)}.ObsIndList = ...
-                                    union(ClusterList{matchedClusterInds(matchedClusterInd)}.ObsIndList, ...
-                                        ClusterList{matchedClusterInds(matchedClusterInd+1)}.ObsIndList);
+                                ClusterList{matchedClusterInds(matchedClusterInd)}.MeasIndList = ...
+                                    union(ClusterList{matchedClusterInds(matchedClusterInd)}.MeasIndList, ...
+                                        ClusterList{matchedClusterInds(matchedClusterInd+1)}.MeasIndList);
                                 ClusterList(matchedClusterInds(matchedClusterInd+1)) = [];
                             end
                             % Finally, join with associated track.
                             ClusterList{matchedClusterInds(matchedClusterInd)}.TrackIndList = ...
                                 union(ClusterList{matchedClusterInds(matchedClusterInd)}.TrackIndList, trackInd);
-                            ClusterList{matchedClusterInds(matchedClusterInd)}.ObsIndList = ...
-                                union(ClusterList{matchedClusterInds(matchedClusterInd)}.ObsIndList, validObsInds);
+                            ClusterList{matchedClusterInds(matchedClusterInd)}.MeasIndList = ...
+                                union(ClusterList{matchedClusterInds(matchedClusterInd)}.MeasIndList, validMeasInds);
                     end
                 else
                     UnassocTrackInds = [UnassocTrackInds trackInd];

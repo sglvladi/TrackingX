@@ -17,7 +17,7 @@ classdef KalmanPredictorX < PredictorX
     methods (Static)
         
         function [xPred, PPred, yPred, S, Pxy] = predict(x,P,F,Q,H,R,u,B,O)
-        % PREDICT Perform the discrete-time KF state and measurement
+        % predict Perform the discrete-time KF state and measurement
         % prediction steps, under the assumption of additive process noise.
         %
         % Parameters
@@ -77,7 +77,7 @@ classdef KalmanPredictorX < PredictorX
         end
         
         function [xPred, PPred] = predictState(x,P,F,Q,u,B,Qu)
-        % PREDICTSTATE Perform the discrete-time KF state prediction 
+        % predictState Perform the discrete-time KF state prediction 
         % step, under the assumption of additive process noise.
         %
         % Parameters
@@ -128,7 +128,7 @@ classdef KalmanPredictorX < PredictorX
         end
 
         function [yPred, S, Pxy] = predictMeasurement(xPred,PPred,H,R)
-        % PREDICTMEASUREMENT Perform the discrete-time KF observation prediction 
+        % predictMeasurement Perform the discrete-time KF observation prediction 
         % step, under the assumption of additive process noise.
         %
         % Parameters

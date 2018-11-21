@@ -5,11 +5,6 @@ function [DataList,newGroundTruth, inds] = dataGen(ObsModel, GroundTruth, nTrack
 %   - 
 
     % Validate inputs
-%     parser = inputParser;
-%     parser.KeepUnmatched = true;
-%     parser.addParameter('PriorStateMean',NaN);
-%     parser.addParameter('PriorStateCovar',NaN);
-%             parser.parse(varargin{:});
     if(nargin<7);   increment     = 1; end
     if(nargin<6);   ObscurRects   = []; end
     if(nargin<5);   V_bounds      = []; end
@@ -30,8 +25,8 @@ function [DataList,newGroundTruth, inds] = dataGen(ObsModel, GroundTruth, nTrack
         nClutter = poissrnd(lambda);
         
         % Initialise measurement list for k-th timestep
-        DataList{ki} = NaN(ObsModel.NumObsDims,nTracks+nClutter);
-        newGroundTruth{ki} = NaN(ObsModel.NumObsDims,nTracks);
+        DataList{ki} = NaN(ObsModel.NumMeasDims,nTracks+nClutter);
+        newGroundTruth{ki} = NaN(ObsModel.NumMeasDims,nTracks);
         
         % Generate true measurements
         for j=1:nTracks
@@ -48,7 +43,7 @@ function [DataList,newGroundTruth, inds] = dataGen(ObsModel, GroundTruth, nTrack
                 for i=1:numel(mapping)
                     state(ObsModel.Mapping(i)) = GroundTruth{k}(i,j);
                 end
-                DataList{ki}(:,j) = ObsModel.heval(state,true);
+                DataList{ki}(:,j) = ObsModel.feval(state,true);
                 newGroundTruth{ki}(:,j) = GroundTruth{k}(:,j);
             end
         end
@@ -58,7 +53,7 @@ function [DataList,newGroundTruth, inds] = dataGen(ObsModel, GroundTruth, nTrack
             if(isa(ObsModel,'Polar2CartGaussModelX'))
                 DataList{ki}(:,j) = [unifrnd(0,pi/2); unifrnd(0,2000)];
             else
-                DataList{ki}(:,j) = ObsModel.obs(0,[unifrnd(V_bounds(1),V_bounds(2)); unifrnd(V_bounds(3),V_bounds(4)); 0; 0]);
+                DataList{ki}(:,j) = ObsModel.feval(0,[unifrnd(V_bounds(1),V_bounds(2)); unifrnd(V_bounds(3),V_bounds(4)); 0; 0]);
             end
         end
         ki = ki + 1;
