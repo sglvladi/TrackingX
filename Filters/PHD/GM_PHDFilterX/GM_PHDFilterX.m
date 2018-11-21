@@ -33,7 +33,7 @@ classdef GM_PHDFilterX < FilterX
 %                   + InnovErrCovars: (NumObsDims x NumObsDims x NumPredComponents) matrix
 %                       Used to store the last computed/set predicted component 
 %                       measurement (innovation) covariances.
-%                   + CrossCovars: (NumStateDims x NumObsDims x NumPredComponents) matrix
+%                   + KalmanGains: (NumStateDims x NumObsDims x NumPredComponents) matrix
 %                       Used to store the last computed/set predicted component 
 %                       state-measurement cross covariances.
 %   + MeasurementList - A (NumObsDims x NumObs) matrix used to store the received 
@@ -469,7 +469,7 @@ classdef GM_PHDFilterX < FilterX
             this.PredComponents.InnovErrCovars = zeros(this.Model.Obs.NumObsDims,...
                                                        this.Model.Obs.NumObsDims,...
                                                        this.NumPredComponents);
-            this.PredComponents.CrossCovars = zeros(this.Model.Dyn.NumStateDims,...
+            this.PredComponents.KalmanGains = zeros(this.Model.Dyn.NumStateDims,...
                                                     this.Model.Obs.NumObsDims,...
                                                     this.NumPredComponents);
             % Perform measurement prediction
@@ -484,7 +484,7 @@ classdef GM_PHDFilterX < FilterX
                 % Assigned measurement prediction to component
                 this.PredComponents.PredMeasMeans(:,i) = this.Filter.PredMeasMean;
                 this.PredComponents.InnovErrCovars(:,:,i) = this.Filter.InnovErrCovar;
-                this.PredComponents.CrossCovars(:,:,i) = this.Filter.CrossCovar;
+                this.PredComponents.KalmanGains(:,:,i) = this.Filter.KalmanGain;
             end
         end
          
@@ -533,7 +533,7 @@ classdef GM_PHDFilterX < FilterX
                 this.Filter.PredStateCovar = this.PredComponents.Covars(:,:,i);
                 this.Filter.PredMeasMean = this.PredComponents.PredMeasMeans(:,i);
                 this.Filter.InnovErrCovar = this.PredComponents.InnovErrCovars(:,:,i);
-                this.Filter.CrossCovar = this.PredComponents.CrossCovars(:,:,i);
+                this.Filter.KalmanGain = this.PredComponents.KalmanGains(:,:,i);
                 this.Filter.update();
                      
                 for j = 1:this.NumMeasurements

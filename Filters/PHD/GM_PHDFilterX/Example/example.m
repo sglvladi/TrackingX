@@ -31,7 +31,7 @@ ssm = StateSpaceModelX(dyn,obs);
 % q = 0.01;     % std of process noise 
 % n_y = 2;      % measurement dimensions
 % r = 0.1;      % std of measurement noise
-lambdaV = 10; % Expected number of clutter measurements over entire surveillance region
+lambdaV = 50; % Expected number of clutter measurements over entire surveillance region
 V = 10^2;     % Volume of surveillance region (10x10 2D-grid)
 V_bounds = [0 10 0 10]; % [x_min x_max y_min y_max]
 
@@ -53,7 +53,7 @@ config.ProbOfDeath = 0.005;
 config.ProbOfDetection = 0.9;
 config.ProbOfGating = 0.9;
 config.ClutterRate = lambdaV/V;
-config.Filter = UnscentedKalmanFilterX(ssm);
+config.Filter = KalmanFilterX(ssm);
 
 % Instantiate PHD filter
 myphd = GM_PHDFilterX(config);
