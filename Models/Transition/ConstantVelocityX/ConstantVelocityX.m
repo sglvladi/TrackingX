@@ -38,6 +38,7 @@ classdef ConstantVelocityX < TransitionModelX
                       0 1];
         Q_cv = @(dt,q) [dt^3/3 dt^2/2; 
                         dt^2/2, dt]*q;
+        Q_
         F
     end
     

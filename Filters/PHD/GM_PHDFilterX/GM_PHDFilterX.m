@@ -39,7 +39,6 @@ classdef GM_PHDFilterX < FilterX
 %       + Control (*)  = Object handle to ControlModelX SubClass
 %       + Clutter
 %       + Birth
- 
 %
 % GM_PHDFilterX Methods:
 %   + GM_PHDFilterX - Constructor method
@@ -317,7 +316,7 @@ classdef GM_PHDFilterX < FilterX
             % 1) Birth component extraction 
             % -------------------------- 
             
-            prediction = this.StatePosterior.Distribution;
+            prediction = copy(this.StatePosterior);
             numComponents = prediction.NumComponents;
             
             % Perform prediction
@@ -402,7 +401,8 @@ classdef GM_PHDFilterX < FilterX
             for i = 1:numMeasurements   % for all measurements
                 Ck(i) = sum(this.DetectionProbability*g(i,:).*this.StatePrediction.Weights,2);
             end
-             
+            
+            Ck_plus = Ck + this.Model.Clutter.pdf(this.MeasurementList);
             % Create true measurement hypothesis components
             for i = 1:numPredComponents
                  
@@ -410,19 +410,19 @@ classdef GM_PHDFilterX < FilterX
                 this.Filter.StatePrediction = GaussianStateX(this.StatePrediction.Means(:,i),this.StatePrediction.Covars(:,:,i)) ;
                 this.Filter.MeasurementPrediction = GaussianStateX(this.MeasurementPrediction.Means(:,i),this.MeasurementPrediction.Covars(:,:,i));
                 this.Filter.KalmanGain = this.KalmanGains_(:,:,i);
-                     
+                
+                this.Filter.MeasurementList = this.MeasurementList;
+                posterior = this.Filter.update();
                 for j = 1:numMeasurements
-                    this.Filter.MeasurementList = this.MeasurementList(:,j);
-                    posterior = this.Filter.update();
                     
                     compIndex = numPredComponents + (i-1)*numMeasurements + j;
-                    Means(:,compIndex) = posterior.Mean;
+                    Means(:,compIndex) = posterior.Mean(:,j);
                     Covars(:,:,compIndex) = posterior.Covar;
-                    % Compute corresponding weights
-                    Weights(compIndex) = ...
-                        this.DetectionProbability*Weights(i)...
-                        *g(j,i)/(this.Model.Clutter.pdf(this.MeasurementList(:,j))+Ck(j));
                 end
+                
+                % Compute corresponding weights
+                Weights(numPredComponents + (i-1)*numMeasurements+1 : numPredComponents + i*numMeasurements) = ...
+                    this.DetectionProbability*g(:,i)'*this.StatePrediction.Weights(i)./Ck_plus;
             end  
              
             % 5) Prune

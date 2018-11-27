@@ -24,19 +24,6 @@ classdef GaussianMixtureX < ProbabilityDistributionX
 % See also TransitionModelX, MeasurementModelX and ControlModelX template classes
     
     properties (Dependent)
-        % Means: (NumVariables x NumComponents) matrix
-        %   Mean vectors of the Gaussian Mixture Components
-        Means
-        
-        % Covars: (NumVariables x NumVariables x NumComponents) matrix
-        %   Covariance matrices of the Gaussian Mixture Components
-        %   All covariance matrices must be symmetric and positive semi-definite.
-        Covars
-        
-        % Weights: (1 x NumComponents) row vector
-        %   Mixture Weights of the Gaussian Mixture Components
-        Weights
-        
         % NumComponents: scalar
         %   The number of mixture components in the Gaussian Mixture 
         NumComponents
@@ -45,13 +32,25 @@ classdef GaussianMixtureX < ProbabilityDistributionX
         %   A structure array whose elements represent individual mixture
         %   components
         Components = {};
+        
+        Mean
+        
+        Covar
     end
     
-    properties   
-        Means_ = 0
-        Covars_ = 1
-        Weights_ = 1
-        NumComponents_ = 1
+    properties
+        % Means: (NumVariables x NumComponents) matrix
+        %   Mean vectors of the Gaussian Mixture Components
+        Means = []
+        
+        % Covars: (NumVariables x NumVariables x NumComponents) matrix
+        %   Covariance matrices of the Gaussian Mixture Components
+        %   All covariance matrices must be symmetric and positive semi-definite.
+        Covars = []
+        
+        % Weights: (1 x NumComponents) row vector
+        %   Mixture Weights of the Gaussian Mixture Components
+        Weights = []
     end
     
     methods
@@ -194,31 +193,45 @@ classdef GaussianMixtureX < ProbabilityDistributionX
         %   Default is 1/NumComponents for all components
             
             switch(nargin)
+                case(1)
                 case(2)
                     if (iscell(varargin{1}))
                         components = varargin{1};
-                        this.Means_ = cell2mat(cellfun(@(c)c.Mean,components,'UniformOutput',false));
-                        this.Covars_ = cell2mat(permute(cellfun(@(c)c.Covar,components,'UniformOutput',false),[1,3,2]));
-                        this.Weights_ = cell2mat(cellfun(@(c)c.Weight,components,'UniformOutput',false));
+                        this.Means = cell2mat(cellfun(@(c)c.Mean,components,'UniformOutput',false));
+                        this.Covars = cell2mat(permute(cellfun(@(c)c.Covar,components,'UniformOutput',false),[1,3,2]));
+                        this.Weights = cell2mat(cellfun(@(c)c.Weight,components,'UniformOutput',false));
+                        [this.NumVariables_] = size(this.Means,1);
+                    elseif (isa(varargin{1},'GaussianMixtureX'))
+                        other_dist = varargin{1};
+                        this.Means = other_dist.Means;
+                        this.Covars = other_dist.Covars;
+                        this.Weights = other_dist.Weights;
+                        [this.NumVariables_] = size(this.Means,1);
                     end
                 otherwise
-                    this.Means = varargin{1};
-                    this.Covars = varargin{2};
-                    [numVariables,numComponents] = size(this.Means);
-                    if(nargin>3)
-                        this.Weights = varargin{3};
+                    if (ischar(varargin{1}) && strcmp(varargin{1},'empty'))
+                        this.NumVariables_ = varargin{2};
+                        numComponents = varargin{3};
+                        this.Means = zeros(this.NumVariables_,numComponents);
+                        this.Covars = zeros(this.NumVariables_,this.NumVariables_,numComponents);
+                        this.Weights = zeros(1,numComponents);
                     else
-                        this.Weights = repmat(1/numComponents,1,numComponents);
+                        this.Means = varargin{1};
+                        this.Covars = varargin{2};
+                        [this.NumVariables_,numComponents] = size(this.Means);
+                        if(nargin>3)
+                            this.Weights = varargin{3};
+                        else
+                            this.Weights = repmat(1/numComponents,1,numComponents);
+                        end
                     end
-                    this.NumVariables_ = numVariables;
-                    this.NumComponents_ = numComponents;
             end
         end
         
         function this = plus(this,other)
-            this.Means_ = [this.Means_, other.Means];
-            this.Covars_ = cat(3, this.Covars_, other.Covars);
-            this.Weights_ = [this.Weights_, other.Weights];
+            this.Means = [this.Means, other.Means];
+            this.Covars = cat(3, this.Covars, other.Covars);
+            this.Weights = [this.Weights, other.Weights];
         end
     end
     
@@ -234,39 +247,26 @@ classdef GaussianMixtureX < ProbabilityDistributionX
             end
         end
         
-        function means = get.Means(this)
-        %get.Means Getter for Means property
-            means = this.Means_;
-        end
-        
-        function set.Means(this, means)
-        %set.Means - Setter for Mean property
-            this.Means_ = means;
-        end
-        
-        function covars = get.Covars(this)
-        %get.Covars Getter for Covars property
-            covars = this.Covars_;
-        end
-        
-        function set.Covars(this, covars)
-        %set.Covars Setter for Covars property
-            this.Covars_ = covars;
-        end
-        
-        
-        function weights = get.Weights(this)
-        %get.Means Getter for Means property
-            weights = this.Weights_;
-        end
-        
-        function set.Weights(this, weights)
-        %set.Means - Setter for Mean property
-            this.Weights_ = weights;
-        end
-        
         function numComponents = get.NumComponents(this)
-            numComponents = size(this.Means_,2);
+            numComponents = size(this.Means,2);
+        end
+        
+        function mean = get.Mean(this)
+            mean = this.Means*(this.Weights./sum(this.Weights))';
+        end
+        
+        function covar = get.Covar(this)
+            covar = zeros(this.NumVariables_,this.NumVariables_);
+            v = this.Mean - this.Means;
+            for k = 1:this.NumComponents
+                covar = covar + this.Weights(k)*(this.Covars(:,:,k) + v(:,k)*v(:,k)');
+            end
+        end
+    end
+    
+    methods(Access=protected)
+        function numVariables = getNumVariables(this)
+            numVariables = size(this.Means,1);
         end
     end
     

@@ -17,7 +17,7 @@ NumIter = size(truth,2);
 truth = [truth(1,:);zeros(1,NumIter);truth(2,:);zeros(1,NumIter)];
 
 % Simulate some measurements from ground-truth data
-%measurements = ssm.Measurement.feval(truth,true);
+measurements = ssm.Measurement.feval(truth,true);
 
 % Now let's estimate!!
 

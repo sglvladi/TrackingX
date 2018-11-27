@@ -315,14 +315,16 @@ classdef SMC_PHDFilterX < ParticleFilterX
             g = this.MeasurementLikelihoodsPerParticle;
                                     
             % Calculate w^{n,i} Eq. (20) of [2]
+            Ck = this.DetectionProbability*g.*this.StatePrediction.Weights;
+            C = sum(Ck,2);
+            C_plus = C + this.Model.Clutter.pdf(this.MeasurementList)';
             this.weightsPerHypothesis_ = [(1-this.DetectionProbability).*this.StatePrediction.Weights;
                                           zeros(numMeasurements, this.StatePrediction.NumParticles)];
             if(numMeasurements>0)
-                % Compute C_k(z) Eq. (27) of [1] 
-                Ck = sum(this.DetectionProbability*g.*this.StatePrediction.Weights,2)';
-                this.weightsPerHypothesis_(2:end,:) = (this.DetectionProbability*g./(this.Model.Clutter.pdf(this.MeasurementList)+Ck)');
+                % Compute C_k(z) Eq. (27) of [1]
+                this.weightsPerHypothesis_(2:end,:) = Ck./C_plus;
             end
-            this.weightsPerHypothesis_(2:end,:) = this.MeasWeights'.*this.weightsPerHypothesis_(2:end,:).*this.StatePrediction.Weights;
+            %this.weightsPerHypothesis_(2:end,:) = this.MeasWeights'.*this.weightsPerHypothesis_(2:end,:).*this.StatePrediction.Weights;
             
             % Update weights Eq. (28) of [1]
             postWeights = sum(this.weightsPerHypothesis_,1);

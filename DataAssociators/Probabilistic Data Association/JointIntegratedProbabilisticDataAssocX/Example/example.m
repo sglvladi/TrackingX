@@ -1,5 +1,5 @@
 %% Plot settings
-ShowPlots = 0;
+ShowPlots = 1;
 ShowArena = 1;
 SkipFrames = 0;
 
@@ -25,7 +25,7 @@ NumTracks = 3;
 
 % Generate DataList
 meas_simulator = MeasurementSimulatorX('Model',ssm);
-meas_simulator.DetectionProbability = 0.6;
+meas_simulator.DetectionProbability = 0.9;
 [DataList, nGroundTruth] = meas_simulator.simulate(GroundTruth);
 
 % Initiate TrackList

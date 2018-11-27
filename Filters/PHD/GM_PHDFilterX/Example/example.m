@@ -13,7 +13,7 @@ ShowPlots = 1;              % Set to 0 to hide plots
 ShowPrediction = 0;         % Set to 0 to skip showing prediction
 ShowUpdate = 1;             % Set to 0 to skip showing update
 
-lambdaV = 10; % Expected number of clutter measurements over entire surveillance region
+lambdaV = 50; % Expected number of clutter measurements over entire surveillance region
 V = 10^2;     % Volume of surveillance region (10x10 2D-grid)
 V_bounds = [0 10 0 10]; % [x_min x_max y_min y_max]
 
@@ -29,9 +29,12 @@ clutter_model = PoissonRateUniformPositionX('ClutterRate',lambdaV,'Limits',[V_bo
 
 % Instantiate birth model
 numBirthComponents = 10;
-BirthComponents.Means = [(V_bounds(2)-V_bounds(1))*rand(numBirthComponents,1), mvnrnd(zeros(numBirthComponents,1), 0.05'),(V_bounds(4)-V_bounds(3))*rand(numBirthComponents,1),mvnrnd(zeros(numBirthComponents,1), 0.05')]';
+BirthComponents.Means = [(V_bounds(2)-V_bounds(1))*rand(numBirthComponents,1)';
+                         mvnrnd(zeros(numBirthComponents,1), 0.5)';
+                         (V_bounds(4)-V_bounds(3))*rand(numBirthComponents,1)';
+                         mvnrnd(zeros(numBirthComponents,1), 0.5)'];
 BirthComponents.Covars = repmat(diag([10 1 10 1]),1,1,numBirthComponents);
-BirthComponents.Weights = 0.001*ones(1,numBirthComponents);
+BirthComponents.Weights = 0.01*ones(1,numBirthComponents);
 birth_distribution = GaussianMixtureX(BirthComponents.Means,BirthComponents.Covars, BirthComponents.Weights);
 birth_model = DistributionBasedBirthModelX('Distribution', birth_distribution,...
                                            'BirthIntensity', 0.000001);

@@ -35,7 +35,7 @@ for i=1:NumTracks
     StatePrior = GaussianStateX(xPrior,PPrior);
     TrackList{i} = TrackX();
     TrackList{i}.addprop('Filter');
-    TrackList{i}.Filter = KalmanFilterX('Model',ssm,'StatePrior',StatePrior); 
+    TrackList{i}.Filter = ParticleFilterX('Model',ssm,'StatePrior',StatePrior); 
 end
 
 %% Initiate PDAF parameters

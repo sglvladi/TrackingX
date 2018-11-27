@@ -25,46 +25,52 @@ FrameRate = 10;            % Number of frames per second
 VideoQuality = 100;         % Set to desired quality percentage
 VideoPathName = 'tomb_tracks_only.avi'; % Set to the desired path and name of produced recording
 
-% Instantiate a Dynamic model
-dyn = ConstantVelocityX('NumDims',2,'VelocityErrVariance',0.0001);
-
-% Instantiate an Observation model
-obs = LinearGaussianX('NumStateDims',4,'NumMeasDims',2,'MeasurementErrVariance',0.01,'Mapping',[1 3]);
-
-% Compile the State-Space model
-ssm = StateSpaceModelX(dyn,obs);
-
+lambdaV = 10; % Expected number of clutter measurements over entire surveillance region
 V = 10^2;     % Volume of surveillance region (10x10 2D-grid)
 V_bounds = [0 10 0 10]; % [x_min x_max y_min y_max]
-lambdaV = 10; % Expected number of clutter measurements over entire surveillance region
-lambda = lambdaV/V;
 
-% Generate observations (Poisson number with rate of lambdaV, positions are uniform over surveillance region)
-[DataList,x1,y1] = gen_obs_cluttered_multi2(NumTracks, x_true, y_true, sqrt(obs.MeasurementErrVariance(1)), V_bounds, lambdaV, 1, 1); 
-N=size(DataList,2); % timesteps 
+% Instantiate a Transitionamic model
+transition_model = ConstantVelocityX('NumDims',2,'VelocityErrVariance',0.0001);
+
+% Instantiate a Measurement model
+measurement_model = LinearGaussianX('NumMeasDims',2,'NumStateDims',4,'MeasurementErrVariance',0.02,'Mapping',[1 3]);
+%measurement_model = RangeBearing2CartesianX('NumStateDims',4,'MeasurementErrVariance',[0.001,0.02],'Mapping',[1 3]);
+
+% Instantiate a clutter model
+clutter_model = PoissonRateUniformPositionX('ClutterRate',lambdaV,'Limits',[V_bounds(1:2);V_bounds(3:4)]);
+
+% Instantiate birth model
+numBirthComponents = 10;
+BirthComponents.Means = [ 1 9 9 1; 0 0 0 0; 1 1 9 9; 0 0 0 0];
+BirthComponents.Covars = repmat(diag([2,0.1,2,0.1]),1,1,4);
+BirthComponents.Weights = [.25, .25, .25, .25];
+birth_distribution = GaussianMixtureX(BirthComponents.Means,BirthComponents.Covars, BirthComponents.Weights);
+birth_model = DistributionBasedBirthModelX('Distribution', birth_distribution,...
+                                           'BirthIntensity', 0.000001);
+
+% Compile the State-Space model
+ssm = StateSpaceModelX(transition_model,measurement_model,'Clutter',clutter_model, 'Birth', birth_model);
+
+% Extract the ground truth data from the example workspace
+load('example.mat');
+NumIter = size(GroundTruth,2);
+
+% Set BirthIntensity
+NumTracks = 3;
+
+% Generate DataList
+meas_simulator = MeasurementSimulatorX('Model',ssm);
+meas_simulator.DetectionProbability = 1;
+[DataList, nGroundTruth] = meas_simulator.simulate(GroundTruth);
 
 % Assign PHD parameter values
 config.Model = ssm;
-config.BirthModel.ProbOfBirth = 0.005;
-xb = [5;0;5;0];
-means = [ 1 9 9 1; 0 0 0 0; 1 1 9 9; 0 0 0 0];
-covars = repmat(diag([2,0.1,2,0.1]),1,1,4);
-weights = [.25, .25, .25, .25];
-BirthDensity = GaussianMixtureX(means,covars,weights);
-Pb = diag([10,0.1,10,0.1]);
-lambdab = 0.05;
-config.BirthModel.BirthIntFcn = @ () GaussianMixtureX(xb,Pb,lambdab);
-config.ProbOfSurvive = 0.9;
-config.ProbOfDetection = 0.9;
-config.ClutterIntFcn = @(z) lambda;
+config.SurvivalProbability = 0.9;
+config.DetectionProbability = 0.9;
 
 % Instantiate PHD filter
 filter = TrackOrientedMeMBerPoissonGMFilterX(config);
-filter.Posterior.Poisson = GaussianMixtureX(xb,Pb,3);
-
-% filter.Posterior.Poisson{1}.Mean = xb;
-% filter.Posterior.Poisson{1}.Covar = Pb;
-% filter.Posterior.Poisson{1}.Weight = 3;
+filter.Poisson.StatePosterior = copy(birth_distribution);
 
 % Create figure windows
 if(ShowPlots)
@@ -92,8 +98,8 @@ end
 
 % START OF SIMULATION
 % ===================>
-for k=1:N
-    fprintf('Iteration = %d/%d\n================>\n',k,N);
+for k=1:NumIter
+    fprintf('Iteration = %d/%d\n================>\n',k,NumIter);
     
     % Extract DataList at time k
     tempDataList = DataList{k}(:,:);
@@ -132,10 +138,10 @@ for k=1:N
 %             h2 = plot(Logs{j}.Groundtruth.State(1,i),Logs{j}.Groundtruth.State(2,i),'bo','MarkerSize', 10);
 %             set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off'); % 
 %         end
-        for i=1:numel(filter.Posterior.Bernoulli)
+        for i=1:filter.Bernoulli.StatePosterior.NumComponents
             %if(numel(filter.Posterior.Bernoulli{i}.Trajectory.ProbOfExistence)>10&&mean(filter.Posterior.Bernoulli{i}.Trajectory.ProbOfExistence)>0.8)
-            if(filter.Posterior.Bernoulli{i}.ProbOfExistence>0.8)
-                plot(ax(1),filter.Posterior.Bernoulli{i}.Trajectory.Mean(1,:),filter.Posterior.Bernoulli{i}.Trajectory.Mean(3,:),'.-');
+            if(filter.Bernoulli.StatePosterior.Weights(i)>0.8)
+                plot(ax(1),filter.Bernoulli.StatePosterior.Trajectories{i}.StateMean(1,:),filter.Bernoulli.StatePosterior.Trajectories{i}.StateMean(3,:),'.-');
                 %plot_gaussian_ellipsoid(filter.Posterior.Bernoulli{i}.Trajectory.Mean([1,3],end),filter.Posterior.Bernoulli{i}.Trajectory.Covariance([1,3],[1,3],end),'r',1,50,ax(1));
             end
                 %hold on;

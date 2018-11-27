@@ -25,7 +25,7 @@ NumTracks = 3;
 
 % Generate DataList
 meas_simulator = MeasurementSimulatorX('Model',ssm);
-meas_simulator.DetectionProbability = 0.6;
+meas_simulator.DetectionProbability = 0.9;
 [DataList, nGroundTruth] = meas_simulator.simulate(GroundTruth);
 
 % Initiate TrackList
@@ -36,9 +36,7 @@ for i=1:NumTracks
     StatePrior = GaussianStateX(xPrior,PPrior);
     TrackList{i} = TrackX();
     TrackList{i}.addprop('Filter');
-    TrackList{i}.Filter = KalmanFilterX('Model',ssm,'StatePrior',StatePrior); 
-    TrackList{i}.addprop('ExistenceProbability');
-    TrackList{i}.ExistenceProbability = 0.5;
+    TrackList{i}.Filter = ParticleFilterX('Model',ssm,'StatePrior',StatePrior); 
 end
 
 %% Initiate PDAF parameters
@@ -48,7 +46,7 @@ config.Gater = EllipsoidalGaterX(2,'GateLevel',10)';
 config.DetectionProbability = meas_simulator.DetectionProbability;
 
 %% Instantiate PDAF
-pdaf = JointIntegratedProbabilisticDataAssocX(config);
+pdaf = JointProbabilisticDataAssocX(config);
 pdaf.TrackList = TrackList;
 
 %% Instantiate Log to store output
@@ -88,9 +86,7 @@ for i = 1:N
     pdaf.MeasurementList = DataList{i};
     
     for j=1:NumTracks
-        pdaf.TrackList{j}.ExistenceProbability = 0.99*pdaf.TrackList{j}.ExistenceProbability;
         pdaf.TrackList{j}.Filter.predict();
-        fprintf("%f, ",pdaf.TrackList{j}.ExistenceProbability);
     end
     
     fprintf("\n");

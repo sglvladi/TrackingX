@@ -9,11 +9,11 @@
 %     and then produces 1xNk cell array of corrupted and cluttered measurements, Nk being the total number of timesteps
 
 % Plot settings
-ShowPlots = 0;              % Set to 0 to hide plots
+ShowPlots = 1;              % Set to 0 to hide plots
 ShowPrediction = 0;         % Set to 0 to skip showing prediction
 ShowUpdate = 1;             % Set to 0 to skip showing update
 
-lambdaV = 50; % Expected number of clutter measurements over entire surveillance region
+lambdaV = 10; % Expected number of clutter measurements over entire surveillance region
 V = 10^2;     % Volume of surveillance region (10x10 2D-grid)
 V_bounds = [0 10 0 10]; % [x_min x_max y_min y_max]
 
@@ -21,7 +21,7 @@ V_bounds = [0 10 0 10]; % [x_min x_max y_min y_max]
 transition_model = ConstantVelocityX('NumDims',2,'VelocityErrVariance',0.0001);
 
 % Instantiate a Measurement model
-measurement_model = LinearGaussianX('NumMeasDims',2,'NumStateDims',4,'MeasurementErrVariance',0.04,'Mapping',[1 3]);
+measurement_model = LinearGaussianX('NumMeasDims',2,'NumStateDims',4,'MeasurementErrVariance',0.02,'Mapping',[1 3]);
 %measurement_model = RangeBearing2CartesianX('NumStateDims',4,'MeasurementErrVariance',[0.001,0.02],'Mapping',[1 3]);
 
 % Instantiate a clutter model

@@ -20,9 +20,9 @@ classdef TrackOrientedMeMBerPoissonGMFilterX < FilterX
 %                   a birth probability of 50%.
 %   + BirthIntFcn - A function handle, which when called generates a set 
 %                   of initial particles and weights.
-%   + ProbOfSurvive - The probability that a target may cease to exist
+%   + SurvivalProbability - The probability that a target may cease to exist
 %                   between consecutive iterations of the filter.
-%   + ProbOfDetection - The probablity that a target will be detected in
+%   + DetectionProbability - The probablity that a target will be detected in
 %                       a given measurement scan.
 %   + NumTargets - The estimated number of targets following an update step.
 %   + Model - An object handle to StateSpaceModelX object
@@ -42,25 +42,142 @@ classdef TrackOrientedMeMBerPoissonGMFilterX < FilterX
 %
 % See also ParticleFilterX, KalmanFilerX.
 
-    properties (Access = private, Hidden)
-        
+    properties (Dependent)
+        NumComponents
+        NumMeasurements
+        NumTargets
+        MeasurementLikelihoods
+        MeasurementLikelihoodsPerComponent
     end
+    
     properties
+        StatePrior
+        StatePrediction
+        MeasurementPrediction
+        StatePosterior
+        SurvivalProbability  
+        DetectionProbability 
+        
+        Bernoulli
+        Poisson
+        
+        % Component management
         Filter
-        BirthModel
-        ProbOfBirth
-        ProbOfSurvive  
-        ProbOfDetection 
-        ClutterIntFcn
-        AssocLikelihoodMatrix
-        MarginalAssociationProbabilities
         Hypothesiser = LoopyBeliefPropagationX();
         Thresholds
+        
         StoreTrajectories = true
+        AssocLikelihoodMatrix
+        MarginalAssociationProbabilities
     end
     
     properties (Access=protected)
-        pmeasLikelihood_ = []
+        MeasurementLikelihoods_ = [];
+        MeasurementLikelihoodsPerComponent_ = [];
+        MeasurementPrediction_ = [];
+        NumComponents_ = 1;
+        KalmanGains_ = [];
+    end
+    
+     methods (Access=protected)
+        function initialise_(this, config)
+            initialise_@FilterX(this,config);
+            
+            % Apply defaults
+            this.Thresholds.Deletion.Bernoulli = 1e-4;
+            this.Thresholds.Deletion.Poisson = 1e-4;
+            
+            if (isfield(config,'StatePrior'))
+                this.StatePrior = config.StatePrior;
+                this.StatePosterior = this.StatePrior;
+            end
+            if (isfield(config,'SurvivalProbability'))
+                this.SurvivalProbability = config.SurvivalProbability;
+            end
+            if (isfield(config,'DetectionProbability'))
+                this.DetectionProbability = config.DetectionProbability;
+            end
+            if (isfield(config,'Thresholds'))
+                thresholds = config.Thresholds;
+                if (isfield(thresholds,'Deletion'))
+                    if (isfield(thresholds.Deletion,'Bernoulli'))
+                        this.Thresholds.Deletion.Bernoulli = thresholds.Deletion.Bernoulli;
+                    end
+                    if (isfield(thresholds.Deletion,'Poisson'))
+                        this.Thresholds.Deletion.Poisson = thresholds.Deletion.Poisson;
+                    end
+                end
+            end
+            if (isfield(config,'Filter'))
+                this.Filter = config.Filter;
+            end
+        end
+        
+        % StatePrior
+        function StatePrior = setStatePrior(this,newStatePrior)
+            StatePrior = newStatePrior;
+        end
+        
+        % State Prediction
+        function StatePrediction = setStatePrediction(this,newStatePrediction)
+            if(isa(newStatePrediction,'GaussianMixtureStateX'))
+                StatePrediction = newStatePrediction;
+            else
+                error('State type must be GaussianMixtureStateX');
+            end
+            this.MeasurementPrediction_ = []; % Reset dependent measurement prediction
+            this.MeasurementLikelihoods_ = [];
+            this.MeasurementLikelihoodsPerComponent_ = [];
+        end
+        
+        % Measurement Prediction
+        function MeasurementPrediction = getMeasurementPrediction(this)
+            if(isempty(this.MeasurementPrediction_))
+                this.MeasurementPrediction_ =  ...
+                    ParticleStateX(this.Model.Measurement.feval(this.StatePrediction.Particles,true),...
+                                   this.StatePrediction.Weights);
+            end
+            MeasurementPrediction = this.MeasurementPrediction_;
+        end
+        function MeasurementPrediction = setMeasurementPrediction(this,newMeasurementPrediction)
+            if(isa(newMeasurementPrediction,'GaussianMixtureStateX'))
+                MeasurementPrediction = newMeasurementPrediction;
+            else
+                error('State type must be GaussianMixtureStateX');
+            end
+            this.MeasurementLikelihoods_ = [];
+        end
+        
+        % MeasurementLikelihoods
+        function MeasurementLikelihoods = getMeasurementLikelihoods(this)
+            if(isempty(this.MeasurementLikelihoods_))
+                this.MeasurementLikelihoods_ = mean(this.getMeasurementLikelihoodsPerParticle(),2)';
+            end
+            MeasurementLikelihoods = this.MeasurementLikelihoods_;
+        end
+        function MeasurementLikelihoods = setMeasurementLikelihoods(this, newMeasurementLikelihoods)
+            MeasurementLikelihoods = newMeasurementLikelihoods;
+        end
+        
+        % MeasurementLikelihoodsPerComponent
+        function MeasurementLikelihoodsPerComponent = getMeasurementLikelihoodsPerComponent(this)
+            if(isempty(this.MeasurementLikelihoodsPerComponent_))
+                this.MeasurementLikelihoodsPerComponent_ = this.Model.Measurement.pdf(this.MeasurementList,this.StatePrediction.Means,this.StatePrediction.Covars);
+            end
+            MeasurementLikelihoodsPerComponent = this.MeasurementLikelihoodsPerComponent_;
+        end
+        function MeasurementLikelihoodsPerComponent = setMeasurementLikelihoodsPerComponent(this, newMeasurementLikelihoodsPerComponent)
+            MeasurementLikelihoodsPerComponent = newMeasurementLikelihoodsPerComponent;
+        end
+        
+        % State Posterior
+        function StatePosterior = setStatePosterior(this,newStatePosterior)
+            if(isa(newStatePosterior,'GaussianMixtureStateX'))
+                StatePosterior = newStatePosterior;
+            else
+                error('State type must be GaussianMixtureStateX');
+            end
+        end
     end
     
     methods
@@ -84,10 +201,10 @@ classdef TrackOrientedMeMBerPoissonGMFilterX < FilterX
         % BirthIntFcn: function handle
         %   A function handle, [parts, weights] = BirthIntFcn(NumParticles), 
         %   which when called generates a set of initial particles and weights.
-        % ProbOfSurvive: scalar
+        % SurvivalProbability: scalar
         %   The probability that a target may cease to exist between consecutive 
         %   iterations of the filter.
-        % ProbOfDetection: scalar
+        % DetectionProbability: scalar
         %   The probablity that a target will be detected in a given measurement scan.
         %
         % Usage
@@ -115,10 +232,8 @@ classdef TrackOrientedMeMBerPoissonGMFilterX < FilterX
             % Call SuperClass method
             this@FilterX(varargin{:});
            
-            this.Prediction.Bernoulli = {};
-            this.Posterior.Bernoulli = {};
-            this.Prediction.Poisson = {};
-            this.Posterior.Poisson = {};
+            this.Bernoulli.StatePosterior = GaussianMixtureStateX();
+            this.Poisson.StatePosterior = GaussianMixtureStateX();
             
             this.Filter = KalmanFilterX(varargin{:});
             
@@ -200,10 +315,10 @@ classdef TrackOrientedMeMBerPoissonGMFilterX < FilterX
         % BirthIntFcn: function handle
         %   A function handle, [parts, weights] = BirthIntFcn(NumParticles), 
         %   which when called generates a set of initial particles and weights.
-        % ProbOfSurvive: scalar
+        % SurvivalProbability: scalar
         %   The probability that a target may cease to exist between consecutive 
         %   iterations of the filter.
-        % ProbOfDetection: scalar
+        % DetectionProbability: scalar
         %   The probablity that a target will be detected in a given measurement scan.
         % NumTargets: scalar
         %   The estimated number of targets following an update step.
@@ -269,72 +384,83 @@ classdef TrackOrientedMeMBerPoissonGMFilterX < FilterX
         %
         %  See also update, smooth.
             
-            % reset measLikelihood matrix
-            this.pmeasLikelihood_ = [];
-            
             % Interpret length of inputs
-            numBernoulli = numel(this.Posterior.Bernoulli);
-            numPoisson = numel(this.Posterior.Poisson);
+            bernoulli.StatePrediction = copy(this.Bernoulli.StatePosterior);
+            poisson.StatePrediction = copy(this.Poisson.StatePosterior);
+            
+            numBernoulli = bernoulli.StatePrediction.NumComponents;
+            numPoisson = poisson.StatePrediction.NumComponents;
+            numStateDims = this.Model.Transition.NumStateDims;
+            numMeasDims = this.Model.Measurement.NumMeasDims;
+            
+            
+            bernoulli.MeasurementPrediction = GaussianMixtureStateX('empty',numMeasDims,numBernoulli);
+            bernoulli.MeasurementPrediction.addprop('KalmanGains');
+            bernoulli.MeasurementPrediction.KalmanGains = zeros(numStateDims,numMeasDims,numBernoulli);
             
             % Predict state pdf of existing tracks
-            this.Prediction.Bernoulli = [];
             for i = 1:numBernoulli
                 
-                % Existence
-                this.Prediction.Bernoulli{i}.ProbOfExistence = this.ProbOfSurvive*this.Posterior.Bernoulli{i}.ProbOfExistence;
-                
                 % PDF
-                this.Filter.StateMean = this.Posterior.Bernoulli{i}.StateMean;
-                this.Filter.StateCovar = this.Posterior.Bernoulli{i}.StateCovar;
-                this.Filter.predict();
-                this.Prediction.Bernoulli{i}.StateMean = this.Filter.PredStateMean;
-                this.Prediction.Bernoulli{i}.StateCovar = this.Filter.PredStateCovar;
-                this.Prediction.Bernoulli{i}.MeasMean = this.Filter.PredMeasMean;
-                this.Prediction.Bernoulli{i}.InnovErrCovar = this.Filter.InnovErrCovar;
-                this.Prediction.Bernoulli{i}.KalmanGain = this.Filter.KalmanGain;
+                this.Filter.StatePosterior = GaussianStateX(bernoulli.StatePrediction.Means(:,i),...
+                                                            bernoulli.StatePrediction.Covars(:,:,i));
+                [statePrediction_i, measurementPrediction_i] = this.Filter.predict();
+                bernoulli.StatePrediction.Means(:,i) = statePrediction_i.Mean;
+                bernoulli.StatePrediction.Covars(:,:,i) = statePrediction_i.Covar;
+                bernoulli.MeasurementPrediction.Means(:,i) = measurementPrediction_i.Mean;
+                bernoulli.MeasurementPrediction.Covars(:,:,i) = measurementPrediction_i.Covar;
+                bernoulli.MeasurementPrediction.KalmanGains(:,:,i) = this.Filter.KalmanGain;
                 
-                if(this.StoreTrajectories)
-                    this.Prediction.Bernoulli{i}.Trajectory = this.Posterior.Bernoulli{i}.Trajectory;
-                end
             end
+            % Existence
+            bernoulli.StatePrediction.Weights = this.SurvivalProbability.*bernoulli.StatePrediction.Weights;
+            this.Bernoulli.StatePrediction = bernoulli.StatePrediction;
+            
+            bernoulli.MeasurementPrediction.Weights = bernoulli.StatePrediction.Weights;
+            this.Bernoulli.MeasurementPrediction = bernoulli.MeasurementPrediction;
+            
             
             % Predict existing PPP intensity
-            this.Prediction.Poisson = [];
             for k = 1:numPoisson
+                % Use underlying filter to predict components
+                this.Filter.StatePosterior = GaussianStateX(poisson.StatePrediction.Means(:,k),...
+                                                            poisson.StatePrediction.Covars(:,:,k));
+                statePrediction_k = this.Filter.predictState();
                 
-                % Intensity
-                this.Prediction.Poisson{k}.Weight = this.ProbOfSurvive*this.Posterior.Poisson{k}.Weight;
-                
-                % PDF
-                this.Filter.StateMean = this.Posterior.Poisson{k}.StateMean;
-                this.Filter.StateCovar = this.Posterior.Poisson{k}.StateCovar;
-                this.Filter.predictState();
-                this.Prediction.Poisson{k}.StateMean = this.Filter.PredStateMean;
-                this.Prediction.Poisson{k}.StateCovar = this.Filter.PredStateCovar;
+                % Assing predicted state to components
+                poisson.StatePrediction.Means(:,k) = statePrediction_k.Mean;
+                poisson.StatePrediction.Covars(:,:,k) = statePrediction_k.Covar;
             end
+            % Intensity
+            poisson.StatePrediction.Weights = this.SurvivalProbability.*poisson.StatePrediction.Weights;
                         
-            % Incorporate birth intensity into PPP
-            [BirthMeans, BirthCovars, BirthWeights] = this.BirthModel.BirthIntFcn();
-            numBirths = numel(BirthWeights);
-            for k = 1:numBirths
-                this.Prediction.Poisson{numPoisson+k}.Weight = BirthWeights(k);
-                this.Prediction.Poisson{numPoisson+k}.StateMean = BirthMeans(:,k);
-                this.Prediction.Poisson{numPoisson+k}.StateCovar = BirthCovars(:,:,k);
-            end
+            % Add birth components to PPP
+            poisson.StatePrediction = poisson.StatePrediction + this.Model.Birth.Distribution;
 
             % Not shown in paper--truncate low weight components
-            ss = cellfun(@(c) c.Weight, this.Prediction.Poisson)> this.Thresholds.Deletion.Poisson;
-            this.Prediction.Poisson = this.Prediction.Poisson(ss);
+            ss = poisson.StatePrediction.Weights > this.Thresholds.Deletion.Poisson;
+            this.Poisson.StatePrediction =  GaussianMixtureStateX(poisson.StatePrediction.Means(:,ss),...
+                                                                  poisson.StatePrediction.Covars(:,:,ss), ...
+                                                                  poisson.StatePrediction.Weights(ss));
             
             % Predict measurement for poisson (surviving and birth)
-            for k = 1:numPoisson+numBirths
-                this.Filter.PredStateMean = this.Prediction.Poisson{k}.StateMean;
-                this.Filter.PredStateCovar = this.Prediction.Poisson{k}.StateCovar;
-                this.Filter.predictObs();
-                this.Prediction.Poisson{k}.MeasMean = this.Filter.PredMeasMean;
-                this.Prediction.Poisson{k}.InnovErrCovar = this.Filter.InnovErrCovar;
-                this.Prediction.Poisson{k}.KalmanGain = this.Filter.KalmanGain;
+            numPoisson = this.Poisson.StatePrediction.NumComponents;
+            poisson.MeasurementPrediction = GaussianMixtureStateX('empty',numMeasDims,numPoisson);
+            poisson.MeasurementPrediction.addprop('KalmanGains');
+            poisson.MeasurementPrediction.KalmanGains = zeros(numStateDims,numMeasDims,numPoisson);
+            
+            % Perform measurement prediction
+            for k = 1:poisson.StatePrediction.NumComponents
+                % Use underlying filter to predict measurement
+                this.Filter.StatePrediction = GaussianStateX(poisson.StatePrediction.Means(:,k),poisson.StatePrediction.Covars(:,:,k));
+                measurementPrediction_k = this.Filter.predictMeasurement();
+                
+                poisson.MeasurementPrediction.Means(:,k) = measurementPrediction_k.Mean;
+                poisson.MeasurementPrediction.Covars(:,:,k) = measurementPrediction_k.Covar;
+                poisson.MeasurementPrediction.KalmanGains(:,:,k) = this.Filter.KalmanGain;
             end
+            poisson.MeasurementPrediction.Weights = poisson.StatePrediction.Weights;
+            this.Poisson.MeasurementPrediction = copy(poisson.MeasurementPrediction);
         end
         
         function update(this)
@@ -345,174 +471,195 @@ classdef TrackOrientedMeMBerPoissonGMFilterX < FilterX
         % * update(this) calculates the corrected intensity.
         %
         % See also UnscentedParticleFilterX, predict, smooth.
-        
-            [numMeasDims, numMeasurements] = size(this.MeasurementList);
-           
-            % Extract parameters from model
-            H = this.Model.Obs.heval();
-            Pd = this.ProbOfDetection;
-            lambda_fa = this.ClutterIntFcn(1);
-            
+                   
             % Interpret sizes from inputs
-            numBernoulli = numel(this.Prediction.Bernoulli);
-            numPoisson = numel(this.Prediction.Poisson);
-            numStateDims = this.Model.Dyn.NumStateDims;
+            numMeasurements = size(this.MeasurementList,2);
+            numBernoulli = this.Bernoulli.StatePrediction.NumComponents;
+            numPoisson = this.Poisson.StatePrediction.NumComponents;
+            numStateDims = this.Model.Transition.NumStateDims;
             
+            % Compute Association Likelihood Matrix for known (Bernoulli) tracks
             this.AssocLikelihoodMatrix = zeros(numBernoulli+1, numMeasurements+1);
-           
-            % Prepare for data association
+            
+            % Compute measurement likelihoods
+            g = this.Model.Measurement.pdf(this.MeasurementList,this.Bernoulli.StatePrediction.Means,this.Bernoulli.StatePrediction.Covars);
             for i = 1:numBernoulli
-                
                 % Missed detection hypothesis
-                this.AssocLikelihoodMatrix(i+1,1) = 1 - this.Prediction.Bernoulli{i}.ProbOfExistence + this.Prediction.Bernoulli{i}.ProbOfExistence*(1-Pd);
-
+                this.AssocLikelihoodMatrix(i+1,1) = ...
+                    1 - this.Bernoulli.StatePrediction.Weights(i) + this.Bernoulli.StatePrediction.Weights(i)*(1-this.DetectionProbability);
                 % True detection hypotheses
-                try
-                    g = mvnpdf(this.MeasurementList',this.Prediction.Bernoulli{i}.MeasMean',this.Prediction.Bernoulli{i}.InnovErrCovar)';
-                catch
-                    ads=1;
-                end
                 for j = 1:numMeasurements
-                    this.AssocLikelihoodMatrix(i+1,j+1) = this.Prediction.Bernoulli{i}.ProbOfExistence*Pd*g(j);
+                    this.AssocLikelihoodMatrix(i+1,j+1) = this.Bernoulli.StatePrediction.Weights(i)*this.DetectionProbability*g(j,i);
                 end
             end
             
             % Create a new track for each measurement by updating PPP with measurement
-            new_Bernoulli = cell(numMeasurements,0);
-            g = zeros(numPoisson,numMeasurements);
+            new_Bernoulli = GaussianMixtureStateX('empty',numStateDims,numMeasurements);
+
+            % Compute measurement likelihoods
+            g = this.Model.Measurement.pdf(this.MeasurementList,this.Poisson.StatePrediction.Means,this.Poisson.StatePrediction.Covars);
+
+            % Compute normalising constant(s)
+            Ck = this.DetectionProbability*g.*this.Poisson.StatePrediction.Weights;
+            C = sum(Ck,2);
+            C_plus = C + this.Model.Clutter.pdf(this.MeasurementList)';
+            
+            % Pre-allocate memory
+            Means = zeros(numStateDims,numPoisson,numMeasurements);
+            Covars = zeros(numStateDims,numStateDims,numPoisson);
+            Weights = Ck./C;
+            
+            % Standard Kalman Update for all PPP components and mesurements
+            this.Filter.MeasurementList = this.MeasurementList;
             for k = 1:numPoisson
-                g(k,:) = mvnpdf(this.MeasurementList',this.Prediction.Poisson{k}.MeasMean',this.Prediction.Poisson{k}.InnovErrCovar)';
-            end
-            for j = 1:numMeasurements
-                ck = zeros(1,numPoisson);
-                yk = zeros(numStateDims,numPoisson);
-                for k = 1:numPoisson
-                    v = this.MeasurementList(:,j) - this.Prediction.Poisson{k}.MeasMean;
-                    ck(k) = this.Prediction.Poisson{k}.Weight*Pd*g(k,j);
-                    yk(:,k) = this.Prediction.Poisson{k}.StateMean + this.Prediction.Poisson{k}.KalmanGain*v;
-                end
-                C = sum(ck);
-                this.AssocLikelihoodMatrix(1,j+1) = C + lambda_fa;
-                new_Bernoulli{j}.ProbOfExistence = C/this.AssocLikelihoodMatrix(1,j+1);
-                ck = ck/C;
-                new_Bernoulli{j}.StateMean = yk*ck';
-                new_Bernoulli{j}.StateCovar = zeros(numStateDims,numStateDims);
-                for k = 1:numPoisson
-                    v = new_Bernoulli{j}.StateMean - yk(:,k);
-                    Pk = this.Prediction.Poisson{k}.StateCovar - this.Prediction.Poisson{k}.KalmanGain*H*this.Prediction.Poisson{k}.StateCovar;
-                    new_Bernoulli{j}.StateCovar = new_Bernoulli{j}.StateCovar + ck(k)*(Pk + v*v');
+                
+                % Use underlying filter to update components
+                this.Filter.StatePrediction = GaussianStateX(this.Poisson.StatePrediction.Means(:,k),this.Poisson.StatePrediction.Covars(:,:,k)) ;
+                this.Filter.MeasurementPrediction = GaussianStateX(this.Poisson.MeasurementPrediction.Means(:,k),this.Poisson.MeasurementPrediction.Covars(:,:,k));
+                this.Filter.KalmanGain = this.Poisson.MeasurementPrediction.KalmanGains(:,:,k);
+                
+                posterior = this.Filter.update();
+                Covars(:,:,k) = posterior.Covar;
+                for j = 1:numMeasurements
+                    Means(:,k,j) = posterior.Mean(:,j);
                 end
             end
             
-            % Update (i.e., thin) intensity of unknown targets
-            for k = 1:numPoisson
-                this.Posterior.Poisson{k}.StateMean = this.Prediction.Poisson{k}.StateMean;
-                this.Posterior.Poisson{k}.StateCovar = this.Prediction.Poisson{k}.StateCovar;
-                this.Posterior.Poisson{k}.Weight = this.Prediction.Poisson{k}.Weight*(1-Pd);
+            % For each measurement, create a new track as a mixture over
+            % all PPP GM components
+            for j = 1:numMeasurements
+                
+                % Association likelihood for new track
+                this.AssocLikelihoodMatrix(1,j+1) = C_plus(j);
+                
+                % Weight for new track
+                new_Bernoulli.Weights(j) = C(j)/C_plus(j);
+                
+                % Reduce mixture to single component
+                % ==================================
+                % Normalise ck to get mixture weights
+                gm = GaussianMixtureX(Means(:,:,j), Covars, Weights(j,:));
+                
+                % Weighted mean over all components for that measurement
+                new_Bernoulli.Means(:,j) = gm.Mean;
+                new_Bernoulli.Covars(:,:,j) = gm.Covar;
+                new_Bernoulli.Weights(j) = C(j)/C_plus(j);
             end
+            
+            % Update (i.e., thin) intensity of unknown targets
+            poisson.Posterior = copy(this.Poisson.StatePrediction);
+            poisson.Posterior.Weights = (1-this.DetectionProbability)*poisson.Posterior.Weights;
 
             % Not shown in paper--truncate low weight components
-            ss = cellfun(@(c) c.Weight, this.Posterior.Poisson)> this.Thresholds.Deletion.Poisson;
-            this.Posterior.Poisson = this.Posterior.Poisson(ss);
+            ss = poisson.Posterior.Weights > this.Thresholds.Deletion.Poisson;
+            this.Poisson.StatePosterior =  GaussianMixtureStateX(poisson.Posterior.Means(:,ss),...
+                                                                 poisson.Posterior.Covars(:,:,ss), ...
+                                                                 poisson.Posterior.Weights(ss));
             
             % Perform Data Association
             [a,b] = lbp(this.AssocLikelihoodMatrix(2:end,:),this.AssocLikelihoodMatrix(1,2:end));
             this.MarginalAssociationProbabilities = [[0,b'];a];
             
-            this.Posterior.Bernoulli = this.formTracksTOMB(a,this.Prediction.Bernoulli,b,new_Bernoulli);
+            bernoulli = this.formTracksTOMB(a,this.Bernoulli,b,new_Bernoulli);
             
             % Truncate tracks with low probability of existence (not shown in algorithm)
-            ss = cellfun(@(c) c.ProbOfExistence,this.Posterior.Bernoulli)> this.Thresholds.Deletion.Bernoulli;
-            this.Posterior.Bernoulli = this.Posterior.Bernoulli(ss);
+            ss = bernoulli.StatePosterior.Weights > this.Thresholds.Deletion.Bernoulli;
+            this.Bernoulli.StatePosterior = GaussianMixtureStateX(bernoulli.StatePosterior.Means(:,ss),...
+                                                                  bernoulli.StatePosterior.Covars(:,:,ss), ...
+                                                                  bernoulli.StatePosterior.Weights(ss));
+            this.Bernoulli.StatePosterior.addprop('Trajectories');
+            this.Bernoulli.StatePosterior.Trajectories = bernoulli.StatePosterior.Trajectories(ss);
         end
         
         function  bernoulli = formTracksTOMB(this,pupd,bernoulli,pnew,bernoulli_new)
-            
-            % Model parameters
-            Pd = this.ProbOfDetection;
-            
+                        
             % Infer sizes
-            nold = numel(bernoulli);
-            nnew = numel(bernoulli_new);
+            nold = bernoulli.StatePrediction.NumComponents;
+            nnew = bernoulli_new.NumComponents;
+            
+            bernoulli.StatePosterior = GaussianMixtureStateX('empty', this.Model.Transition.NumStateDims, nold+nnew);
+            bernoulli.StatePosterior.addprop('Trajectories');
+            bernoulli.StatePosterior.Trajectories = cell(1,nold+nnew);
 
             % Form continuing tracks
             for i = 1:nold
                 
                 % Existence
-                pr = [bernoulli{i}.ProbOfExistence*(1-Pd)/this.AssocLikelihoodMatrix(i+1,1)*pupd(i,1), pupd(i,2:end)];
-                bernoulli{i}.ProbOfExistence = sum(pr);
-                assocWeigths = pr/bernoulli{i}.ProbOfExistence;
+                pr = [bernoulli.StatePrediction.Weights(i)*(1-this.DetectionProbability)/this.AssocLikelihoodMatrix(i+1,1)*pupd(i,1), pupd(i,2:end)];
+                bernoulli.StatePosterior.Weights(i) = sum(pr);
+                assocWeigths = pr/bernoulli.StatePosterior.Weights(i);
                 
                 % State Update
-                this.Filter.PredStateMean = bernoulli{i}.StateMean;
-                this.Filter.PredStateCovar = bernoulli{i}.StateCovar;
-                this.Filter.PredMeasMean = bernoulli{i}.MeasMean;
-                this.Filter.InnovErrCovar = bernoulli{i}.InnovErrCovar; 
-                this.Filter.KalmanGain = bernoulli{i}.KalmanGain;
-                this.Filter.Measurement = this.MeasurementList;
+                this.Filter.StatePrediction = GaussianStateX(bernoulli.StatePrediction.Means(:,i), ...
+                                                             bernoulli.StatePrediction.Covars(:,:,i));
+                this.Filter.MeasurementPrediction = GaussianStateX(bernoulli.MeasurementPrediction.Means(:,i), ...
+                                                                   bernoulli.MeasurementPrediction.Covars(:,:,i));
+                this.Filter.KalmanGain = bernoulli.MeasurementPrediction.KalmanGains(:,:,i);
+                this.Filter.MeasurementList = this.MeasurementList;
                 this.Filter.updatePDA(assocWeigths);
                 
-                bernoulli{i}.StateMean = this.Filter.StateMean;
-                bernoulli{i}.StateCovar = this.Filter.StateCovar;
+                bernoulli.StatePosterior.Means(:,i) = this.Filter.StatePosterior.Mean;
+                bernoulli.StatePosterior.Covars(:,:,i) = this.Filter.StatePosterior.Covar;
                 
-                bernoulli{i}.Trajectory.StateMean(:,end+1) = bernoulli{i}.StateMean;
+                bernoulli.StatePosterior.Trajectories{i} = bernoulli.StatePrediction.Trajectories{i};
+                bernoulli.StatePosterior.Trajectories{i}.StateMean(:,end+1) = bernoulli.StatePosterior.Means(:,i);
             end
 
             % Form new tracks (already single hypothesis)
             for j = 1:nnew
-                bernoulli{nold+j}.ProbOfExistence = pnew(j) .* bernoulli_new{j}.ProbOfExistence;
-                bernoulli{nold+j}.StateMean = bernoulli_new{j}.StateMean;
-                bernoulli{nold+j}.StateCovar = bernoulli_new{j}.StateCovar;
-                bernoulli{nold+j}.Trajectory.StateMean = bernoulli{nold+j}.StateMean;
-            end
-        end
-    end
-    
-    methods (Access = protected)
-        
-        function initialise_(this, config)
-            
-            % Apply defaults
-            this.Thresholds.Deletion.Bernoulli = 1e-4;
-            this.Thresholds.Deletion.Poisson = 1e-4;
-            
-            if (isfield(config,'Model'))
-                this.Model = config.Model;
-            end
-            if (isfield(config,'BirthModel'))
-                this.BirthModel = config.BirthModel;
-            end
-            if (isfield(config,'ProbOfSurvive'))
-                this.ProbOfSurvive = config.ProbOfSurvive;
-            end
-            if (isfield(config,'ProbOfDetection'))
-                this.ProbOfDetection = config.ProbOfDetection;
-            end
-            if (isfield(config,'ClutterIntFcn'))
-                this.ClutterIntFcn = config.ClutterIntFcn;
-            end
-            if (isfield(config,'Thresholds'))
-                thresholds = config.Thresholds;
-                if (isfield(thresholds,'Deletion'))
-                    if (isfield(thresholds.Deletion,'Bernoulli'))
-                        this.Thresholds.Deletion.Bernoulli = thresholds.Deletion.Bernoulli;
-                    end
-                    if (isfield(thresholds.Deletion,'Poisson'))
-                        this.Thresholds.Deletion.Poisson = thresholds.Deletion.Poisson;
-                    end
-                end
+                bernoulli.StatePosterior.Weights(nold+j) = pnew(j) .* bernoulli_new.Weights(j);
+                bernoulli.StatePosterior.Means(:,nold+j) = bernoulli_new.Means(:,j);
+                bernoulli.StatePosterior.Covars(:,:,nold+j) = bernoulli_new.Covars(:,:,j);
+                bernoulli.StatePosterior.Trajectories{nold+j}.StateMean = bernoulli_new.Means(:,j);
             end
         end
         
-        % ===============================>
-        % ACCESS METHOD HANDLES
-        % ===============================>
+        % StatePrior        
+        function statePrior = get.StatePrior(this)
+            statePrior = this.StatePrior;
+        end
+        function set.StatePrior(this, newStatePrior)
+            this.StatePrior = setStatePrior(this, newStatePrior);
+        end
         
-        function MeasLikelihood = getMeasLikelihood(this)
-            if(isempty(this.pmeasLikelihood_))
-                this.pmeasLikelihood_ = this.Model.Obs.pdf(this.MeasurementList, this.PredParticles);               
-            end
-            MeasLikelihood = this.pmeasLikelihood_;
+        % StatePrediction
+        function statePrediction = get.StatePrediction(this)
+            statePrediction = this.StatePrediction;
+        end
+        function set.StatePrediction(this, newStatePrediction)
+            this.StatePrediction = setStatePrediction(this, newStatePrediction);
+        end
+        
+        % MeasurementPrediction
+        function measurementPrediction = get.MeasurementPrediction(this)
+            measurementPrediction = this.MeasurementPrediction;
+        end
+        function set.MeasurementPrediction(this, newMeasurementPrediction)
+            this.MeasurementPrediction = setMeasurementPrediction(this, newMeasurementPrediction);
+        end
+        
+        % MeasurementLikelihood
+        function MeasurementLikelihoods = get.MeasurementLikelihoods(this)
+            MeasurementLikelihoods = getMeasurementLikelihoods(this);
+        end
+        function set.MeasurementLikelihoods(this, newMeasurementLikelihoods)
+            this.MeasurementLikelihoods_ = setMeasurementLikelihoods(this, newMeasurementLikelihoods);
+        end
+        
+        % MeasurementLikelihoodsPerComponent
+        function MeasurementLikelihoodsPerComponent = get.MeasurementLikelihoodsPerComponent(this)
+            MeasurementLikelihoodsPerComponent = getMeasurementLikelihoodsPerComponent(this);
+        end
+        function set.MeasurementLikelihoodsPerComponent(this, newMeasurementLikelihoodsPerComponent)
+            this.MeasurementLikelihoodsPerComponent_ = setMeasurementLikelihoodsPerComponent(this, newMeasurementLikelihoodsPerComponent);
+        end
+        
+        % StatePosterior
+        function statePosterior = get.StatePosterior(this)
+            statePosterior = this.StatePosterior;
+        end
+        function set.StatePosterior(this, newStatePosterior)
+            this.StatePosterior = setStatePosterior(this, newStatePosterior);
         end
     end
 end

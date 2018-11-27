@@ -44,14 +44,21 @@ classdef (Abstract) ProbabilityDistributionX < BaseX
 
         function numVariables = get.NumVariables(this)
         %get.NumVariables Custom getter for NumVariables property
-            numVariables = this.NumVariables_;
+            numVariables = getNumVariables(this);
         end
 
         function set.NumVariables(this, numVariables)
         %set.NumVariables Custom setter for NumVariables property
-            validateattributes(numVariables, {'numeric'}, {'scalar', 'integer', '>=', 1}, ...
-                'ProbabilityDistribution', 'numVariables');
-            this.NumVariables_ = double(numVariables);
+            this.NumVariables_ = setNumVariables(this, numVariables);
+        end
+    end
+    
+    methods (Access=protected)
+        function numVariables = getNumVariables(this)
+            numVariables = this.NumVariables_;
+        end
+        function NumVariables = setNumVariables(this, numVariables)
+            NumVariables = numVariables;
         end
     end
 end

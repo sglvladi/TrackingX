@@ -19,7 +19,7 @@ classdef GaussianDistributionX < ProbabilityDistributionX
 % 
 % See also TransitionModelX, MeasurementModelX and ControlModelX template classes
     
-    properties (Dependent)
+    properties
         % Mean: (NumVariables x 1) column vector 
         %   Mean vector of the Gaussian distribution
         Mean
@@ -28,17 +28,6 @@ classdef GaussianDistributionX < ProbabilityDistributionX
         %   The covariance matrix of the Gaussian distribution
         %   The covariance matrix has to be symmetric and positive semi-definite.
         Covar
-    end
-    
-    properties (Access = private)
-        % Mean_ - Internal storage for mean vector
-        Mean_
-        
-        % Covar_ - Internal storage for covariance matrix
-        Covar_
-        
-        % Std_ - Internal storage for standard deviation matrix
-        Std_
     end
     
     methods
@@ -92,10 +81,6 @@ classdef GaussianDistributionX < ProbabilityDistributionX
                 mean = varargin{1};
                 covar =  varargin{2};
                 %reset Reset the distribution with a new number of random variables
-
-                % Reset number of random variables. This will also take care of
-                % input validation.
-                this.NumVariables = size(mean,1);
 
                 % Re-initialize the mean and covariance            
                 this.Mean = mean;
@@ -155,53 +140,6 @@ classdef GaussianDistributionX < ProbabilityDistributionX
             
             sampleCovar = factor * (bsxfun(@times, meanDiff, weights) * meanDiff');
         end
-    end
-    
-    methods
-        function meanValue = get.Mean(this)
-        %get.Mean Getter for Mean property
-            meanValue = this.Mean_;
-        end
-        
-        function set.Mean(this, meanValue)
-        %set.Mean - Setter for Mean property
-            this.Mean_ = double(meanValue);
-            validateattributes(meanValue, {'numeric'}, {'size', [this.NumVariables,1]}, ...
-                                           'GaussianDistributionX', 'Mean');
-        end
-        
-        function covariance = get.Covar(this)
-        %get.Covariance Getter for Covariance property
-            covariance = this.Covar_;
-        end
-        
-        function set.Covar(this, covariance)
-        %set.Covariance Setter for Covariance property
-            
-            validateattributes(covariance, {'numeric'}, ...
-                               {'size', [this.NumVariables, this.NumVariables]}, ...
-                                'GaussianDistributionX', 'Covar');
-            
-            % Verify properties of covariance matrix. It's supposed to be
-            % symmetric and positive semi-definite.
-            % If that's the case, the number of negative eigenvalues,
-            % numNegEigenValues, will be 0.
-            % numNegEigenValues will be NaN if the input is not symmetric.
-%             [T,numNegEigenValues] = cholcov(double(covariance));
-%             if(numNegEigenValues~=0)
-%                 warning('Applying correction to ensure symmetric and positive semi-definite covariance!');
-%                 covariance = (covariance+covariance')/2;
-%                 [T,numNegEigenValues] = cholcov(double(covariance));
-%             end
-%             assert(numNegEigenValues == 0);
-            covariance = (covariance+covariance')/2;
-            
-            % Store Cholesky factor to speed up subsequent sampling
-            % operations.
-            this.Covar_ = double(covariance);
-            %this.Std_ = real(T);
-        end
-    end
-    
+    end    
 end
 
