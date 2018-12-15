@@ -11,12 +11,12 @@
 % Load dataset
 load('3_robots.mat');
 
-tot_elapsed = 0;
+tot_ellapsed = 0;
 % Plot settings
 ShowPlots = 1;              % Set to 0 to hide plots
 ShowPrediction = 0;         % Set to 0 to skip showing prediction
 ShowUpdate = 1;             % Set to 0 to skip showing update
-TrackNum = 3;
+NumTracks = 3;
 
 % Recording settings
 clear F;
@@ -25,47 +25,54 @@ FrameRate = 10;            % Number of frames per second
 VideoQuality = 100;         % Set to desired quality percentage
 VideoPathName = 'tomb_tracks_only.avi'; % Set to the desired path and name of produced recording
 
-
-tot_ellapsed = 0;
-
-% Instantiate a Dynamic model
-dyn = ConstantVelocityModelX_2D('VelocityErrVariance',0.0001);
-
-% Instantiate an Observation model
-obs = LinGaussObsModelX_2D('NumStateDims',4,'ObsErrVariance',0.01,'Mapping',[1 3]);
-
-% Compile the State-Space model
-ssm = StateSpaceModelX(dyn,obs);
-
+lambdaV = 50; % Expected number of clutter measurements over entire surveillance region
 V = 10^2;     % Volume of surveillance region (10x10 2D-grid)
 V_bounds = [0 10 0 10]; % [x_min x_max y_min y_max]
-lambdaV = 10; % Expected number of clutter measurements over entire surveillance region
-lambda = lambdaV/V;
 
-% Generate observations (Poisson number with rate of lambdaV, positions are uniform over surveillance region)
-[DataList,x1,y1] = gen_obs_cluttered_multi2(TrackNum, x_true, y_true, sqrt(obs.ObsErrVariance), V_bounds, lambdaV, 1, 1); 
-N=size(DataList,2); % timesteps 
+% Instantiate a Transitionamic model
+transition_model = ConstantVelocityX('NumDims',2,'VelocityErrVariance',0.0001);
+
+% Instantiate a Measurement model
+measurement_model = LinearGaussianX('NumMeasDims',2,'NumStateDims',4,'MeasurementErrVariance',0.01,'Mapping',[1 3]);
+%measurement_model = RangeBearing2CartesianX('NumStateDims',4,'MeasurementErrVariance',[0.001,0.02],'Mapping',[1 3]);
+
+% Instantiate a clutter model
+clutter_model = PoissonRateUniformPositionX('ClutterRate',lambdaV,'Limits',[V_bounds(1:2);V_bounds(3:4)]);
+
+% Instantiate birth model
+numBirthComponents = 10;
+BirthComponents.Means = [unifrnd(0,10,50,1),zeros(50,1),unifrnd(0,10,50,1),zeros(50,1)]';%[ 1 9 9 1; 0 0 0 0; 1 1 9 9; 0 0 0 0];
+BirthComponents.Covars = repmat(diag([0.5,0.1,0.5,0.1].^2),1,1,50);
+BirthComponents.Weights = repmat(1/50,1,50);
+%birth_distribution = GaussianMixtureX(BirthComponents.Means,BirthComponents.Covars, BirthComponents.Weights);
+birth_distribution = UniformDistributionX([V_bounds(1:2);[0,.5];V_bounds(3:4);[0,.5]]);
+birth_model = DistributionBasedBirthModelX('Distribution', birth_distribution,...
+                                           'BirthIntensity', 0.01);
+
+% Compile the State-Space model
+ssm = StateSpaceModelX(transition_model,measurement_model,'Clutter',clutter_model, 'Birth', birth_model);
+
+% Extract the ground truth data from the example workspace
+load('example.mat');
+NumIter = size(GroundTruth,2);
+
+% Set BirthIntensity
+NumTracks = 3;
+
+% Generate DataList
+meas_simulator = MeasurementSimulatorX('Model',ssm);
+meas_simulator.DetectionProbability = 1;
+[DataList, nGroundTruth] = meas_simulator.simulate(GroundTruth);
 
 % Assign PHD parameter values
 config.Model = ssm;
-q = dyn.covariance();
-PriorDistFcn = @(Np) deal([(V_bounds(2)-V_bounds(1))*rand(Np,1), mvnrnd(zeros(Np,1), 0.01),(V_bounds(4)-V_bounds(3))*rand(Np,1),mvnrnd(zeros(Np,1), 0.01)]',repmat(0.2/Np,1,Np)); % Uniform position and heading, Gaussian speed
-config.PriorDistFcn = @ (Np) PriorDistFcn(Np);
-config.BirthModel.ProbOfBirth = 0.005;
-config.BirthModel.BirthIntFcn = @ (Np) PriorDistFcn(Np);
-config.BirthModel.Schema = 'Expansion';
-config.BirthModel.Jk = 0.1;
-config.ProbOfSurvive = 0.9;
-config.ProbOfDetection = 0.9;
-config.ClutterRate = lambdaV;
-config.ClutterIntFcn = @(z) repmat(lambda,1,size(z,2));
-config.NumBernoulliParticles = 2000;
-config.NumPoissonParticles = 50000;
-config.ResamplingScheme = 'Multinomial';
+config.SurvivalProbability = 0.9;
+config.DetectionProbability = 0.9;
 
 % Instantiate PHD filter
-mybpf = TrackOrientedMeMBerPoissonParticleFilterX(config);
-[mybpf.Poisson.Updated.Particles, mybpf.Poisson.Updated.Weights] = PriorDistFcn(10000);
+filter = TrackOrientedMeMBerPoissonParticleFilterX(config);
+[particles,weights] = birth_model.random(10000);
+filter.Poisson.StatePosterior = ParticleStateX(particles,weights*30);
 
 % Create figure windows
 if(ShowPlots)
@@ -93,26 +100,25 @@ end
 
 % START OF SIMULATION
 % ===================>
-for k=1:N
-    fprintf('Iteration = %d/%d\n================>\n',k,N);
+for k=1:NumIter
+    fprintf('Iteration = %d/%d\n================>\n',k,NumIter);
     
     % Extract DataList at time k
     tempDataList = DataList{k}(:,:);
     tempDataList( :, ~any(tempDataList,1) ) = [];       
     
     % Change PHD filter parameters
-    mybpf.MeasurementList = tempDataList; % New observations
-    %mybpf.ClutterRate = (size(tempDataList,2)-mybpf.NumTargets)/V;
+    filter.MeasurementList = tempDataList; % New observations
     
     tic;
     % Predict PHD filter
-    mybpf.predict();
+    filter.predict();
         
     % Update PHD filter
-    mybpf.update();
+    filter.update();
     ellapsed = toc;
     tot_ellapsed = tot_ellapsed + ellapsed;
-    %fprintf("Probability of existence: %f\n", mybpf.ProbOfExistence);
+    %fprintf("Probability of existence: %f\n", filter.ProbOfExistence);
     fprintf("Ellapsed time: %f\n\n", ellapsed);
     % Plot update step results
     if(ShowPlots && ShowUpdate)
@@ -125,23 +131,21 @@ for k=1:N
         axis(ax(1),V_bounds)
         hold(ax(1),'on');
 
-        %h2 = plot(ax(1), mybpf.Particles(1,:), mybpf.Particles(3,:), '.');
-        %h2 = plot_gaussian_ellipsoid(mean(mybpf.Particles([1,3],:),2),weightedcov(mybpf.Particles([1,3],:),mybpf.Weights),'r',1,50,ax(1));
         hold(ax(1),'on');
-        for j=1:NumTracks
-            h2 = plot(Logs{j}.Groundtruth.State(1,1:i),Logs{j}.Groundtruth.State(2,1:i),'b.-','LineWidth',1);
-            if j==2
-                set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
+%         for j=1:NumTracks
+%             h2 = plot(GroundTruth{k}(1,1:i),Logs{j}.Groundtruth.State(2,1:i),'b.-','LineWidth',1);
+%             if j==2
+%                 set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
+%             end
+%             h2 = plot(Logs{j}.Groundtruth.State(1,i),Logs{j}.Groundtruth.State(2,i),'bo','MarkerSize', 10);
+%             set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off'); % 
+%         end
+        for i=1:numel(filter.Bernoulli.StatePosterior.ExistenceProbabilities)
+            %if(numel(filter.Posterior.Bernoulli{i}.Trajectory.ProbOfExistence)>10&&mean(filter.Posterior.Bernoulli{i}.Trajectory.ProbOfExistence)>0.8)
+            if(filter.Bernoulli.StatePosterior.ExistenceProbabilities(i)>0.8)
+                plot(ax(1),filter.Bernoulli.StatePosterior.Trajectories{i}.StateMean(1,:),filter.Bernoulli.StatePosterior.Trajectories{i}.StateMean(3,:),'.-');
+                plot_gaussian_ellipsoid(filter.Bernoulli.StatePosterior.Trajectories{i}.StateMean([1,3],end),filter.Bernoulli.StatePosterior.Trajectories{i}.StateCovar([1,3],[1,3],end),'r',1,50,ax(1));
             end
-            h2 = plot(Logs{j}.Groundtruth.State(1,i),Logs{j}.Groundtruth.State(2,i),'bo','MarkerSize', 10);
-            set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off'); % 
-        end
-        for i=1:numel(mybpf.Bernoulli.Updated)
-            %if(numel(mybpf.Bernoulli.Updated{i}.Trajectory.ProbOfExistence)>10&&mean(mybpf.Bernoulli.Updated{i}.Trajectory.ProbOfExistence)>0.8)
-                %plot(ax(1),mybpf.Bernoulli.Updated{i}.Particles(1,:),mybpf.Bernoulli.Updated{i}.Particles(3,:),'.');
-                plot(ax(1),mybpf.Bernoulli.Updated{i}.Trajectory.Mean(1,:),mybpf.Bernoulli.Updated{i}.Trajectory.Mean(3,:),'.-');
-                %plot_gaussian_ellipsoid(mybpf.Bernoulli.Updated{i}.Trajectory.Mean([1,3],end),mybpf.Bernoulli.Updated{i}.Trajectory.Covariance([1,3],[1,3],end),'r',1,50,ax(1));
-            %end
                 %hold on;
         end
         
@@ -153,14 +157,15 @@ for k=1:N
             
         % Plot PHD
         cla(ax(2), 'reset');
-        [bandwidth,density,X,Y]=kde2d(mybpf.Poisson.Updated.Particles([1,3],:)');
+        p = filter.Poisson.StatePosterior.Particles;
+        [bandwidth,density,X,Y]=kde2d(p([1,3],:)');
         %contour3(X,Y,density,50);
         h = surf(ax(2),X,Y,density);        
         shading interp
         colormap(ax(2), jet(3000))
         %set(h, 'edgecolor','none')
         hold on;
-        plot(ax(2), mybpf.MeasurementList(1,:), mybpf.MeasurementList(2,:), 'y*');
+        plot(ax(2), filter.MeasurementList(1,:), filter.MeasurementList(2,:), 'y*');
         axis(ax(2), [V_bounds]);
         str = sprintf('PHD intensity (Update)');
         xlabel(ax(2),'X position (m)')
@@ -185,13 +190,4 @@ if(Record)
     open(vidObj);
     writeVideo(vidObj, F);
     close(vidObj);
-end
-
-function [birthParticles, birthWeights] = BirthIntFcn(measurements)
-    obs = LinGaussObsModelX_2D('NumStateDims',4,'ObsErrVariance',0.02,'Mapping',[1 3]);
-    birthParticles = zeros(4,10*size(measurements,2));
-    for i=1:size(measurements,2)
-        birthParticles(:,i:i+9) = [mvnrnd(measurements(1,i)',0.02,10)'; mvnrnd(0, 0.05,10)'; mvnrnd(measurements(2,i)',0.02,10)'; mvnrnd(0, 0.05',10)'];
-    end
-    birthWeights = repmat(1/(10*size(measurements,2)),1,10*size(measurements,2));
 end

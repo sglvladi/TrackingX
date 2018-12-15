@@ -266,42 +266,6 @@ classdef TrackOrientedMeMBerPoissonGMFilterX < FilterX
         % ----------
         % Model: StateSpaceModelX
         %   An object handle to StateSpaceModelX object.
-        % NumParticles: scalar
-        %   The number of particles to be employed by the  SMC PHD Filter. 
-        %   (default = 10000)
-        % PriorParticles: (NumStateDims x NumParticles) matrix
-        %   The initial set of particles to be used by the Particle Filter. 
-        %   These are copied into the Particles property by the constructor.
-        % PriorWeights: (1 x NumParticles) row vector
-        %   The initial set of weights to be used by the Particle Filter. 
-        %   These are copied into the Weights property by the constructor. 
-        %   (default = 1/NumParticles, which implies uniform weights)
-        % PriorDistFcn: function handle
-        %   A function handle, of the form [parts, weights] = PriorDistFcn(NumParticles),
-        %   which when called generates a set of initial particles and weights, 
-        %   that are consecutively copied into the Particles and Weights properties
-        %   respectively. The function should accept exactly ONE argument, 
-        %   which is the number of particles (NumParticles) to be generated and
-        %   return 2 outputs. If a PriorDistFcn is specified, then any values provided for the
-        %   PriorParticles and PriorWeights arguments are ignored.
-        % ResamplingScheme: string 
-        %   Method used for particle resampling, specified as either 'Multinomial'
-        %   or 'Systematic'. (default = 'Systematic')
-        % ResamplingPolicy: (1 x 2) cell array
-        %   Specifies the resampling trigger conditions. ReamplingPolicy{1} 
-        %   should be a string which can be either:
-        %       1) "TimeInterval", in which case ReamplingPolicy{2} should 
-        %          be a scalar specifying the number of iterations after which
-        %          resampling should be performed, or
-        %       2) "EffectiveRatio", in which case Resampling{2} should be
-        %          a scalar specifying the minimum ratio of effective particles 
-        %          which, when reached, will trigger the resampling process
-        %   (default ResamplingPolicy = {'TimeInterval',1}], implying that 
-        %   resampling is performed on every update of the Particle Filter).                       
-        % Resampler: ResamplerX object handle, optional
-        %   An object handle to a ResamplerX subclass. If a Resampler is provided,
-        %   then it will override any choice specified within the ResamplingScheme. 
-        %   ResamplingPolicy will not be affected.
         % BirthModel: (1 x 2) cell array
         %   Specifies the particle birth scheme. BirthModel{1} should be 
         %   a string which can be set to either:
@@ -320,8 +284,6 @@ classdef TrackOrientedMeMBerPoissonGMFilterX < FilterX
         %   iterations of the filter.
         % DetectionProbability: scalar
         %   The probablity that a target will be detected in a given measurement scan.
-        % NumTargets: scalar
-        %   The estimated number of targets following an update step.
         %
         % Usage
         % ----- 
@@ -392,7 +354,6 @@ classdef TrackOrientedMeMBerPoissonGMFilterX < FilterX
             numPoisson = poisson.StatePrediction.NumComponents;
             numStateDims = this.Model.Transition.NumStateDims;
             numMeasDims = this.Model.Measurement.NumMeasDims;
-            
             
             bernoulli.MeasurementPrediction = GaussianMixtureStateX('empty',numMeasDims,numBernoulli);
             bernoulli.MeasurementPrediction.addprop('KalmanGains');
@@ -569,6 +530,14 @@ classdef TrackOrientedMeMBerPoissonGMFilterX < FilterX
                                                                   bernoulli.StatePosterior.Weights(ss));
             this.Bernoulli.StatePosterior.addprop('Trajectories');
             this.Bernoulli.StatePosterior.Trajectories = bernoulli.StatePosterior.Trajectories(ss);
+%                                                               
+%             this.Bernoulli.StatePosterior = GaussianMixtureStateX(bernoulli.StatePosterior.Means,...
+%                                                                   bernoulli.StatePosterior.Covars, ...
+%                                                                   bernoulli.StatePosterior.Weights);
+%             this.Bernoulli.StatePosterior.addprop('Trajectories');
+%             this.Bernoulli.StatePosterior.Trajectories = bernoulli.StatePosterior.Trajectories;
+            %[this.Bernoulli, this.Poisson] = this.recycle(this.Bernoulli, this.Poisson, 0.001);
+            
         end
         
         function  bernoulli = formTracksTOMB(this,pupd,bernoulli,pnew,bernoulli_new)
@@ -603,6 +572,7 @@ classdef TrackOrientedMeMBerPoissonGMFilterX < FilterX
                 
                 bernoulli.StatePosterior.Trajectories{i} = bernoulli.StatePrediction.Trajectories{i};
                 bernoulli.StatePosterior.Trajectories{i}.StateMean(:,end+1) = bernoulli.StatePosterior.Means(:,i);
+                bernoulli.StatePosterior.Trajectories{i}.StateCovar(:,:,end+1) = bernoulli.StatePosterior.Covars(:,:,i);
             end
 
             % Form new tracks (already single hypothesis)
@@ -611,6 +581,46 @@ classdef TrackOrientedMeMBerPoissonGMFilterX < FilterX
                 bernoulli.StatePosterior.Means(:,nold+j) = bernoulli_new.Means(:,j);
                 bernoulli.StatePosterior.Covars(:,:,nold+j) = bernoulli_new.Covars(:,:,j);
                 bernoulli.StatePosterior.Trajectories{nold+j}.StateMean = bernoulli_new.Means(:,j);
+                bernoulli.StatePosterior.Trajectories{nold+j}.StateCovar = bernoulli_new.Covars(:,:,j);
+            end
+        end
+        
+        function [bernoulli, poisson] = recycle(this, bernoulli, poisson, threshold)
+            numBernoulli = bernoulli.StatePosterior.NumComponents;
+            numPoisson = poisson.StatePosterior.NumComponents;
+            numStateDims = this.Model.Transition.NumStateDims;
+            
+            recycleInds = find(bernoulli.StatePosterior.Weights< threshold);
+            numRecycle = numel(recycleInds);
+            
+            if(numRecycle>0)
+                
+                % Copy over old poisson components
+                poisson_posterior = GaussianMixtureStateX('empty', numStateDims, numPoisson+numRecycle);
+                poisson_posterior.Means(:,1:numPoisson) = poisson.StatePosterior.Means;
+                poisson_posterior.Covars(:,:,1:numPoisson) = poisson.StatePosterior.Covars;
+                poisson_posterior.Weights(1:numPoisson) = poisson.StatePosterior.Weights;
+                
+                % Append recycled bernoulli components
+                poisson_posterior.Means(:,numPoisson+1:end) = bernoulli.StatePosterior.Means(:,recycleInds);
+                poisson_posterior.Covars(:,:,numPoisson+1:end) = bernoulli.StatePosterior.Covars(:,:,recycleInds);
+                poisson_posterior.Weights(numPoisson+1:end) = bernoulli.StatePosterior.Weights(recycleInds);
+                
+                for i=1:numPoisson+numRecycle
+                    [S,a]=cholcov(poisson_posterior.Covars(:,:,i));
+                    if(a~=0)
+                        disp(i);
+                    end
+                end
+                
+                % Remove old bernoulli components
+                bernoulli.StatePosterior.Means(:,recycleInds) = [];
+                bernoulli.StatePosterior.Covars(:,:,recycleInds) = [];
+                bernoulli.StatePosterior.Weights(recycleInds) = [];
+                bernoulli.StatePosterior.Trajectories(recycleInds) = [];
+                
+                poisson.StatePosterior = poisson_posterior;
+
             end
         end
         

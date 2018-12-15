@@ -41,7 +41,7 @@ function [newWeights] = ParticleFilterX_UpdatePDA(lik,y,parts,weights,W,Likeliho
         newWeights = weights;
         return;
     else
-        Ck = sum(LikelihoodMatrix.*weights,2);
+        Ck = sum(LikelihoodMatrix.*weights,2)+eps;
         weightsPerMeasurement = LikelihoodMatrix./Ck.*weights;
         newWeights = W(1)*weights + sum(W(2:end)'.*weightsPerMeasurement,1);
 

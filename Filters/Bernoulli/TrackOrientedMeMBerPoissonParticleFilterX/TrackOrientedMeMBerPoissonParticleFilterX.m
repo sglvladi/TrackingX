@@ -1,39 +1,13 @@
 classdef TrackOrientedMeMBerPoissonParticleFilterX < FilterX
 % TrackOrientedMeMBerPoissonParticleFilterX class
 %
-% Summary of TrackOrientedMeMBerPoissonParticleFilterX:
+% Summary of TrackOrientedMeMBerPoissonGMFilterX:
 % This is a class implementation of a Track-Oriented Marginal Hybrid 
 % Multi-Bernoulli (MeMBer) Poisson Filter [1].
 %
-% TrackOrientedMeMBerPoissonParticleFilterX Properties:
-%   + NumParticles - The number of particles employed by the PHD Filter
-%   + Particles - A (NumStateDims x NumParticles) matrix used to store 
-%                       the last computed/set filtered particles  
-%   + Weights - A (1 x NumParticles) vector used to store the weights
-%               of the last computed/set filtered particles
-%   + PredParticles - A (NumStateDims x NumParticles) matrix used to store 
-%                     the last computed/set predicted particles  
-%   + PredWeights - A (1 x NumParticles) vector used to store the weights
-%                   of the last computed/set predicted particles
+% TrackOrientedMeMBerPoissonGMFilterX Properties:
 %   + MeasurementList - A (NumObsDims x NumObs) matrix used to store the received 
 %                       measurements
-%   + ResamplingScheme - Method used for particle resampling, specified as 
-%                        'multinomial', 'systematic'. Default = 'systematic'
-%   + ResamplingPolicy - A (1 x 2) cell array, specifying the resampling trigger
-%                        conditions. ReamplingPolicy{1} should be a string
-%                        which can be either "TimeInterval", in which case 
-%                        ReamplingPolicy{2} should specify the number of 
-%                        iterations after which resampling should be done,
-%                        or "EffectiveRatio", in which case Resampling{2}
-%                        should specify the minimum ratio of effective particles
-%                        which when reached will trigger the resampling process.
-%                        Default ResamplingPolicy = {"TimeInterval",1}, meaning
-%                        that resampling is performed on every iteration of
-%                        the Particle Filter (upon update).                       
-%   + Resampler - An object handle to a ResamplerX subclass. If a 
-%                 Resampler is provided, then it will override any choice
-%                 specified within the ResamplingScheme. ResamplingPolicy
-%                 will not be affected.
 %   + BirthModel - A (1 x 3) cell array, specifying the particle birth
 %                   scheme. BirthModel{1} should be a string which can be
 %                   set to either "Mixture", in which case BirthModel{2}
@@ -46,9 +20,9 @@ classdef TrackOrientedMeMBerPoissonParticleFilterX < FilterX
 %                   a birth probability of 50%.
 %   + BirthIntFcn - A function handle, which when called generates a set 
 %                   of initial particles and weights.
-%   + ProbOfSurvive - The probability that a target may cease to exist
+%   + SurvivalProbability - The probability that a target may cease to exist
 %                   between consecutive iterations of the filter.
-%   + ProbOfDetection - The probablity that a target will be detected in
+%   + DetectionProbability - The probablity that a target will be detected in
 %                       a given measurement scan.
 %   + NumTargets - The estimated number of targets following an update step.
 %   + Model - An object handle to StateSpaceModelX object
@@ -56,8 +30,8 @@ classdef TrackOrientedMeMBerPoissonParticleFilterX < FilterX
 %       + Obs - Object handle to ObservationModelX SubClass 
 %       + Ctr - Object handle to ControlModelX SubClass 
 %
-% TrackOrientedMeMBerPoissonParticleFilterX Methods:
-%   + TrackOrientedMeMBerPoissonParticleFilterX - Constructor method
+% TrackOrientedMeMBerPoissonGMFilterX Methods:
+%   + TrackOrientedMeMBerPoissonGMFilterX - Constructor method
 %   + predict - Performs Bernoulli prediction step
 %   + update - Performs Bernoulli update step
 %
@@ -68,60 +42,155 @@ classdef TrackOrientedMeMBerPoissonParticleFilterX < FilterX
 %
 % See also ParticleFilterX, KalmanFilerX.
 
-    properties (Access = private, Hidden)
-        
+    properties (Dependent)
+        NumComponents
+        NumMeasurements
+        NumTargets
+        MeasurementLikelihoods
+        MeasurementLikelihoodsPerComponent
     end
+    
     properties
+        NumBernoulliParticles = 5000
+        NumPoissonParticles = 50000       
+        
+        StatePrior
+        StatePrediction
+        MeasurementPrediction
+        StatePosterior
+        SurvivalProbability  
+        DetectionProbability 
+        
         Bernoulli
         Poisson
-        NumMeasurements
-        NumBernoulliParticles = 1000
-        NumPoissonParticles = 10000
-        MeasurementList
+        
+        % Component management
+        Filter
+        Hypothesiser = LoopyBeliefPropagationX();
+        
         ResamplingScheme = 'Systematic'
         ResamplingPolicy = {'TimeInterval',1}                    
-        Resampler        
-        BirthModel
-        ProbOfBirth
-        ProbOfSurvive  
-        ProbOfDetection 
-        ClutterRate
-        ClutterIntFcn
+        Resampler
+        
+        StoreTrajectories = true
         AssocLikelihoodMatrix
         MarginalAssociationProbabilities
-        Hypothesiser = LoopyBeliefPropagationX();
     end
     
     properties (Access=protected)
-        pmeasLikelihood_ = []
+        MeasurementLikelihoods_ = [];
+        MeasurementLikelihoodsPerParticle_ = [];
+        MeasurementPrediction_ = [];
+        NumComponents_ = 1;
+    end
+    
+    methods (Access=protected)
+        function initialise_(this, config)
+            initialise_@FilterX(this,config);
+            
+            this.Resampler = SystematicResamplerX();
+            
+            if (isfield(config,'StatePrior'))
+                this.StatePrior = config.StatePrior;
+                this.StatePosterior = this.StatePrior;
+            end
+            if (isfield(config,'SurvivalProbability'))
+                this.SurvivalProbability = config.SurvivalProbability;
+            end
+            if (isfield(config,'DetectionProbability'))
+                this.DetectionProbability = config.DetectionProbability;
+            end
+            if (isfield(config,'Thresholds'))
+                thresholds = config.Thresholds;
+                if (isfield(thresholds,'Deletion'))
+                    if (isfield(thresholds.Deletion,'Bernoulli'))
+                        this.Thresholds.Deletion.Bernoulli = thresholds.Deletion.Bernoulli;
+                    end
+                    if (isfield(thresholds.Deletion,'Poisson'))
+                        this.Thresholds.Deletion.Poisson = thresholds.Deletion.Poisson;
+                    end
+                end
+            end
+            if (isfield(config,'Filter'))
+                this.Filter = config.Filter;
+            end
+        end
+        
+        % StatePrior
+        function StatePrior = setStatePrior(this,newStatePrior)
+            StatePrior = newStatePrior;
+        end
+        
+        % State Prediction
+        function StatePrediction = setStatePrediction(this,newStatePrediction)
+            if(isa(newStatePrediction,'GaussianMixtureStateX'))
+                StatePrediction = newStatePrediction;
+            else
+                error('State type must be GaussianMixtureStateX');
+            end
+            this.MeasurementPrediction_ = []; % Reset dependent measurement prediction
+            this.MeasurementLikelihoods_ = [];
+            this.MeasurementLikelihoodsPerComponent_ = [];
+        end
+        
+        % Measurement Prediction
+        function MeasurementPrediction = getMeasurementPrediction(this)
+            if(isempty(this.MeasurementPrediction_))
+                this.MeasurementPrediction_ =  ...
+                    ParticleStateX(this.Model.Measurement.feval(this.StatePrediction.Particles,true),...
+                                   this.StatePrediction.Weights);
+            end
+            MeasurementPrediction = this.MeasurementPrediction_;
+        end
+        function MeasurementPrediction = setMeasurementPrediction(this,newMeasurementPrediction)
+            if(isa(newMeasurementPrediction,'GaussianMixtureStateX'))
+                MeasurementPrediction = newMeasurementPrediction;
+            else
+                error('State type must be GaussianMixtureStateX');
+            end
+            this.MeasurementLikelihoods_ = [];
+        end
+        
+        % MeasurementLikelihoods
+        function MeasurementLikelihoods = getMeasurementLikelihoods(this)
+            if(isempty(this.MeasurementLikelihoods_))
+                this.MeasurementLikelihoods_ = mean(this.getMeasurementLikelihoodsPerParticle(),2)';
+            end
+            MeasurementLikelihoods = this.MeasurementLikelihoods_;
+        end
+        function MeasurementLikelihoods = setMeasurementLikelihoods(this, newMeasurementLikelihoods)
+            MeasurementLikelihoods = newMeasurementLikelihoods;
+        end
+        
+        % MeasurementLikelihoodsPerComponent
+        function MeasurementLikelihoodsPerComponent = getMeasurementLikelihoodsPerComponent(this)
+            if(isempty(this.MeasurementLikelihoodsPerComponent_))
+                this.MeasurementLikelihoodsPerComponent_ = this.Model.Measurement.pdf(this.MeasurementList,this.StatePrediction.Means,this.StatePrediction.Covars);
+            end
+            MeasurementLikelihoodsPerComponent = this.MeasurementLikelihoodsPerComponent_;
+        end
+        function MeasurementLikelihoodsPerComponent = setMeasurementLikelihoodsPerComponent(this, newMeasurementLikelihoodsPerComponent)
+            MeasurementLikelihoodsPerComponent = newMeasurementLikelihoodsPerComponent;
+        end
+        
+        % State Posterior
+        function StatePosterior = setStatePosterior(this,newStatePosterior)
+            if(isa(newStatePosterior,'GaussianMixtureStateX'))
+                StatePosterior = newStatePosterior;
+            else
+                error('State type must be GaussianMixtureStateX');
+            end
+        end
     end
     
     methods
-        function this = TrackOrientedMeMBerPoissonParticleFilterX_2(varargin)
+        function this = TrackOrientedMeMBerPoissonParticleFilterX(varargin)
         % TrackOrientedMeMBerPoissonParticleFilterX - Constructor method
         %   
         % Parameters
         % ----------
         % Model: StateSpaceModelX
         %   An object handle to StateSpaceModelX object.
-        % ResamplingScheme: string 
-        %   Method used for particle resampling, specified as either 'Multinomial'
-        %   or 'Systematic'. (default = 'Systematic')
-        % ResamplingPolicy: (1 x 2) cell array
-        %   Specifies the resampling trigger conditions. ReamplingPolicy{1} 
-        %   should be a string which can be either:
-        %       1) "TimeInterval", in which case ReamplingPolicy{2} should 
-        %          be a scalar specifying the number of iterations after which
-        %          resampling should be performed, or
-        %       2) "EffectiveRatio", in which case Resampling{2} should be
-        %          a scalar specifying the minimum ratio of effective particles 
-        %          which, when reached, will trigger the resampling process
-        %   (default ResamplingPolicy = {'TimeInterval',1}], implying that 
-        %   resampling is performed on every update of the Particle Filter).                       
-        % Resampler: ResamplerX object handle, optional
-        %   An object handle to a ResamplerX subclass. If a Resampler is provided,
-        %   then it will override any choice specified within the ResamplingScheme. 
-        %   ResamplingPolicy will not be affected.
         % BirthModel: (1 x 2) cell array
         %   Specifies the particle birth scheme. BirthModel{1} should be 
         %   a string which can be set to either:
@@ -135,46 +204,48 @@ classdef TrackOrientedMeMBerPoissonParticleFilterX < FilterX
         % BirthIntFcn: function handle
         %   A function handle, [parts, weights] = BirthIntFcn(NumParticles), 
         %   which when called generates a set of initial particles and weights.
-        % ProbOfSurvive: scalar
+        % SurvivalProbability: scalar
         %   The probability that a target may cease to exist between consecutive 
         %   iterations of the filter.
-        % ProbOfDetection: scalar
+        % DetectionProbability: scalar
         %   The probablity that a target will be detected in a given measurement scan.
-        % NumTargets: scalar
-        %   The estimated number of targets following an update step.
         %
         % Usage
         % -----
-        % * phd = TrackOrientedMeMBerPoissonParticleFilterX() returns an unconfigured object 
+        % * phd = TrackOrientedMeMBerPoissonGMFilterX() returns an unconfigured object 
         %   handle. Note that the object will need to be configured at a 
         %   later instance before any call is made to it's methods.
-        % * phd = TrackOrientedMeMBerPoissonParticleFilterX(ssm) returns an object handle,
+        % * phd = TrackOrientedMeMBerPoissonGMFilterX(ssm) returns an object handle,
         %   preconfigured with the provided StateSpaceModelX object handle ssm.
-        % * phd = TrackOrientedMeMBerPoissonParticleFilterX(ssm,priorParticles,priorWeights) 
+        % * phd = TrackOrientedMeMBerPoissonGMFilterX(ssm,priorParticles,priorWeights) 
         %   returns an object handle, preconfigured with the provided  
         %   StateSpaceModel object handle ssm and the prior information   
         %   about the state, provided in the form of the priorParticles 
         %   and priorWeights variables.
-        % * phd = TrackOrientedMeMBerPoissonParticleFilterX(ssm,priorDistFcn) returns an object
+        % * phd = TrackOrientedMeMBerPoissonGMFilterX(ssm,priorDistFcn) returns an object
         %   handle, preconfigured with the provided StateSpaceModel object 
         %   handle ssm and the prior information about the state, provided  
         %   in the form of the priorDistFcn function.
-        % * phd = TrackOrientedMeMBerPoissonParticleFilterX(___,Name,Value,___) instantiates an  
+        % * phd = TrackOrientedMeMBerPoissonGMFilterX(___,Name,Value,___) instantiates an  
         %   object handle, configured with the options specified by one or 
         %   more Name,Value pair arguments.
         %
         %  See also predict, update.   
             
-            % Call SuperClass method
+           % Call SuperClass method
             this@FilterX(varargin{:});
-           
-            this.Bernoulli.Predicted = {};
-            this.Bernoulli.Updated = {};
-            this.Poisson.Predicted = {};
-            this.Poisson.Updated = {};
+            
+            this.Filter = ParticleFilterX(varargin{:});
+            
+            
+            this.Bernoulli.StatePosterior.Particles = zeros(this.Model.Transition.NumStateDims,this.NumBernoulliParticles,0);
+            this.Bernoulli.StatePosterior.Weights = zeros(1,this.NumBernoulliParticles,0);
+            this.Bernoulli.StatePosterior.ExistenceProbabilities = zeros(1,0);
+            
+            this.Poisson.StatePosterior.Particles = zeros(this.Model.Transition.NumStateDims,this.NumPoissonParticles);
+            this.Poisson.StatePosterior.Weights = zeros(1,this.NumPoissonParticles);
             
             if(nargin==0)
-                this.Resampler = SystematicResamplerX();
                 return;
             end
             
@@ -182,41 +253,7 @@ classdef TrackOrientedMeMBerPoissonParticleFilterX < FilterX
             if(nargin==1)
                 if(isstruct(varargin{1}))
                     config = varargin{1};
-                     if (isfield(config,'Resampler'))
-                        this.Resampler = config.Resampler;
-                     elseif (isfield(config,'ResamplingScheme'))
-                        if(strcmp(config.ResamplingScheme,'Systematic'))
-                            this.Resampler = SystematicResamplerX();
-                        elseif(strcmp(config.ResamplingScheme,'Multinomial'))
-                            this.Resampler = MultinomialResamplerX();
-                        end
-                     else
-                         this.Resampler = SystematicResamplerX();
-                     end
-                     if (isfield(config,'ResamplingPolicy'))
-                         this.ResamplingPolicy = config.ResamplingPolicy;
-                     end
-                     if (isfield(config,'BirthModel'))
-                         this.BirthModel = config.BirthModel;
-                     end
-                     if (isfield(config,'ProbOfSurvive'))
-                         this.ProbOfSurvive = config.ProbOfSurvive;
-                     end
-                     if (isfield(config,'ProbOfDetection'))
-                         this.ProbOfDetection = config.ProbOfDetection;
-                     end
-                     if (isfield(config,'ClutterRate'))
-                         this.ClutterRate = config.ClutterRate;
-                     end
-                     if (isfield(config,'ClutterIntFcn'))
-                         this.ClutterIntFcn = config.ClutterIntFcn;
-                     end
-                     if (isfield(config,'NumBernoulliParticles'))
-                         this.NumBernoulliParticles = config.NumBernoulliParticles;
-                     end
-                     if (isfield(config,'NumPoissonParticles'))
-                         this.NumPoissonParticles = config.NumPoissonParticles;
-                     end
+                    this.initialise_(config);
                 end
                 return;
             end
@@ -226,41 +263,7 @@ classdef TrackOrientedMeMBerPoissonParticleFilterX < FilterX
             parser.KeepUnmatched = true;
             parser.parse(varargin{:});
             config = parser.Results;
-             if (isfield(config,'Resampler'))
-                 this.Resampler = config.Resampler;
-             elseif (isfield(config,'ResamplingScheme'))
-                 if(strcmp(config.ResamplingScheme,'Systematic'))
-                     this.Resampler = SystematicResamplerX();
-                 elseif(strcmp(config.ResamplingScheme,'Multinomial'))
-                     this.Resampler = MultinomialResamplerX();
-                 end
-             else
-                 this.Resampler = SystematicResamplerX();
-             end
-             if (isfield(config,'ResamplingPolicy'))
-                 this.ResamplingPolicy = config.ResamplingPolicy;
-             end
-             if (isfield(config,'BirthModel'))
-                 this.BirthModel = config.BirthModel;
-             end
-             if (isfield(config,'ProbOfSurvive'))
-                 this.ProbOfSurvive = config.ProbOfSurvive;
-             end
-             if (isfield(config,'ProbOfDetection'))
-                 this.ProbOfDetection = config.ProbOfDetection;
-             end
-             if (isfield(config,'ClutterRate'))
-                 this.ClutterRate = config.ClutterRate;
-             end
-             if (isfield(config,'ClutterIntFcn'))
-                 this.ClutterIntFcn = config.ClutterIntFcn;
-             end
-             if (isfield(config,'NumBernoulliParticles'))
-                 this.NumBernoulliParticles = config.NumBernoulliParticles;
-             end
-             if (isfield(config,'NumPoissonParticles'))
-                 this.NumPoissonParticles = config.NumPoissonParticles;
-             end
+            this.initialise_(config);
         end
         
         function initialise(this,varargin)
@@ -269,26 +272,28 @@ classdef TrackOrientedMeMBerPoissonParticleFilterX < FilterX
         %   
         % Parameters
         % ----------
+        % Parameters
+        % ----------
         % Model: StateSpaceModelX
         %   An object handle to StateSpaceModelX object.
-        % NumParticles: scalar
-        %   The number of particles to be employed by the  SMC PHD Filter. 
-        %   (default = 10000)
-        % PriorParticles: (NumStateDims x NumParticles) matrix
-        %   The initial set of particles to be used by the Particle Filter. 
-        %   These are copied into the Particles property by the constructor.
-        % PriorWeights: (1 x NumParticles) row vector
-        %   The initial set of weights to be used by the Particle Filter. 
-        %   These are copied into the Weights property by the constructor. 
-        %   (default = 1/NumParticles, which implies uniform weights)
-        % PriorDistFcn: function handle
-        %   A function handle, of the form [parts, weights] = PriorDistFcn(NumParticles),
-        %   which when called generates a set of initial particles and weights, 
-        %   that are consecutively copied into the Particles and Weights properties
-        %   respectively. The function should accept exactly ONE argument, 
-        %   which is the number of particles (NumParticles) to be generated and
-        %   return 2 outputs. If a PriorDistFcn is specified, then any values provided for the
-        %   PriorParticles and PriorWeights arguments are ignored.
+        % BirthModel: (1 x 2) cell array
+        %   Specifies the particle birth scheme. BirthModel{1} should be 
+        %   a string which can be set to either:
+        %       1) "Mixture", in which case BirthModel{2} should specify the
+        %          probability of birth of new particles, or
+        %       2) "Expansion", in which case BirthModel{2} should specify 
+        %          the number of particles to be "birthed" at each iteration 
+        %          of the filter.
+        %   (default BirthModel = {"Mixture",0.5} implying that particles 
+        %    are born using the mixture scheme, with a birth probability of 50%)
+        % BirthIntFcn: function handle
+        %   A function handle, [parts, weights] = BirthIntFcn(NumParticles), 
+        %   which when called generates a set of initial particles and weights.
+        % SurvivalProbability: scalar
+        %   The probability that a target may cease to exist between consecutive 
+        %   iterations of the filter.
+        % DetectionProbability: scalar
+        %   The probablity that a target will be detected in a given measurement scan.
         % ResamplingScheme: string 
         %   Method used for particle resampling, specified as either 'Multinomial'
         %   or 'Systematic'. (default = 'Systematic')
@@ -307,26 +312,6 @@ classdef TrackOrientedMeMBerPoissonParticleFilterX < FilterX
         %   An object handle to a ResamplerX subclass. If a Resampler is provided,
         %   then it will override any choice specified within the ResamplingScheme. 
         %   ResamplingPolicy will not be affected.
-        % BirthModel: (1 x 2) cell array
-        %   Specifies the particle birth scheme. BirthModel{1} should be 
-        %   a string which can be set to either:
-        %       1) "Mixture", in which case BirthModel{2} should specify the
-        %          probability of birth of new particles, or
-        %       2) "Expansion", in which case BirthModel{2} should specify 
-        %          the number of particles to be "birthed" at each iteration 
-        %          of the filter.
-        %   (default BirthModel = {"Mixture",0.5} implying that particles 
-        %    are born using the mixture scheme, with a birth probability of 50%)
-        % BirthIntFcn: function handle
-        %   A function handle, [parts, weights] = BirthIntFcn(NumParticles), 
-        %   which when called generates a set of initial particles and weights.
-        % ProbOfSurvive: scalar
-        %   The probability that a target may cease to exist between consecutive 
-        %   iterations of the filter.
-        % ProbOfDetection: scalar
-        %   The probablity that a target will be detected in a given measurement scan.
-        % NumTargets: scalar
-        %   The estimated number of targets following an update step.
         %
         % Usage
         % ----- 
@@ -350,44 +335,7 @@ classdef TrackOrientedMeMBerPoissonParticleFilterX < FilterX
             if(nargin==1)
                 if(isstruct(varargin{1}))
                     config = varargin{1};
-                    if (isfield(config,'Model'))
-                        this.Model = config.Model;
-                    end
-                    if (isfield(config,'Resampler'))
-                        this.Resampler = config.Resampler;
-                    elseif (isfield(config,'ResamplingScheme'))
-                        if(strcmp(config.ResamplingScheme,'Systematic'))
-                            this.Resampler = SystematicResamplerX();
-                        elseif(strcmp(config.ResamplingScheme,'Multinomial'))
-                            this.Resampler = MultinomialResamplerX();
-                        end
-                    else
-                        this.Resampler = SystematicResamplerX();
-                    end
-                    if (isfield(config,'ResamplingPolicy'))
-                        this.ResamplingPolicy = config.ResamplingPolicy;
-                    end
-                    if (isfield(config,'BirthModel'))
-                        this.BirthModel = config.BirthModel;
-                    end
-                    if (isfield(config,'ProbOfSurvive'))
-                        this.ProbOfSurvive = config.ProbOfSurvive;
-                    end
-                    if (isfield(config,'ProbOfDetection'))
-                        this.ProbOfDetection = config.ProbOfDetection;
-                    end
-                    if (isfield(config,'ClutterRate'))
-                         this.ClutterRate = config.ClutterRate;
-                    end
-                    if (isfield(config,'ClutterIntFcn'))
-                         this.ClutterIntFcn = config.ClutterIntFcn;
-                    end
-                    if (isfield(config,'NumBernoulliParticles'))
-                        this.NumBernoulliParticles = config.NumBernoulliParticles;
-                    end
-                    if (isfield(config,'NumPoissonParticles'))
-                        this.NumPoissonParticles = config.NumPoissonParticles;
-                    end
+                    this.initialise_(config);
                     return;
                 end
             end
@@ -397,41 +345,7 @@ classdef TrackOrientedMeMBerPoissonParticleFilterX < FilterX
             parser.KeepUnmatched = true;
             parser.parse(varargin{:});
             config = parser.Results;
-             if (isfield(config,'Resampler'))
-                this.Resampler = config.Resampler;
-            elseif (isfield(config,'ResamplingScheme'))
-                if(strcmp(config.ResamplingScheme,'Systematic'))
-                    this.Resampler = SystematicResamplerX();
-                elseif(strcmp(config.ResamplingScheme,'Multinomial'))
-                    this.Resampler = MultinomialResamplerX();
-                end
-            else
-                this.Resampler = SystematicResamplerX();
-            end
-            if (isfield(config,'ResamplingPolicy'))
-                this.ResamplingPolicy = config.ResamplingPolicy;
-            end
-            if (isfield(config,'BirthModel'))
-                this.BirthModel = config.BirthModel;
-            end
-            if (isfield(config,'ProbOfSurvive'))
-                this.ProbOfSurvive = config.ProbOfSurvive;
-            end
-            if (isfield(config,'ProbOfDetection'))
-                this.ProbOfDetection = config.ProbOfDetection;
-            end
-            if (isfield(config,'ClutterRate'))
-                this.ClutterRate = config.ClutterRate;
-            end
-            if (isfield(config,'ClutterIntFcn'))
-                this.ClutterIntFcn = config.ClutterIntFcn;
-            end
-            if (isfield(config,'NumBernoulliParticles'))
-                this.NumBernoulliParticles = config.NumBernoulliParticles;
-            end
-            if (isfield(config,'NumPoissonParticles'))
-                this.NumPoissonParticles = config.NumPoissonParticles;
-            end
+            this.initialise_(config);
         end
         
         function predict(this)
@@ -460,55 +374,44 @@ classdef TrackOrientedMeMBerPoissonParticleFilterX < FilterX
         %
         %  See also update, smooth.
             
-            % reset measLikelihood matrix
-            this.pmeasLikelihood_ = [];
-
+            % Interpret length of inputs
+            bernoulli.StatePrediction = this.Bernoulli.StatePosterior;
+            numBernoulli = numel(this.Bernoulli.StatePosterior.ExistenceProbabilities);
+            
             % Predict existing Bernoulli tracks
-            this.Bernoulli.Predicted = [];
-            for i = 1:numel(this.Bernoulli.Updated)
+            for i = 1:numBernoulli
                 
                 % Predict state particles
-                this.Bernoulli.Predicted{i}.Particles = ...
-                  this.Model.Dyn.feval(this.Bernoulli.Updated{i}.Particles, ...
-                  this.Model.Dyn.random(size(this.Bernoulli.Updated{i}.Particles,2)));
+                bernoulli.StatePrediction.Particles(:,:,i) = ...
+                  this.Model.Transition.feval(bernoulli.StatePrediction.Particles(:,:,i), true);
               
                 % Predict state weights
-                this.Bernoulli.Predicted{i}.Weights = ...
-                    this.ProbOfSurvive*this.Bernoulli.Updated{i}.Weights;
+                bernoulli.StatePrediction.Weights(:,:,i) = bernoulli.StatePrediction.Weights(:,:,i);
                 
                 % Predict existence probability
-                this.Bernoulli.Predicted{i}.ProbOfExistence = ...
-                    sum(this.Bernoulli.Predicted{i}.Weights)*this.Bernoulli.Updated{i}.ProbOfExistence;
+                bernoulli.StatePrediction.ExistenceProbabilities(i) = ...
+                    this.SurvivalProbability*bernoulli.StatePrediction.ExistenceProbabilities(i);
                 
                 % Normalise state weights
-                this.Bernoulli.Predicted{i}.Weights = ...
-                    this.Bernoulli.Predicted{i}.Weights./sum(this.Bernoulli.Predicted{i}.Weights);
-                
-                % Copy forward the component trajectory
-                this.Bernoulli.Predicted{i}.Trajectory = this.Bernoulli.Updated{i}.Trajectory;
+                bernoulli.StatePrediction.Weights(:,:,i) = ...
+                    bernoulli.StatePrediction.Weights(:,:,i)./sum(bernoulli.StatePrediction.Weights(:,:,i));
             end
+            this.Bernoulli.StatePrediction = bernoulli.StatePrediction;
 
             % Predict existing PPP intensity
-            this.Poisson.Predicted = struct;
-            this.Poisson.Predicted.Particles = ...
-                this.Model.Dyn.feval(this.Poisson.Updated.Particles, ...
-                 this.Model.Dyn.random(size(this.Poisson.Updated.Particles,2)));
-            this.Poisson.Predicted.Weights = this.ProbOfSurvive*this.Poisson.Updated.Weights;
-
-            % Incorporate birth intensity into PPP
-            if(this.BirthModel.Jk<1)
-                Jk = ceil(this.BirthModel.Jk*size(this.Poisson.Predicted.Particles,2));
-            else
-                Jk = this.BirthModel.Jk;
-            end
+            poisson.StatePrediction = copy(this.Poisson.StatePosterior);
             
-            % Generate birth particles
-            [birthParticles, birthWeights] = this.BirthModel.BirthIntFcn(Jk);
+            % Number of birth particles
+            Jk = 5000;
 
-            % Expand number of particles to accomodate for births
-            this.Poisson.Predicted.Particles = [this.Poisson.Predicted.Particles, birthParticles]; 
-            this.Poisson.Predicted.Weights = [this.Poisson.Predicted.Weights, birthWeights];
-            this.Poisson.Predicted.NumTargets = sum(this.Poisson.Predicted.Weights);
+            % Generate Np normally predicted particles
+            predParticles = this.Model.Transition.feval(poisson.StatePrediction.Particles, true); 
+            predWeights = this.SurvivalProbability *poisson.StatePrediction.Weights;
+
+            % Generate birth particles 
+            [birthParticles, birthWeights] = this.Model.Birth.random(Jk);
+
+            this.Poisson.StatePrediction = ParticleStateX([predParticles,birthParticles], [predWeights, birthWeights]);
             
         end
         
@@ -521,135 +424,158 @@ classdef TrackOrientedMeMBerPoissonParticleFilterX < FilterX
         %
         % See also UnscentedParticleFilterX, predict, smooth.
         
-            this.NumMeasurements = size(this.MeasurementList,2);
+            numMeasurements = size(this.MeasurementList,2);
+            numBernoulli = numel(this.Bernoulli.StatePrediction.ExistenceProbabilities);
             
-            this.AssocLikelihoodMatrix = zeros(numel(this.Bernoulli.Predicted)+1, this.NumMeasurements+1);
-
-            % Update existing tracks
-            this.Bernoulli.Updated = [];
-            for i = 1:numel(this.Bernoulli.Predicted)
+            % Compute Association Likelihood Matrix for known (Bernoulli) tracks
+            this.AssocLikelihoodMatrix = zeros(numBernoulli+1, numMeasurements+1);
+            
+            % Compute measurement likelihoods
+            g = zeros(numMeasurements,numBernoulli);
+            for i = 1:numBernoulli
                 
-                % Particles remain the same for now
-                this.Bernoulli.Updated{i}.Particles = this.Bernoulli.Predicted{i}.Particles;
-
-                % Compute measurement likelihoods for track
-                g = this.Model.Obs.pdf(this.MeasurementList, this.Bernoulli.Updated{i}.Particles);
+                g(:,i) = sum(this.Model.Measurement.pdf(this.MeasurementList,this.Bernoulli.StatePrediction.Particles(:,:,i)),2);
                 
-                % Store weights per hypothesis (Equivalent to creating multiple hypotheses)
-                this.Bernoulli.Updated{i}.WeightsPerHypothesis = zeros(this.NumMeasurements+1,size(this.Bernoulli.Updated{i}.Particles,2));
-                
-                % Store existence per Hypothesis
-                this.Bernoulli.Updated{i}.ExistencePerHypothesis = zeros(1,this.NumMeasurements+1);
-                
-                % Evaluate missed detection hypothesis
-                this.Bernoulli.Updated{i}.WeightsPerHypothesis(1,:) =  (1-this.ProbOfDetection) * this.Bernoulli.Predicted{i}.Weights;
-                this.AssocLikelihoodMatrix(i+1,1) = 1-this.Bernoulli.Predicted{i}.ProbOfExistence + this.Bernoulli.Predicted{i}.ProbOfExistence*sum(this.Bernoulli.Updated{i}.WeightsPerHypothesis(1,:));
-                this.Bernoulli.Updated{i}.ExistencePerHypothesis(1) = ...
-                    this.Bernoulli.Predicted{i}.ProbOfExistence*sum(this.Bernoulli.Updated{i}.WeightsPerHypothesis(1,:))...
-                    /this.AssocLikelihoodMatrix(i+1,1);
-                
-                % Evaluate hypotheses with measurement updates
-                this.Bernoulli.Updated{i}.WeightsPerHypothesis(2:end,:) = this.ProbOfDetection * g .* this.Bernoulli.Predicted{i}.Weights;
-                
-                this.Bernoulli.Updated{i}.ExistencePerHypothesis(2:end) = 1;
-                this.AssocLikelihoodMatrix(i+1,2:end) = this.Bernoulli.Predicted{i}.ProbOfExistence*sum(this.Bernoulli.Updated{i}.WeightsPerHypothesis(2:end,:),2)';
-                
-                % Copy forward the component trajectory
-                this.Bernoulli.Updated{i}.Trajectory = this.Bernoulli.Predicted{i}.Trajectory;
+                % Missed detection hypothesis
+                this.AssocLikelihoodMatrix(i+1,1) = ...
+                    1 - this.Bernoulli.StatePrediction.ExistenceProbabilities(i) + this.Bernoulli.StatePrediction.ExistenceProbabilities(i)*(1-this.DetectionProbability);
+                % True detection hypotheses
+                for j = 1:numMeasurements
+                    this.AssocLikelihoodMatrix(i+1,j+1) = this.Bernoulli.StatePrediction.ExistenceProbabilities(i)*this.DetectionProbability*g(j,i);
+                end
             end
-            
-            %disp(cellfun(@(c) c.ProbOfExistence, this.Bernoulli.Updated, 'UniformOutput', false));
             
             % Create a new track for each measurement by updating PPP with measurement
-            % Compute g(z|x) matrix as in [1] 
-            g = this.Model.Obs.pdf(this.MeasurementList, this.Poisson.Predicted.Particles);
+            new_Bernoulli.Particles = zeros(this.Model.Transition.NumStateDims,this.NumBernoulliParticles,numMeasurements);
+            new_Bernoulli.Weights = zeros(1,this.NumBernoulliParticles,numMeasurements);
+            new_Bernoulli.ExistenceProbabilities = zeros(1,numMeasurements);
+            
+            % Compute measurement likelihoods
+            g = this.Model.Measurement.pdf(this.MeasurementList,this.Poisson.StatePrediction.Particles);
                         
             % Compute C_k(z) Eq. (27) of [1]  
-            Ck = this.ProbOfDetection*g.*this.Poisson.Predicted.Weights;
+            Ck = this.DetectionProbability*g.*this.Poisson.StatePrediction.Weights;
+            C = sum(Ck,2);
+            C_plus = C + this.Model.Clutter.pdf(this.MeasurementList)';
             
-            % Calculate w^{n,i} Eq. (20) of [2]
-            PoissonWeightsPerMeasurement = zeros(this.NumMeasurements, size(this.Poisson.Predicted.Particles,2));
-            if(this.NumMeasurements>0)
-                for j=1:this.NumMeasurements
-                    PoissonWeightsPerMeasurement(j,:) = (this.ProbOfDetection*g(j,:).*this.Poisson.Predicted.Weights)/(this.ClutterIntFcn(this.MeasurementList(:,j))+sum(Ck(j),2));
-                end
-                    %PoissonWeightsPerMeasurement = (Ck+repmat(this.ClutterIntFcn(this.MeasurementList)',1,size(this.Poisson.Predicted.Weights,2))).*this.Poisson.Predicted.Weights;
+            weightsPerHypothesis = [(1-this.DetectionProbability).*this.Poisson.StatePrediction.Weights;
+                                          zeros(numMeasurements, this.Poisson.StatePrediction.NumParticles)];
+            if(numMeasurements>0)
+                % Compute C_k(z) Eq. (27) of [1]
+                weightsPerHypothesis(2:end,:) = Ck./C_plus;
             end
             
-            % Extract new tracks from PPP density
-            for j = 1:this.NumMeasurements
-                newTrack = struct;
+            % For each measurement, create a new track as a mixture over
+            % all PPP GM components
+            for j = 1:numMeasurements
                 
-                % Get new particles and weights
-                newTrack.Particles = this.Poisson.Predicted.Particles;
-                newTrack.Weights = (PoissonWeightsPerMeasurement(j,:)./sum(PoissonWeightsPerMeasurement(j,:)));
+                % Association likelihood for new track
+                this.AssocLikelihoodMatrix(1,j+1) = C_plus(j);
+                
+                % Weight for new track
+                particles = this.Poisson.StatePrediction.Particles;
+                weights = weightsPerHypothesis(j,:); %Ck(j)./C_plus(j);
                 
                 % Resample to correct number of particles
-                [newTrack.Particles,newTrack.Weights,idx] = this.Resampler.resample(newTrack.Particles,newTrack.Weights,this.NumBernoulliParticles);
+                % =======================================
+                [new_Bernoulli.Particles(:,:,j),new_Bernoulli.Weights(1,:,j)] = this.Resampler.resample(particles,weights./sum(weights),this.NumBernoulliParticles);
+                new_Bernoulli.ExistenceProbabilities(j) = C(j)/C_plus(j);
                 
-                Ck_j = Ck(j,idx);
-                C = sum(Ck_j,2);
-                
-                % Compute weights per hypothesis
-                this.AssocLikelihoodMatrix(1,j+1) = this.ClutterIntFcn(this.MeasurementList(:,j)) + C;
-                
-                % Compute probability of existence
-                newTrack.ProbOfExistence = C/this.AssocLikelihoodMatrix(1,j+1);
-                
-                % Create new bernoulli component
-                this.Bernoulli.Updated{end+1} = newTrack;
             end
             
-            % Update (i.e., thin) PPP intensity
-            this.Poisson.Updated = struct;
-            this.Poisson.Updated.Particles = this.Poisson.Predicted.Particles;
-            this.Poisson.Updated.Weights = (1-this.ProbOfDetection)*this.Poisson.Predicted.Weights;
+            % Update (i.e., thin) intensity of unknown targets
+            poisson.Posterior = copy(this.Poisson.StatePrediction);
+            poisson.Posterior.Weights = (1-this.DetectionProbability)*poisson.Posterior.Weights; 
+            this.Poisson.StatePosterior = poisson.Posterior;
             
-            % Resample (equivalent to Step 3 of [1]
-            NumPPPTargets = sum(this.Poisson.Updated.Weights,2);
-            [this.Poisson.Updated.Particles,this.Poisson.Updated.Weights] = ...
-                this.Resampler.resample(this.Poisson.Updated.Particles, ...
-                    (this.Poisson.Updated.Weights/NumPPPTargets),this.NumPoissonParticles); % Resample
-            this.Poisson.Updated.Weights = this.Poisson.Updated.Weights*NumPPPTargets;
-            
-            
-            % Compute marginal association probabilities for known targets
+            % Perform Data Association
             [a,b] = lbp(this.AssocLikelihoodMatrix(2:end,:),this.AssocLikelihoodMatrix(1,2:end));
             this.MarginalAssociationProbabilities = [[0,b'];a];
-            %this.MarginalAssociationProbabilities = this.Hypothesiser.hypothesise(this.AssocLikelihoodMatrix);
             
-            % TOMB/P algorithm for forming new tracks
-            % Form continuing tracks
-            for i = 1 : numel(this.Bernoulli.Predicted)
-                % Update Existence probability
-                this.Bernoulli.Updated{i}.ProbOfExistence = sum(this.MarginalAssociationProbabilities(i+1,:).*this.Bernoulli.Updated{i}.ExistencePerHypothesis);
-                
-                % Update weights
-                this.Bernoulli.Updated{i}.Weights = sum(this.MarginalAssociationProbabilities(i+1,:)'.*this.Bernoulli.Updated{i}.WeightsPerHypothesis,1);
-                this.Bernoulli.Updated{i}.Weights = this.Bernoulli.Updated{i}.Weights./sum(this.Bernoulli.Updated{i}.Weights,2);
-                % Resample
-                [this.Bernoulli.Updated{i}.Particles,this.Bernoulli.Updated{i}.Weights] = ...
-                    this.Resampler.resample(this.Bernoulli.Updated{i}.Particles, this.Bernoulli.Updated{i}.Weights,this.NumBernoulliParticles); 
-                
-                this.Bernoulli.Updated{i}.Trajectory.Mean(:,end+1) = mean(this.Bernoulli.Updated{i}.Particles,2);
-                this.Bernoulli.Updated{i}.Trajectory.Covariance(:,:,end+1) = cov(this.Bernoulli.Updated{i}.Particles');
-                this.Bernoulli.Updated{i}.Trajectory.ProbOfExistence(:,end+1) = this.Bernoulli.Updated{i}.ProbOfExistence;
-            end
-            % Form new tracks (already single hypothesis)
-            for j = numel(this.Bernoulli.Predicted)+ 1 : numel(this.Bernoulli.Updated)
-                this.Bernoulli.Updated{j}.ProbOfExistence = this.Bernoulli.Updated{j}.ProbOfExistence*this.MarginalAssociationProbabilities(1,j+1-(numel(this.Bernoulli.Predicted)));
-                
-                this.Bernoulli.Updated{j}.Trajectory.Mean = mean(this.Bernoulli.Updated{j}.Particles,2);
-                this.Bernoulli.Updated{j}.Trajectory.Covariance = cov(this.Bernoulli.Updated{j}.Particles');
-                this.Bernoulli.Updated{j}.Trajectory.ProbOfExistence = this.Bernoulli.Updated{j}.ProbOfExistence;
-            end
+            bernoulli = this.formTracksTOMB(a,this.Bernoulli,b,new_Bernoulli);
+            [this.Bernoulli,poisson] = this.recycle(bernoulli,this.Poisson,0.1);
             
-            disp(cellfun(@(c) c.ProbOfExistence, this.Bernoulli.Updated, 'UniformOutput', false));
+            % Resample (equivalent to Step 3 of [1]
+            numTargets = sum(poisson.StatePosterior.Weights,2); % Compute total mass
+            [postParticles, postWeights, idx] = ...
+                this.Resampler.resample(poisson.StatePosterior.Particles, ...
+                    (poisson.StatePosterior.Weights/numTargets),this.NumPoissonParticles); % Resample
+            postWeights = postWeights*numTargets; % Rescale
+            this.Poisson.StatePosterior = ParticleStateX(postParticles,postWeights);
+            
+%             ss = bernoulli.StatePosterior.ExistenceProbabilities > 0.1;
+%             bernoulli.StatePosterior.Particles = bernoulli.StatePosterior.Particles(:,:,ss);
+%             bernoulli.StatePosterior.Weights = bernoulli.StatePosterior.Weights(:,:,ss);
+%             bernoulli.StatePosterior.ExistenceProbabilities = bernoulli.StatePosterior.ExistenceProbabilities(ss);
+%             this.Bernoulli = bernoulli;
+%             this.Bernoulli.StatePosterior.Trajectories = bernoulli.StatePosterior.Trajectories(ss);
+            
+        end
+        
+        function  bernoulli = formTracksTOMB(this,pupd,bernoulli,pnew,bernoulli_new)
                         
-            % Prune bernoulli components
-            this.Bernoulli.Updated = this.Bernoulli.Updated(find(cell2mat(cellfun(@(c) c.ProbOfExistence, this.Bernoulli.Updated, 'UniformOutput', false))>5*10^(-2)));
+            % Infer sizes
+            nold = numel(bernoulli.StatePrediction.ExistenceProbabilities);
+            nnew = numel(bernoulli_new.ExistenceProbabilities);
             
-            %disp(cellfun(@(c) c.ProbOfExistence, this.Bernoulli.Updated, 'UniformOutput', false));
+            bernoulli.StatePosterior.Particles = zeros(this.Model.Transition.NumStateDims,this.NumBernoulliParticles,nold+nnew);
+            bernoulli.StatePosterior.Weights = zeros(1,this.NumBernoulliParticles,nold+nnew);
+            bernoulli.StatePosterior.ExistenceProbabilities = zeros(1,nold+nnew);
+
+            % Form continuing tracks
+            for i = 1:nold
+                
+                % Existence
+                pr = [bernoulli.StatePrediction.ExistenceProbabilities(i)*(1-this.DetectionProbability)/this.AssocLikelihoodMatrix(i+1,1)*pupd(i,1), pupd(i,2:end)];
+                bernoulli.StatePosterior.ExistenceProbabilities(i) = sum(pr);
+                assocWeigths = pr/bernoulli.StatePosterior.ExistenceProbabilities(i);
+                
+                % State Update
+                this.Filter.StatePrediction = ParticleStateX(bernoulli.StatePrediction.Particles(:,:,i), ...
+                                                             bernoulli.StatePrediction.Weights(:,:,i));
+                this.Filter.MeasurementList = this.MeasurementList;
+                this.Filter.updatePDA(assocWeigths);
+                
+                bernoulli.StatePosterior.Particles(:,:,i) = this.Filter.StatePosterior.Particles;
+                bernoulli.StatePosterior.Weights(:,:,i) = this.Filter.StatePosterior.Weights;
+                
+                bernoulli.StatePosterior.Trajectories{i} = bernoulli.StatePrediction.Trajectories{i};
+                bernoulli.StatePosterior.Trajectories{i}.StateMean(:,end+1) = bernoulli.StatePosterior.Particles(:,:,i)*bernoulli.StatePosterior.Weights(:,:,i)';
+                bernoulli.StatePosterior.Trajectories{i}.StateCovar(:,:,end+1) = weightedcov(bernoulli.StatePosterior.Particles(:,:,i),bernoulli.StatePosterior.Weights(:,:,i));
+            end
+
+            % Form new tracks (already single hypothesis)
+            for j = 1:nnew
+                bernoulli.StatePosterior.ExistenceProbabilities(nold+j) = pnew(j) .* bernoulli_new.ExistenceProbabilities(j);
+                bernoulli.StatePosterior.Particles(:,:,nold+j) = bernoulli_new.Particles(:,:,j);
+                bernoulli.StatePosterior.Weights(:,:,nold+j) = bernoulli_new.Weights(:,:,j);
+                bernoulli.StatePosterior.Trajectories{nold+j}.StateMean = bernoulli_new.Particles(:,:,j)*bernoulli_new.Weights(:,:,j)';
+                bernoulli.StatePosterior.Trajectories{nold+j}.StateCovar = weightedcov(bernoulli_new.Particles(:,:,j),bernoulli_new.Weights(:,:,j));
+            end
+        end
+        
+        function [bernoulli, poisson] = recycle(this, bernoulli, poisson, threshold)
+            
+            recycleInds = find(bernoulli.StatePosterior.ExistenceProbabilities< threshold);
+            numRecycle = numel(recycleInds);
+            
+            if(numRecycle>0)
+                                
+                % Append recycled bernoulli components
+                for i=1:numRecycle
+                    poisson.StatePosterior.Particles = [poisson.StatePosterior.Particles, bernoulli.StatePosterior.Particles(:,:,recycleInds(i))];
+                    poisson.StatePosterior.Weights = ...
+                        [poisson.StatePosterior.Weights, bernoulli.StatePosterior.Weights(:,:,recycleInds(i))*bernoulli.StatePosterior.ExistenceProbabilities(recycleInds(i))];
+                end
+                    
+                % Remove old bernoulli components
+                bernoulli.StatePosterior.Particles(:,:,recycleInds) = [];
+                bernoulli.StatePosterior.Weights(:,:,recycleInds) = [];
+                bernoulli.StatePosterior.ExistenceProbabilities(recycleInds) = [];
+                bernoulli.StatePosterior.Trajectories(recycleInds) = [];
+                
+                
+            end
         end
     
     end

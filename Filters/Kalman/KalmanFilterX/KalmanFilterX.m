@@ -619,7 +619,7 @@ classdef KalmanFilterX < FilterX
 %             % Compute filtered estimates
 %             x    = xPred + K*tot_innov_err;  
 %             P    = W(1)*PPred + (1-W(1))*Pc + Pgag;
-%             P    = (P+P')/2;
+             P    = (P+P')/2;
         end
         
         function config = getInitConfig()

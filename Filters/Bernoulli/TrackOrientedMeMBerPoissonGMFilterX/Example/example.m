@@ -61,7 +61,7 @@ NumTracks = 3;
 % Generate DataList
 meas_simulator = MeasurementSimulatorX('Model',ssm);
 meas_simulator.DetectionProbability = 1;
-[DataList, nGroundTruth] = meas_simulator.simulate(GroundTruth);
+%[DataList, nGroundTruth] = meas_simulator.simulate(GroundTruth);
 
 % Assign PHD parameter values
 config.Model = ssm;
@@ -142,7 +142,7 @@ for k=1:NumIter
             %if(numel(filter.Posterior.Bernoulli{i}.Trajectory.ProbOfExistence)>10&&mean(filter.Posterior.Bernoulli{i}.Trajectory.ProbOfExistence)>0.8)
             if(filter.Bernoulli.StatePosterior.Weights(i)>0.8)
                 plot(ax(1),filter.Bernoulli.StatePosterior.Trajectories{i}.StateMean(1,:),filter.Bernoulli.StatePosterior.Trajectories{i}.StateMean(3,:),'.-');
-                %plot_gaussian_ellipsoid(filter.Posterior.Bernoulli{i}.Trajectory.Mean([1,3],end),filter.Posterior.Bernoulli{i}.Trajectory.Covariance([1,3],[1,3],end),'r',1,50,ax(1));
+                plot_gaussian_ellipsoid(filter.Bernoulli.StatePosterior.Trajectories{i}.StateMean([1,3],end),filter.Bernoulli.StatePosterior.Trajectories{i}.StateCovar([1,3],[1,3],end),'r',1,50,ax(1));
             end
                 %hold on;
         end
@@ -155,7 +155,8 @@ for k=1:NumIter
             
         % Plot PHD
 %         cla(ax(2), 'reset');
-%         [bandwidth,density,X,Y]=kde2d(filter.Poisson.Updated.Particles([1,3],:)');
+%         p = filter.Poisson.StatePosterior.random(100000);
+%         [bandwidth,density,X,Y]=kde2d(p([1,3],:)');
 %         %contour3(X,Y,density,50);
 %         h = surf(ax(2),X,Y,density);        
 %         shading interp
@@ -169,7 +170,7 @@ for k=1:NumIter
 %         ylabel(ax(2),'Y position (m)')
 %         zlabel(ax(2),'Intensity')
 %         title(ax(2),str)
-%         pause(0.01)
+        pause(0.01)
         
         % Store video frame
         if(Record)

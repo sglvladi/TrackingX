@@ -7,11 +7,11 @@ SkipFrames = 0;
 transition_model = ConstantVelocityX('NumDims',2,'VelocityErrVariance',0.0001);
 
 % Instantiate a Measurement model
-%measurement_model = LinearGaussianX('NumMeasDims',2,'NumStateDims',4,'MeasurementErrVariance',0.02,'Mapping',[1 3]);
-measurement_model = RangeBearing2CartesianX('NumStateDims',4,'MeasurementErrVariance',[0.001,0.02],'Mapping',[1 3]);
+measurement_model = LinearGaussianX('NumMeasDims',2,'NumStateDims',4,'MeasurementErrVariance',0.02,'Mapping',[1 3]);
+%measurement_model = RangeBearing2CartesianX('NumStateDims',4,'MeasurementErrVariance',[0.001,0.02],'Mapping',[1 3]);
 
 % Instantiate a clutter model
-clutter_model = PoissonRateUniformPositionX('ClutterRate',10,'Limits',[0 10; 0 10]);
+clutter_model = PoissonRateUniformPositionX('ClutterRate',lambdaV,'Limits',[V_bounds(1:2);V_bounds(3:4)]);
 
 % Compile the State-Space model
 ssm = StateSpaceModelX(transition_model,measurement_model,'Clutter',clutter_model);
@@ -26,7 +26,7 @@ NumTracks = 3;
 % Generate DataList
 meas_simulator = MeasurementSimulatorX('Model',ssm);
 meas_simulator.DetectionProbability = 0.9;
-[DataList, nGroundTruth] = meas_simulator.simulate(GroundTruth);
+%[DataList, nGroundTruth] = meas_simulator.simulate(GroundTruth);
 
 % Initiate TrackList
 TrackList = cell(1,NumTracks);
@@ -36,7 +36,7 @@ for i=1:NumTracks
     StatePrior = GaussianStateX(xPrior,PPrior);
     TrackList{i} = TrackX();
     TrackList{i}.addprop('Filter');
-    TrackList{i}.Filter = ParticleFilterX('Model',ssm,'StatePrior',StatePrior, 'NumParticles', 5000); 
+    TrackList{i}.Filter = KalmanFilterX('Model',ssm,'StatePrior',StatePrior, 'NumParticles', 5000); 
     TrackList{i}.addprop('ExistenceProbability');
     TrackList{i}.ExistenceProbability = 0.5;
 end
