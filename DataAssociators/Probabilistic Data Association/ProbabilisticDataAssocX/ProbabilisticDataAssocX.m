@@ -6,7 +6,8 @@ classdef ProbabilisticDataAssocX < DataAssociatorX
 %
 % ProbabilisticDataAssocX Properties:
 %   + TrackList - A (1 x Tracks) vector of TrackX objects
-%   + MeasurementList - A (1 x NumMeas) vector of observations/measurements
+%   + MeasurementList - A MeasurementListX object, containing a (1 xTracks) 
+%       array of MeasurementX objects
 %   + Gater - A GaterX object used to perform gating
 %   + Clusterer - A ClustererX object used to perform clustering of tracks
 %   + ClutterModel - A ClutterModelX subclass used to model clutter
@@ -142,19 +143,18 @@ classdef ProbabilisticDataAssocX < DataAssociatorX
         
         function associate(this,TrackList,MeasurementList)
         % associate - Performs JPDAF association step
-        %   
-        % DESCRIPTION: 
-        % * associate(jpda) performs data association on the object jpda, based 
-        %   on its  internally stored jpda.TrackList and jpda.MeasurementList properties
-        % * associate(jpda,TrackList,MeasurementList) performs data association on 
-        %   the object jpda, based on the provided list of tracks TrackList 
-        %   and list of observations MeasurementList  
-        %   
-        %   Usage:
-        %       (jpdaf.Params.k = 1; % 1 sec)
-        %       jpdaf.Predict();
         %
-        %   See also ProbabilisticDataAssocX/initialise, ProbabilisticDataAssocX/updateTracks.
+        % Parameters
+        % ----------
+        % TrackList: TrackListX container, optional
+        %   Array of TrackX objects to be associated. If skipped the function 
+        %   will attempt to use an internally cached version of the
+        %   variable.
+        % MeasurementList: MeasurementListX container
+        %   Array of MeasurementX objects. If skipped the function will attempt
+        %   to use an internally cached version of the variable.
+        %
+        % See also ProbabilisticDataAssocX/initialise, ProbabilisticDataAssocX/updateTracks.
         
             if(nargin>1)
                 this.TrackList = TrackList;
@@ -213,7 +213,7 @@ classdef ProbabilisticDataAssocX < DataAssociatorX
             numTracks = numel(this.TrackList);
         end
         function numMeasurements = get.NumMeasurements(this)
-            numMeasurements = numel(this.MeasurementList);
+            numMeasurements = this.MeasurementList.NumMeasurements;
         end
     end
     
@@ -222,9 +222,9 @@ classdef ProbabilisticDataAssocX < DataAssociatorX
         function performGating(this)
             if(isa(this.Gater,'EllipsoidalGaterX') || isa(this.Gater,'BoundingBoxGaterX'))
                 % Validation matix and volume
-                [this.ValidationMatrix, this.GateVolumes] = this.Gater.gate(this.TrackList,this.MeasurementList);
+                [this.ValidationMatrix, this.GateVolumes] = this.Gater.gate(this.TrackList,this.MeasurementList.Vectors);
             else
-                this.ValidationMatrix = ones(size(this.TrackList,2),size(this.MeasurementList,2));
+                this.ValidationMatrix = ones(size(this.TrackList,2),size(this.MeasurementList.Vectors,2));
                 this.GateVolumes = [];
             end
             
@@ -250,13 +250,16 @@ classdef ProbabilisticDataAssocX < DataAssociatorX
                 ValidMeasInds = find(this.TrackList{trackInd}.ValidationMatrix);
                 if(~isempty(ValidMeasInds))
                     % Extract valid measurements
-                    this.TrackList{trackInd}.Filter.MeasurementList = this.MeasurementList(:,ValidMeasInds);
-
+                    try
+                        this.TrackList{trackInd}.Filter.MeasurementList = MeasurementListX(this.MeasurementList.Vectors(:,ValidMeasInds),...
+                                                                                           this.MeasurementList.Timestamp);
+                    catch
+                    end
                     % Evaluate the measurement likelihoods
                     this.LikelihoodMatrix(trackInd, ValidMeasInds) = this.TrackList{trackInd}.Filter.MeasurementLikelihoods;
                 else
                     % Extract valid measurements
-                    this.TrackList{trackInd}.Filter.MeasurementList = [];
+                    this.TrackList{trackInd}.Filter.MeasurementList = MeasurementListX();
                 end
             end
         end
@@ -296,7 +299,7 @@ classdef ProbabilisticDataAssocX < DataAssociatorX
                         end
                         clutterDensity = GatingProbability*numel(measIndList)/this.GateVolumes(trackInd);
                     else
-                        clutterDensity = this.ClutterModel.pdf(this.TrackList{trackInd}.Filter.MeasurementPrediction.Mean);
+                        clutterDensity = this.ClutterModel.pdf(this.TrackList{trackInd}.Filter.MeasurementPrediction.Mean)+eps;
                     end
                     this.AssocLikelihoodMatrix(trackInd,:) = ...
                         [clutterDensity*(1-this.DetectionProbability*GatingProbability), ...

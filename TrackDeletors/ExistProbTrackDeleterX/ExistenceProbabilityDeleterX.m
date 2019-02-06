@@ -1,15 +1,15 @@
-classdef ExistProbTrackDeleterX < TrackInitiatorX 
-% ExistProbTrackDeleterX Abstract class
+classdef ExistenceProbabilityDeleterX < TrackInitiatorX 
+% ExistenceProbabilityDeleterX Abstract class
 %
-% Summary of ExistProbTrackDeleterX:
+% Summary of ExistenceProbabilityDeleterX:
 % This is an implementation of a Track Initiator which uses a PHD Filter
 % to detect and initiate tracks.
 %
-% ExistProbTrackDeleterX Properties:
+% ExistenceProbabilityDeleterX Properties:
 %   DeleteThreshold
 %
-% ExistProbTrackDeleterX Methods:
-%   + ExistProbTrackDeleterX - Constructor method
+% ExistenceProbabilityDeleterX Methods:
+%   + ExistenceProbabilityDeleterX - Constructor method
 %
 % (+) denotes public properties/methods
 %
@@ -20,25 +20,20 @@ classdef ExistProbTrackDeleterX < TrackInitiatorX
     end
         
     methods
-        function this = ExistProbTrackDeleterX(varargin)
-        % ExistProbTrackDeleterX Constructor method
+        function this = ExistenceProbabilityDeleterX(varargin)
+        % ExistenceProbabilityDeleterX Constructor method
         %
         % Parameters
         % ----------
         % DeleteThreshold: scalar
         %   A scalar value in the range [0,1] which specifies the threshold
-        %   probability of existance to be used to delete tracks. 
+        %   probability of existance to be used to delete tracks.
         % 
         % Usage
         % -----
-        % * ExistProbTrackDeleterX(DeleteThreshold) returns 
-        %   a ExistProbTrackDeleterX object handle configured with the provided
+        % * ExistenceProbabilityDeleterX(DeleteThreshold) returns 
+        %   a ExistenceProbabilityDeleterX object handle configured with the provided
         %   deletion threshold DeleteThreshold.
-        % * PhdTrackInitiatorX(config) can also be used, where config is a
-        %   structure with fields config.DeleteThreshold
-        % * PhdTrackInitiatorX(___,Name,Value) instantiates an object 
-        %   handle, configured with additional options specified by one or
-        %   more Name,Value pair arguments.
             
             if(nargin==0)
                 error('Not enough input arguments');
@@ -100,7 +95,8 @@ classdef ExistProbTrackDeleterX < TrackInitiatorX
             numTracks = numel(Tracks);
             DeletedTracks = [];
             for trackInd = 1:numTracks
-                if(Tracks{trackInd}.ProbOfExist<0.1)
+                if(Tracks{trackInd}.ExistenceProbability<this.DeleteThreshold)
+                    disp('Deleting EXISTENCE based!');
                     DeletedTracks{end+1} = Tracks{trackInd};
                     Tracks{trackInd} = [];
                 end

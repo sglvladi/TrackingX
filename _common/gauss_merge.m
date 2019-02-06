@@ -1,4 +1,14 @@
-function [x_new,P_new,w_new]= gauss_merge(x,P,w,threshold)
+function [x_new,P_new,w_new] = gauss_merge(x,P,w,threshold)
+% gauss_merge Merge mixture components that fall in close proximity
+%
+% TODO:
+% ----
+% * Generate documentation
+%
+% Credit: 
+% -------
+% * This code has been taken from http://ba-tuong.vo-au.com/codes.html.
+% * Minor modifications may have been applied to the original version.
 
 L= length(w); x_dim= size(x,1);
 I= 1:L;

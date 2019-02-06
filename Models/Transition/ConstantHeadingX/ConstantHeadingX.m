@@ -1,7 +1,7 @@
-classdef ConstantHeadingModelX <  DynamicModelX 
-% ConstantHeadingModelX class
+classdef ConstantHeadingX < TransitionModelX 
+% ConstantHeadingX class
 %
-% Summary of ConstantHeadingModelX
+% Summary of ConstantHeadingX
 % This is a class implementation of a time-varying 2D Linear-Gaussian 
 % Constant Heading Dynamic Model [1].
 %
@@ -12,22 +12,22 @@ classdef ConstantHeadingModelX <  DynamicModelX
 %   dh = q_head*dB_t, B_t~N(0,t)          | Heading            (rad)
 %
 % Or equivalently:
-%   x(t) = f(x(t-1),Dt) + w(t),  w(t)~ N(0,Q)
+%   x(t) = f(x(t-1),dt) + w(t),  w(t)~ N(0,Q)
 %
 % where: (using Euler discretisation of the SDEs)
 %   x = [x; y; v; h]
-%   F = [x + v*cos(h)*Dt; y+ v*sin(h)*Dt; v; h]
+%   F = [x + v*cos(h)*dt; y+ v*sin(h)*dt; v; h]
 %   Q = [0, 0, 0, 0; 
 %        0, 0, 0, 0;
-%        0, 0, q_vel*sqrt(Dt), 0; 
-%        0, 0, 0, q_head*sqrt(Dt)]; 
+%        0, 0, q_vel*sqrt(dt), 0; 
+%        0, 0, 0, q_head*sqrt(dt)]; 
 %
-% ConstantVelocityModelX_2D Properties:
+% ConstantHeadingXModelX_2D Properties:
 %   - VelocityErrVariance  Value of the velocity noise diffusion coefficient q_vel
 %   - HeadingErrVariance   Value of the heading noise diffusion coefficient q_head
-%   - TimeVariant          Value of the time variant Dt
+%   - TimeVariant          Value of the time variant dt
 %
-% ConstantVelocityModelX_2D Methods:
+% ConstantHeadingXModelX_2D Methods:
 %   - feval(~)         Equivalent to applying the model transition equations 
 %   - random(~)        Process noise sample generator function
 %   - pdf(~)           Function to evaluate the probability p(x_k|x_{k-1}) of 
@@ -40,43 +40,68 @@ classdef ConstantHeadingModelX <  DynamicModelX
     properties
         VelocityErrVariance
         HeadingErrVariance
-        TimeVariant
+        TimestepDuration = duration(0,0,1);
     end
     
     properties (Access = private)
-        f = @(xkm1,Dt) [xkm1(1,:)+Dt*xkm1(3,:).*cos(xkm1(4,:)); 
-                        xkm1(2,:)+Dt*xkm1(3,:).*sin(xkm1(4,:)); 
+        f = @(xkm1,dt) [xkm1(1,:)+dt*xkm1(3,:).*cos(xkm1(4,:)); 
+                        xkm1(2,:)+dt*xkm1(3,:).*sin(xkm1(4,:)); 
                         xkm1(3,:); 
                         xkm1(4,:)];
-        Q = @(Dt, q_vel, q_head) Dt*blkdiag(q_vel^2, q_vel^2, q_vel, q_head);
+        Q = @(dt, q_vel, q_head) dt*blkdiag(q_vel^2, q_vel^2, q_vel, q_head);
+    end
+    
+    properties
+        NumStateDims = 4;
+    end
+    
+    methods (Access = protected)
+        function initialise_(this, config)
+            if (isfield(config,'NumDims'))
+                this.NumDims = config.NumDims;
+            end
+            if (isfield(config,'TimestepDuration'))
+                this.TimestepDuration = config.TimestepDuration;
+            end
+            if (isfield(config,'VelocityErrVariance'))
+                this.VelocityErrVariance = config.VelocityErrVariance;
+            end
+            if (isfield(config,'HeadingErrVariance'))
+                this.HeadingErrVariance = config.HeadingErrVariance;
+            end
+        end
     end
     
     methods
-        function this = ConstantHeadingModelX(varargin)
-        % CONSTANTHEADINGMODELX Constructor method
+        function this = ConstantHeadingX(varargin)
+        % ConstantHeadingXX Constructor method
         %   
-        % DESCRIPTION: 
-        % * ConstantHeadingModelX(q_vel,q_head) instantiates aan object handle 
-        %   configured with the provided velocity and heading process noise 
-        %   diffusion coefficients q_vel and q_head (scalar). 
-        % * ConstantVelocityModelX_2D(config) instantiates an object handle 
-        %   configured with the provided velocity and heading process noise 
-        %   diffusion coefficients config.VelocityErrVariance and 
-        %   config.HeadingErrVariance (scalar).
-        % * ConstantVelocityModelX_2D(___,Name,Value) instantiates an object 
-        %   handle, configured with additional options specified by one or
-        %   more Name,Value pair arguments.
+        % Parameters
+        % ----------
+        % VelocityErrVariance: scalar
+        %   Describes the process noise diffusion coefficient.
+        % HeadingErrVariance: scalar
+        %   Describes the process noise diffusion coefficient.
+        % NumDims: scalar
+        %   The number of dimensions. (default = 1)
+        % TimestepDuration: duration
+        %   The timestep duration. Specifying this on construction allows
+        %   to avoid supplying it in every predict/update cycle.
         %
-        % PARAMETERS
-        % * VelocityErrVariance - (Required) The VelocityErrVariance is a scalar
-        %   value describing the velocity noise diffusion coefficient. 
-        % * HeadingErrVariance - (Required) The VelocityErrVariance is a scalar
-        %   value describing the heading noise diffusion coefficient (in rads/sec).
+        % Usage
+        % ----- 
+        % * ConstantHeadingXX(___,Name,Value) instantiates an object 
+        %   handle, configured the parameters specified by one or
+        %   more Name,Value pair arguments. 
+        % * ConstantHeadingXX(config) instantiates an object handle configured  
+        %   with the parameters specified inside the 'config' structure, whose 
+        %   fieldnames correspond to the parameter names as given in the 
+        %   Parameters section above.
         %
-        %  See also apply, rnd, pdf, covariance.   
+        %  See also feval, random, pdf, covariance.   
             
             % Call SuperClass method
-            this@DynamicModelX;
+            this@TransitionModelX;
             
             % Return quickly if no arguments are passed
             if(nargin==0)
@@ -88,9 +113,8 @@ classdef ConstantHeadingModelX <  DynamicModelX
             % First check to see if a structure was received
             if(nargin==1)
                 if(isstruct(varargin{1}))
-                    this.VelocityErrVariance = varargin{1}.VelocityErrVariance;
-                    this.HeadingErrVariance = varargin{1}.HeadingErrVariance;
-                    this.TimeVariant = varargin{1}.TimeVariant;
+                    config = varargin{1};
+                    this.initialise_(config)
                     return;
                 end
             end
@@ -98,20 +122,13 @@ classdef ConstantHeadingModelX <  DynamicModelX
             % Otherwise, fall back to input parser
             parser = inputParser;
             parser.KeepUnmatched = true;
-            parser.addOptional('VelocityErrVariance',[]);
-            parser.addOptional('HeadingErrVariance',[]);
-            parser.addOptional('TimeVariant',1);
             parser.parse(varargin{:});
-            
-            this.VelocityErrVariance = parser.Results.VelocityErrVariance;
-            this.HeadingErrVariance = parser.Results.HeadingErrVariance;
-            this.TimeVariant = parser.Results.TimeVariant;
-            
-            this.NumStateDims = 4;
+            config = struct_concat(parser.Results, parser.Unmatched);
+            this.initialise_(config);
             
         end
         
-        function xk = feval(this, xkm1, wk, Dt)
+        function xk = feval(this, xkm1, wk, dt)
         % FEVAL Propagate a given state through the dynamic model
         %
         % Parameters
@@ -128,7 +145,7 @@ classdef ConstantHeadingModelX <  DynamicModelX
         %     where each column corresponds to the random noise which will
         %     be added to each state vector. 
         %   - If not provided, then no noise will be added to the state vectors.
-        % Dt: scalar, optional
+        % dt: scalar, optional
         %   A time variant. (default=this.TimeVariant)
         %
         % Returns
@@ -142,15 +159,15 @@ classdef ConstantHeadingModelX <  DynamicModelX
         %   
         % Usage
         % -----
-        % * xk = FEVAL(this,xkm1,wk,Dt) returns the new state xk, produced by
+        % * xk = FEVAL(this,xkm1,wk,dt) returns the new state xk, produced by
         %   propagating the given state xkm1 through the dynamic model for
-        %   time Dt and adding random noise wk. xk, xkm1 and wk must have  
+        %   time dt and adding random noise wk. xk, xkm1 and wk must have  
         %   the same dimensions, i.e (NumStateDim x Ns), where Ns is the 
         %   number of states/columns in xkm1.
         % * xk = FEVAL(this,xkm1,wk) returns the new state xk, produced by
         %   propagating the given state xkm1 through the dynamic model for
         %   time this.TimeVariant and adding random noise wk.
-        %   (i.e. Default Dt = this.TimeVariant)
+        %   (i.e. Default dt = this.TimeVariant)
         % * xk = FEVAL(this,xkm1) returns the new state xk, produced by
         %   propagating the given state xkm1 through the dynamic model for
         %   time this.TimeVariant without the addition of noise.
@@ -163,31 +180,33 @@ classdef ConstantHeadingModelX <  DynamicModelX
         
             switch(nargin)
                 case 1 
-                    xk = this.f;
-                    return;
-%                     xkm1 = 1;
-%                     wk   = 0;
-%                     Dt = this.TimeVariant;
+                    xkm1 = 1;
+                    wk   = 0;
+                    dt = this.TimestepDuration;
                 case 2
                     wk   = 0;
-                    Dt = this.TimeVariant;
+                    dt = this.TimestepDuration;
                 case 3
-                    Dt = this.TimeVariant;
+                    dt = this.TimestepDuration;
                     if(islogical(wk) && wk)
-                        wk = this.random(size(xkm1,2),Dt);
+                        wk = this.random(size(xkm1,2),dt);
+                    end
+                case 4
+                    if(islogical(wk) && wk)
+                        wk = this.random(size(xkm1,2),dt);
                     end
             end
             
             % Compute result
-            xk = this.f(xkm1,Dt) + wk;
+            xk = this.f(xkm1,seconds(dt)) + wk;
         end
         
-        function cov = covariance(this,Dt)
+        function cov = covar(this,dt)
         % COVARIANCE Returns process covariance matrix.
         %
         % Parameters
         % ----------
-        % Dt: scalar, optional
+        % dt: scalar, optional
         %   A time variant. (default=this.TimeVariant)
         %
         % Returns
@@ -197,23 +216,23 @@ classdef ConstantHeadingModelX <  DynamicModelX
         %
         % Usage
         % -----
-        % * Qk = covariance(this,Dt) returns process covariance matrix, upon 
-        %   application of Dt.
+        % * Qk = covariance(this,dt) returns process covariance matrix, upon 
+        %   application of dt.
         % * Qk = covariance(this) returns process covariance matrix, upon 
         %   application of this.TimeVariant. 
-        % (i.e. Default Dt = this.TimeVariant)
+        % (i.e. Default dt = this.TimeVariant)
         %
         % See also FEVAL, RANDOM, PDF.
             switch(nargin)
                 case 1 
-                    Dt = this.TimeVariant;
+                    dt = this.TimestepDuration;
             end
             
             % Return process covariance
-            cov = this.Q(Dt,this.VelocityErrVariance, this.HeadingErrVariance); % Time variant
+            cov = this.Q(seconds(dt),this.VelocityErrVariance, this.HeadingErrVariance); % Time variant
         end
         
-        function wk = random(this, Ns, Dt)
+        function wk = random(this, Ns, dt)
         % RANDOM Generates random samples from the dynamic model's noise
         % distribution.
         %
@@ -222,7 +241,7 @@ classdef ConstantHeadingModelX <  DynamicModelX
         % Ns: scalar, optional
         %   The number of samples to be generated.
         %   (default = 1)
-        % Dt: scalar, optional
+        % dt: scalar, optional
         %   A time variant. 
         %   (default=this.TimeVariant)
         %
@@ -234,30 +253,30 @@ classdef ConstantHeadingModelX <  DynamicModelX
         %
         % Usage
         % -----
-        % * wk = random(this,Ns,Dt) generates and returns a set of Ns samples
+        % * wk = random(this,Ns,dt) generates and returns a set of Ns samples
         %   generated from the noise distribution of the dynamic model, i.e.
-        %   wk ~ N(0,Q(Dt)), where Q is the noise covariance upon application 
-        %   of the time variant Dt.
+        %   wk ~ N(0,Q(dt)), where Q is the noise covariance upon application 
+        %   of the time variant dt.
         % * wk = random(this,Ns) generates and returns a set of Ns samples
         %   generated from the noise distribution of the dynamic model, i.e.
         %   wk ~ N(0,Q), where Q is the noise covariance upon application 
         %   of the time variant this.TimeIndex.
-        % (i.e. Default Dt = this.TimeVariant)
+        % (i.e. Default dt = this.TimeVariant)
         %
         % See also FEVAL, PDF, COVARIANCE
        
             switch(nargin)
                 case 1
                     Ns = 1;
-                    Dt = this.TimeVariant;
+                    dt = this.TimestepDuration;
                 case 2
-                    Dt = this.TimeVariant;
+                    dt = this.TimestepDuration;
             end
               
-            wk = mvnrnd(zeros(this.NumStateDims,1),this.Q(Dt,this.VelocityErrVariance, this.HeadingErrVariance),Ns)';
+            wk = gauss_rnd(zeros(this.NumStateDims,1),this.covar(dt),Ns);
         end
         
-        function prob = pdf(this, xk, xkm1, Dt)
+        function prob = pdf(this, xk, xkm1, dt)
         % PDF Evaluates the probability/likelihood p(x_k|x_{k-1}) of a 
         % (set of) new state vector(s), given a (set of) old state vector(s)  
         % 
@@ -267,7 +286,7 @@ classdef ConstantHeadingModelX <  DynamicModelX
         %   A matrix, whose columns correspond to individual new state vectors.
         % xkm1: (NumStateDims x Np) matrix
         %   A matrix, whose columns correspond to individual old state vectors
-        % Dt: scalar, optional
+        % dt: scalar, optional
         %   A time variant. 
         %   (default=this.TimeVariant)
         %
@@ -279,27 +298,27 @@ classdef ConstantHeadingModelX <  DynamicModelX
         %
         % Usage
         % -----
-        % * prob = pdf(x_k, x_km1, Dt) evaluates and returns a (a x b)
+        % * prob = pdf(x_k, x_km1, dt) evaluates and returns a (a x b)
         %   probability/likelihood matrix given the (NumStatesDim x a) x_k
-        %   and (NumStatesDim x b) x_km1 state matrices. Dt is an optional 
+        %   and (NumStatesDim x b) x_km1 state matrices. dt is an optional 
         %   argument (Default = this.TimeVariant) time variable, which is 
         %   used for computing the model's covariance.
         %
         % See also FEVAL, RANDOM, COVARIANCE
             
             if(nargin<4)
-                Dt = this.TimeVariant;
+                dt = this.TimestepDuration;
             end
             
-            xk_km1 = this.feval(xkm1);
+            xk_km1 = this.feval(xkm1,false,dt);
             prob = zeros(size(xk,2), size(xkm1,2));
             if(size(xkm1,2)>size(xk,2))
                 for i=1:size(xk,2)
-                    prob(i,:) = gauss_pdf(xk(:,i), xk_km1, this.Q(Dt,this.VelocityErrVariance,this.HeadingErrVariance));
+                    prob(i,:) = gauss_pdf(xk(:,i), xk_km1, this.covar(dt));
                 end
             else
                 for i=1:size(xkm1,2)
-                    prob(:,i) = gauss_pdf(xk, xk_km1(:,i), this.Q(Dt,this.VelocityErrVariance,this.HeadingErrVariance))';  
+                    prob(:,i) = gauss_pdf(xk, xk_km1(:,i), this.covar(dt))';  
                 end
             end
                         

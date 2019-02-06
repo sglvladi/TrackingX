@@ -83,7 +83,7 @@ classdef KalmanFilterX < FilterX
         end
         function MeasurementLikelihoods = getMeasurementLikelihoods(this)
             if(isempty(this.MeasurementLikelihoods_))
-                this.MeasurementLikelihoods_ =  mvnpdf(this.MeasurementList',this.MeasurementPrediction.Mean',this.MeasurementPrediction.Covar)';
+                this.MeasurementLikelihoods_ =  mvnpdf(this.MeasurementList.Vectors',this.MeasurementPrediction.Mean',this.MeasurementPrediction.Covar)';
             end
             MeasurementLikelihoods = this.MeasurementLikelihoods_;
         end
@@ -149,7 +149,7 @@ classdef KalmanFilterX < FilterX
         % ----------
         % Model: StateSpaceModelX
         %   An object handle to StateSpaceModelX object.
-        % StatePrior: struct, optional
+        % StatePrior: StateX, optional
         %   A StateX subclass object describing the state prior. If StatePrior 
         %   is not a GaussianStateX instance, then it will be converted in
         %   one using the extracted mean and covariance.
@@ -187,34 +187,27 @@ classdef KalmanFilterX < FilterX
         
         function [statePrediction, measurementPrediction] = predict(this, varargin)
         % Predict Perform Kalman Filter prediction step
-        %   
-        % Usage
-        % -----
-        % * predict(this) calculates the predicted system state and measurement,
-        %   as well as their associated uncertainty covariances.
+        % 
+        % Parameters
+        % ----------
+        % prior: GaussianStateX, optional
+        %   The prior state estimate.
+        % timestamp: datetime, optional
+        %   A timestamp indicating the time at which prediction is
+        %   performed.
         %
-        % More details
-        % ------------
-        % * KalmanFilterX uses the Model class property, which should be an
-        %   instance of the TrackingX.Models.StateSpaceModel class, in order
-        %   to extract information regarding the underlying state-space model.
-        % * State prediction is performed using the Model.Transition property,
-        %   which must be a subclass of TrackingX.Abstract.TransitionModel and
-        %   provide the following interface functions:
-        %   - Model.Transition.feval(): Returns the model transition matrix
-        %   - Model.Transition.covar(): Returns the process noise covariance
-        % * Measurement prediction and innovation covariance calculation is
-        %   performed usinf the Model.Measurement class property, which should be
-        %   a subclass of TrackingX.Abstract.TransitionModel and provide the
-        %   following interface functions:
-        %   - Model.Measurement.heval(): Returns the model measurement matrix
-        %   - Model.Measurement.covariance(): Returns the measurement noise covariance
+        % Returns
+        % -------
+        % GaussianStateX
+        %   The generated state prediction
+        % GaussianStateX, optional
+        %   The generated measurement prediction
         %
-        % See also update, smooth.
+        %  See also update, smooth.
             
             % Predict state and measurement
-            statePrediction = this.predictState(varargin);
-            measurementPrediction = this.predictMeasurement(varargin);
+            statePrediction = this.predictState(varargin{:});
+            measurementPrediction = this.predictMeasurement(varargin{:});
         end
         
         function statePrediction = predictState(this,varargin)
@@ -226,9 +219,27 @@ classdef KalmanFilterX < FilterX
         %
         % See also update, smooth.
             
+            timestamp = [];
+            timestamp_old = [];
+            for i = 1:min([2,nargin-1])
+                if isa(varargin{i},'StateX')
+                    this.StatePosterior = varargin{i};
+                    timestamp_old = this.StatePosterior.Timestamp;
+                elseif isdatetime(varargin{i})
+                    timestamp = varargin{i};
+                end
+            end
+            
+            if isempty(timestamp)
+                dt = this.Model.Transition.TimestepDuration;
+                timestamp = this.StatePosterior.Timestamp;
+            else
+                dt = timestamp - timestamp_old;
+            end
+            
             % Extract model parameters
-            F = this.Model.Transition.matrix();
-            Q = this.Model.Transition.covar();
+            F = this.Model.Transition.matrix(dt);
+            Q = this.Model.Transition.covar(dt);
             if(~isempty(this.Model.Control))
                 B   = this.Model.Control.feval();
                 Qu  = this.Model.Control.covar();
@@ -242,7 +253,7 @@ classdef KalmanFilterX < FilterX
             [statePredictionMean, statePredictionCovar] = ...
                 this.predictState_(this.StatePosterior.Mean, this.StatePosterior.Covar, F, Q, this.ControlInput, B, Qu); 
             
-            statePrediction = GaussianStateX(statePredictionMean, statePredictionCovar);
+            statePrediction = GaussianStateX(statePredictionMean, statePredictionCovar, timestamp);
             this.StatePrediction = statePrediction;
         end
         
@@ -272,6 +283,10 @@ classdef KalmanFilterX < FilterX
         %   - Model.Measurement.covariance(): Returns the measurement noise covariance
         %
         % See also update, smooth.
+        
+            if nargin>1
+                this.StatePrediction = varargin{1};
+            end
             
             % Extract model parameters
             H = this.Model.Measurement.feval();
@@ -280,7 +295,10 @@ classdef KalmanFilterX < FilterX
             % Perform prediction
             [measurementPredictionMean, measurementPredictionCovar, this.KalmanGain] = ...
                 this.predictMeasurement_(this.StatePrediction.Mean, this.StatePrediction.Covar, H, R);
-            measurementPrediction = GaussianStateX(measurementPredictionMean, measurementPredictionCovar);
+            
+            measurementPrediction = GaussianStateX(measurementPredictionMean,... 
+                                                   measurementPredictionCovar,...
+                                                   this.StatePrediction.Timestamp);
             this.MeasurementPrediction = measurementPrediction;
         end
         
@@ -294,19 +312,35 @@ classdef KalmanFilterX < FilterX
         %
         % See also KalmanFilterX, predict, iterate, smooth.
             
+            if nargin>1
+                if isa(varargin{1},'MeasurementX')
+                    this.MeasurementList = varargin{1};
+                elseif isa(varargin{1}, 'StateX')
+                    this.StatePrediction = varargin{1};
+                    this.MeasurementList = varargin{2};
+                end
+            end
+            if(this.MeasurementList.NumMeasurements)
+                timestamp = this.MeasurementList.Timestamp;
+            else
+                timestamp = this.StatePrediction.Timestamp;
+            end
+            
             if(isempty(this.MeasurementPrediction.Mean) || isempty(this.MeasurementPrediction.Covar))
                 [measurementPredictionMean, measurementPredictionCovar, this.KalmanGain] = ...
                     this.predictMeasurement_(this.StatePrediction.Mean, this.StatePrediction.Covar, H, R);
-                measurementPrediction = GaussianStateX(measurementPredictionMean, measurementPredictionCovar);
+                measurementPrediction = GaussianStateX(measurementPredictionMean,...
+                                                       measurementPredictionCovar,...
+                                                       this.StatePrediction.Timestamp);
                 this.MeasurementPrediction = measurementPrediction;
             end     
         
             % Perform single measurement update
             [posteriorMean, posteriorCovar] = this.update_(this.StatePrediction.Mean,this.StatePrediction.Covar,...
-                                                             this.MeasurementList,this.MeasurementPrediction.Mean,...
-                                                             this.MeasurementPrediction.Covar,this.KalmanGain);
+                                                           this.MeasurementList.Vectors,this.MeasurementPrediction.Mean,...
+                                                           this.MeasurementPrediction.Covar,this.KalmanGain);
             
-            posterior = GaussianStateX(posteriorMean,posteriorCovar);
+            posterior = GaussianStateX(posteriorMean, posteriorCovar, timestamp);
             this.StatePosterior = posterior;
         end
         
@@ -323,12 +357,18 @@ classdef KalmanFilterX < FilterX
         %   [1] Y. Bar-Shalom, F. Daum and J. Huang, "The probabilistic data association filter," in IEEE Control Models, vol. 29, no. 6, pp. 82-100, Dec. 2009.
         %
         %   See also KalmanFilterX, Predict, Iterate, Smooth, resample.
+        
+            if(this.MeasurementList.NumMeasurements)
+                timestamp = this.MeasurementList.Timestamp;
+            else
+                timestamp = this.StatePrediction.Timestamp;
+            end
             
             [posteriorMean, posteriorCovar] = ...
-                this.updatePDA_(this.StatePrediction.Mean,this.StatePrediction.Covar,this.MeasurementList,...
+                this.updatePDA_(this.StatePrediction.Mean,this.StatePrediction.Covar,this.MeasurementList.Vectors,...
                                 assocWeights,this.MeasurementPrediction.Mean,this.MeasurementPrediction.Covar,this.KalmanGain);
             
-            posterior = GaussianStateX(posteriorMean,posteriorCovar);
+            posterior = GaussianStateX(posteriorMean,posteriorCovar,timestamp);
             this.StatePosterior = posterior;
         end
         

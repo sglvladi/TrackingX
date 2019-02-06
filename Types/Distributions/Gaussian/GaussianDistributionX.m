@@ -39,10 +39,20 @@ classdef GaussianDistributionX < ProbabilityDistributionX
         % numVariables: scalar, optional
         %   The number of random variables. Onlt necessary if neither mean
         %   nor covar specified.
+        %
+        % -- OR ---
+        %
+        % distribution: ProbabilityDistributionX
+        %   Another distribution, based on which the new Gaussian
+        %   distribution should be created.
+        %
+        % -- OR ---
+        %
         % mean: (NumVariables x 1) column vector
         %   Mean vector of the Gaussian distribution
         % covar: (NumVariables x NumVariables) matrix
         %   The covariance matrix of the Gaussian distribution
+        
             this.reset(varargin{:});
         end
         
@@ -74,17 +84,50 @@ classdef GaussianDistributionX < ProbabilityDistributionX
         end
         
         function reset(this, varargin)
-            
+        % reset Reset the distribution with new inputs
+        %
+        % Parameters
+        % ----------
+        % numVariables: scalar, optional
+        %   The number of random variables. Onlt necessary if neither mean
+        %   nor covar specified.
+        %
+        % -- OR ---
+        %
+        % distribution: ProbabilityDistributionX
+        %   Another distribution, based on which the new Gaussian
+        %   distribution should be created.
+        %
+        % -- OR ---
+        %
+        % mean: (NumVariables x 1) column vector
+        %   Mean vector of the Gaussian distribution
+        % covar: (NumVariables x NumVariables) matrix
+        %   The covariance matrix of the Gaussian distribution  
+        
             if(nargin == 2)
-                this.NumVariables = varargin{1};
+                if isnumeric(varargin{1})
+                    % Just number of variables
+                    this.NumVariables = varargin{1};
+                else
+                    % Distribution
+                    this.Mean = varargin{1}.Mean;
+                    this.Covar = varargin{1}.Covar;
+                end
             elseif(nargin>2)
-                mean = varargin{1};
-                covar =  varargin{2};
-                %reset Reset the distribution with a new number of random variables
-
                 % Re-initialize the mean and covariance            
-                this.Mean = mean;
-                this.Covar = covar;
+                this.Mean = varargin{1};
+                this.Covar = varargin{2};
+            end
+            
+        end
+    end
+    
+    methods (Access=protected)
+        function numVariables = getNumVariables(this)
+            numVariables = numel(this.Mean);
+            if numVariables == 0
+                numVariables = this.NumVariables_;
             end
         end
     end

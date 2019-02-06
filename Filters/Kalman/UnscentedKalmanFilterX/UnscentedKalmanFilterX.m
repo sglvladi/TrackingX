@@ -167,8 +167,8 @@ classdef UnscentedKalmanFilterX < KalmanFilterX
         %  See also update, smooth.
         
             % Predict state and measurement
-            statePrediction = this.predictState(varargin);
-            measurementPrediction = this.predictMeasurement(varargin);
+            statePrediction = this.predictState(varargin{:});
+            measurementPrediction = this.predictMeasurement(varargin{:});
         end
         
         function statePrediction = predictState(this,varargin)
@@ -179,10 +179,28 @@ classdef UnscentedKalmanFilterX < KalmanFilterX
         % * predictState(this) calculates the predicted system state and covariance.
         %
         %  See also update, smooth.
-        
+            
+            timestamp = [];
+            timestamp_old = [];
+            for i = 1:min([2,nargin-1])
+                if isa(varargin{i},'StateX')
+                    this.StatePosterior = varargin{i};
+                    timestamp_old = this.StatePosterior.Timestamp;
+                elseif isdatetime(varargin{i})
+                    timestamp = varargin{i};
+                end
+            end
+            
+            if isempty(timestamp)
+                dt = this.Model.Transition.TimestepDuration;
+                timestamp = this.StatePosterior.Timestamp;
+            else
+                dt = timestamp - timestamp_old;
+            end
+            
             % Extract model parameters
-            f = @(x) this.Model.Transition.feval(x);
-            Q = this.Model.Transition.covar();
+            f = @(x) this.Model.Transition.feval(x, false, dt);
+            Q = this.Model.Transition.covar(dt);
             if(~isempty(this.Model.Control))
                 b   = @(x) this.Model.Control.feval(x);
                 Qu  = this.Model.Ctr.covar();
@@ -198,7 +216,7 @@ classdef UnscentedKalmanFilterX < KalmanFilterX
                               this.StatePosterior.Mean, this.StatePosterior.Covar,...
                               f, Q, this.ControlInput, b, Qu);  
                           
-            statePrediction = GaussianStateX(statePredictionMean, statePredictionCovar);
+            statePrediction = GaussianStateX(statePredictionMean, statePredictionCovar, timestamp);
             this.StatePrediction = statePrediction;
         end
         
@@ -229,7 +247,11 @@ classdef UnscentedKalmanFilterX < KalmanFilterX
         %   - Model.Measurement.covar(): Returns the measurement noise covar
         %
         %  See also update, smooth.
-        
+            
+            if nargin>1
+                this.StatePrediction = varargin{1};
+            end
+            
              % Extract model parameters
             h = @(x) this.Model.Measurement.feval(x);
             R = this.Model.Measurement.covar();
@@ -238,7 +260,9 @@ classdef UnscentedKalmanFilterX < KalmanFilterX
             [measurementPredictionMean, measurementPredictionCovar, this.KalmanGain] = ...
                 this.predictMeasurement_(this.Alpha, this.Kappa, this.Beta,...
                               this.StatePrediction.Mean, this.StatePrediction.Covar, h, R); 
-            measurementPrediction = GaussianStateX(measurementPredictionMean, measurementPredictionCovar);
+            measurementPrediction = GaussianStateX(measurementPredictionMean,...
+                                                   measurementPredictionCovar,...
+                                                   this.StatePrediction.Timestamp);
             this.MeasurementPrediction = measurementPrediction;
         end
         
@@ -252,17 +276,8 @@ classdef UnscentedKalmanFilterX < KalmanFilterX
         %
         %   See also KalmanFilterX, predict, iterate, smooth.
             
-            if(isempty(this.MeasurementPrediction.Mean)||isempty(this.MeasurementPrediction.Covar))
-                [measurementPredictionMean, measurementPredictionCovar, this.KalmanGain] = ...
-                    this.predictMeasurement_(this.Alpha, this.Kappa, this.Beta,...
-                                     this.PredStateMean,this.PredStateCovar,...
-                                     this.Model.Measurement.feval(),this.Model.Measurement.covar());
-                measurementPrediction = GaussianStateX(measurementPredictionMean, measurementPredictionCovar);
-                this.MeasurementPrediction = measurementPrediction;
-            end
-            
             % Call SuperClass method
-            posterior = update@KalmanFilterX(this, varargin);
+            posterior = update@KalmanFilterX(this, varargin{:});
         end
         
         function posterior = updatePDA(this, assocWeights, varargin)
@@ -279,7 +294,7 @@ classdef UnscentedKalmanFilterX < KalmanFilterX
         %   See also KalmanFilterX, Predict, Iterate, Smooth, resample.
         
             % Call SuperClass method
-            posterior = updatePDA@KalmanFilterX(this, assocWeights);
+            posterior = updatePDA@KalmanFilterX(this, assocWeights, varargin{:});
         end
         
     end
@@ -509,54 +524,57 @@ classdef UnscentedKalmanFilterX < KalmanFilterX
             P = PPred - K*S*K';
         end
         
-        function [x,P,K] = updatePDA_(xPred,PPred,Y,W,yPred,S,K)
-        % KALMANFILTERX_UPDATEPDA Perform the discrete-time Probabilistic Data 
-        % Association (PDA) KF update step, under the assumption of additive process 
-        % noise, for multiple measurements (as a Gaussian Mixture)
-        %
-        % Parameters
-        % ----------
-        % xPred: column vector
-        %   The (xDim x 1) predicted state estimate.
-        % PPred: matrix
-        %   The (xDim x xDim) predicted state covariance matrix.
-        % Y: matrix
-        %   The (yDim x nY) measurement vector.
-        % W: row vector
-        %   The (1 x nY+1) measurement association/mixture weights 
-        %   vector. (dummy measurement assumed at index 1)
-        % yPred: column vector
-        %   The (yDim x 1) predicted measurement estimate.
-        % S: matrix
-        %   The (yDim x yDim) innovation covariance matrix.
-        % Pxy: matrix
-        %   The (xDim x yDim) cross-covariance matrix.
-        %
-        % Returns
-        % -------
-        % x: column vector
-        %   The (xDim x 1) state estimate at the current time-step.
-        % P: matrix
-        %   The (xDim x xDim) state covariance matrix at the current
-        %   time-step.
-        % K: matrix
-        %   The (xDim x yDim) Kalman gain matrix at the current
-        %   time-step.
-        %
-        %October 2017 Lyudmil Vladimirov, University of Liverpool.
-
-            % Get size of observation vector
-            [yDim,nY] = size(Y);  
-
-            % Compute innovation mean and (cross) covariance
-            innov_err       = Y - yPred(:,ones(1,nY));
-            tot_innov_err   = innov_err*W(2:end)';
-            Pc              = PPred - K*S*K';
-            Pgag            = K*((innov_err.*W(ones(yDim,1),2:end))*innov_err' - tot_innov_err*tot_innov_err')*K';
-
-            % Compute filtered estimates
-            x    = xPred + K*tot_innov_err;  
-            P    = W(1)*PPred + (1-W(1))*Pc + Pgag;
-        end
+%         function [x,P,K] = updatePDA_(xPred,PPred,Y,W,yPred,S,K)
+%         % KALMANFILTERX_UPDATEPDA Perform the discrete-time Probabilistic Data 
+%         % Association (PDA) KF update step, under the assumption of additive process 
+%         % noise, for multiple measurements (as a Gaussian Mixture)
+%         %
+%         % Parameters
+%         % ----------
+%         % xPred: column vector
+%         %   The (xDim x 1) predicted state estimate.
+%         % PPred: matrix
+%         %   The (xDim x xDim) predicted state covariance matrix.
+%         % Y: matrix
+%         %   The (yDim x nY) measurement vector.
+%         % W: row vector
+%         %   The (1 x nY+1) measurement association/mixture weights 
+%         %   vector. (dummy measurement assumed at index 1)
+%         % yPred: column vector
+%         %   The (yDim x 1) predicted measurement estimate.
+%         % S: matrix
+%         %   The (yDim x yDim) innovation covariance matrix.
+%         % Pxy: matrix
+%         %   The (xDim x yDim) cross-covariance matrix.
+%         %
+%         % Returns
+%         % -------
+%         % x: column vector
+%         %   The (xDim x 1) state estimate at the current time-step.
+%         % P: matrix
+%         %   The (xDim x xDim) state covariance matrix at the current
+%         %   time-step.
+%         % K: matrix
+%         %   The (xDim x yDim) Kalman gain matrix at the current
+%         %   time-step.
+%         %
+%         %October 2017 Lyudmil Vladimirov, University of Liverpool.
+% 
+%             % Get size of observation vector
+%             [yDim,nY] = size(Y);  
+% 
+%             % Compute innovation mean and (cross) covariance
+%             try
+%                 innov_err       = Y - yPred(:,ones(1,nY));
+%             catch
+%             end
+%             tot_innov_err   = innov_err*W(2:end)';
+%             Pc              = PPred - K*S*K';
+%             Pgag            = K*((innov_err.*W(ones(yDim,1),2:end))*innov_err' - tot_innov_err*tot_innov_err')*K';
+% 
+%             % Compute filtered estimates
+%             x    = xPred + K*tot_innov_err;  
+%             P    = W(1)*PPred + (1-W(1))*Pc + Pgag;
+%         end
     end
 end

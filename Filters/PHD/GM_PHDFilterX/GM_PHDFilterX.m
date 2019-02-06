@@ -397,12 +397,16 @@ classdef GM_PHDFilterX < FilterX
             g = this.MeasurementLikelihoodsPerComponent;
              
             % Compute normalising constant
-            Ck = zeros(1,numMeasurements);
-            for i = 1:numMeasurements   % for all measurements
-                Ck(i) = sum(this.DetectionProbability*g(i,:).*this.StatePrediction.Weights,2);
-            end
+            Ck = this.DetectionProbability*g.*this.StatePrediction.Weights;
+            C = sum(Ck,2);
+            Ck_plus = C + this.Model.Clutter.pdf(this.MeasurementList)';
             
-            Ck_plus = Ck + this.Model.Clutter.pdf(this.MeasurementList);
+            % Compute the weights for all hypotheses (including null)
+            weightsPerHypothesis_ = [Weights(1:numPredComponents);
+                                     zeros(numMeasurements, numPredComponents)]; % Null
+            weightsPerHypothesis_(2:end,:) = Ck./Ck_plus; % True
+            a = sum(weightsPerHypothesis_,1);
+            
             % Create true measurement hypothesis components
             for i = 1:numPredComponents
                  
@@ -422,7 +426,7 @@ classdef GM_PHDFilterX < FilterX
                 
                 % Compute corresponding weights
                 Weights(numPredComponents + (i-1)*numMeasurements+1 : numPredComponents + i*numMeasurements) = ...
-                    this.DetectionProbability*g(:,i)'*this.StatePrediction.Weights(i)./Ck_plus;
+                     weightsPerHypothesis_(2:end,i);
             end  
              
             % 5) Prune

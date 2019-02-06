@@ -15,6 +15,7 @@ classdef MofN_TrackInitiatorX < TrackInitiatorX
 % March 2018 Lyudmil Vladimirov, University of Liverpool.
     
     properties
+       TagGenerator
        TrackList
        MeasurementList
        AssocWeightsMatrix
@@ -25,7 +26,6 @@ classdef MofN_TrackInitiatorX < TrackInitiatorX
        WindowSize
        CustomConfirmConditionFcn
        CustomDeleteConditionFcn
-       TrackIdGenFcn
     end
         
     methods
@@ -45,6 +45,7 @@ classdef MofN_TrackInitiatorX < TrackInitiatorX
             if(nargin==1)
                 if(isstruct(varargin{1}))
                     config = varargin{1};
+                    this.TagGenerator = config.TagGenerator;
                     this.InitFilter = config.InitFilter;
                     this.DataAssociator = config.DataAssociator;
                     this.DeleteThreshold = config.DeleteThreshold;
@@ -59,11 +60,6 @@ classdef MofN_TrackInitiatorX < TrackInitiatorX
                     else
                        this.CustomDeleteConditionFcn=0;
                     end
-                    if(isfield(config,"TrackIdGenFcn"))
-                        this.TrackIdGenFcn = config.TrackIdGenFcn;
-                    else
-                       this.TrackIdGenFcn=@(x) randi(10000);
-                    end
                 end
                 return;
             end
@@ -72,7 +68,8 @@ classdef MofN_TrackInitiatorX < TrackInitiatorX
             parser = inputParser;
             parser.KeepUnmatched = true;
             parser.parse(varargin{:});
-            config = parser.Results;
+            config = parser.Unmatched;
+            this.TagGenerator = config.TagGenerator;
             this.InitFilter = config.InitFilter;
             this.DataAssociator = config.DataAssociator;
             this.ConfirmThreshold = config.ConfirmThreshold;
@@ -91,7 +88,7 @@ classdef MofN_TrackInitiatorX < TrackInitiatorX
             this.WindowSize = max(this.ConfirmThreshold,this.DeleteThreshold);
         end
         
-        function [ConfirmedTrackList, TentativeTrackList] = initiateTracks(this,ConfirmedTrackList, MeasurementList, AssocWeightsMatrix)
+        function [ConfirmedTrackList, TentativeTrackList, deletedTracks] = initiateTracks(this,ConfirmedTrackList, MeasurementList, AssocWeightsMatrix)
         % INITIATETRACKS Perform track initiation
         %   
         % DESCRIPTION: 
@@ -108,12 +105,19 @@ classdef MofN_TrackInitiatorX < TrackInitiatorX
         
             %% Confirmed tracks
             numConfirmedTracks = numel(ConfirmedTrackList);
+            deletedTracks = {};
             if numConfirmedTracks>0
 
                 % Update detection history
                 for t=1:numConfirmedTracks
+                    validInds = find(AssocWeightsMatrix(t,2:end));
+                    if(numel(validInds)>1)
+                    end
+                    validMeas = MeasurementListX(MeasurementList.Vectors(validInds), MeasurementList.Timestamp);
                     track_detected = ~isempty(find(ConfirmedTrackList{t}.ValidationMatrix, 1));
                     ConfirmedTrackList{t}.DetectionHistory = [ConfirmedTrackList{t}.DetectionHistory(2:end),track_detected];
+                    ConfirmedTrackList{t}.Trajectory(end+1) = ConfirmedTrackList{t}.Filter.StatePosterior;
+                    ConfirmedTrackList{t}.Associations(end+1) = validMeas;
                 end
 
                 % Delete Tracks
@@ -124,9 +128,14 @@ classdef MofN_TrackInitiatorX < TrackInitiatorX
                     % Check condition
                     del_cond = sum(ConfirmedTrackList{t}.DetectionHistory(end-(M-1):end)==0) >= this.DeleteThreshold(1);
                     if isa(this.CustomDeleteConditionFcn, 'function_handle')
-                        del_cond = del_cond || this.CustomDeleteConditionFcn(this,ConfirmedTrackList{t});
+                        c_del_cond = this.CustomDeleteConditionFcn(this,ConfirmedTrackList{t});
+                        if(c_del_cond)
+                            print('Deleting COVARIANCE based');
+                        end
+                        del_cond = del_cond || c_del_cond;
                     end
                     if(del_cond)
+                        deletedTracks{end+1} = ConfirmedTrackList{t};
                         ConfirmedTrackList{t} = [];
                         del_tracks = del_tracks + 1;
                         del_flag = 1;
@@ -141,7 +150,7 @@ classdef MofN_TrackInitiatorX < TrackInitiatorX
             %% Tentative tracks 
 
             % Get indices of all measurements where there exist no possible association
-            numMeas = size(MeasurementList,2);
+            numMeas = MeasurementList.NumMeasurements;
             rhi = zeros(1, numMeas);
             for measInd = 1:numMeas
                 rhi_tmp = 1;
@@ -154,34 +163,41 @@ classdef MofN_TrackInitiatorX < TrackInitiatorX
             end
             UnassocMeasInd = rhi==1; %any(sum(AssocWeightsMatrix,1)==0,1);
 
-            this.DataAssociator.MeasurementList = MeasurementList(:,UnassocMeasInd); % Only use unassociated measurements
-            for j=1:numel(this.DataAssociator.TrackList)
-                this.DataAssociator.TrackList{j}.Filter.predict();
-            end
+            this.DataAssociator.MeasurementList = MeasurementListX(MeasurementList.Vectors(:,UnassocMeasInd), MeasurementList.Timestamp); % Only use unassociated measurements
+            this.DataAssociator.predictTracks();
             this.DataAssociator.associate();    
             this.DataAssociator.updateTracks();
             
             % Update Detection and Miss counters for all tracks
             for t=1:numel(this.DataAssociator.TrackList)
-
                 % Update counts
-                track_detected = ~isempty(find(this.DataAssociator.TrackList{t}.ValidationMatrix, 1));
+                validInds = find(this.DataAssociator.ValidationMatrix(t,:));
+                validMeas = MeasurementListX(MeasurementList.Vectors(:,validInds), MeasurementList.Timestamp);
+                track_detected = ~isempty(validInds);
                 this.DataAssociator.TrackList{t}.DetectionHistory = [this.DataAssociator.TrackList{t}.DetectionHistory(2:end),track_detected]; 
+                this.DataAssociator.TrackList{t}.Trajectory(end+1) = this.DataAssociator.TrackList{t}.Filter.StatePosterior;
+                this.DataAssociator.TrackList{t}.Associations(end+1) = validMeas;
             end
 
             % Delete or Confirm Tentative Tracks
             del_tracks = 0;
             del_flag = 0;
             for t = 1:numel(this.DataAssociator.TrackList)
-                P = this.DataAssociator.TrackList{t}.Filter.StateCovar;
+                P = this.DataAssociator.TrackList{t}.State.Covar;
                 M_c = this.ConfirmThreshold(2);
                 M_d = this.DeleteThreshold(2);
+                
                 % Check condition
                 del_cond = sum(this.DataAssociator.TrackList{t}.DetectionHistory(end-(M_d-1):end)==0) >= this.DeleteThreshold(1);
                 if isa(this.CustomDeleteConditionFcn, 'function_handle')
-                    del_cond = del_cond || this.CustomDeleteConditionFcn(this,this.DataAssociator.TrackList{t});
+                    c_del_cond = this.CustomDeleteConditionFcn(this,this.DataAssociator.TrackList{t});
+                    if(del_cond)
+                        print('Deleting COVARIANCE based');
+                    end
+                    del_cond = del_cond || c_del_cond;
                 end
-                if(del_cond)% || P(1,1)>sigmaDelThresh^2 || P(2,2)>sigmaDelThresh^2) 
+                if(del_cond)
+                    disp("Deleting track");
                     this.DataAssociator.TrackList{t} = []; 
                     del_tracks = del_tracks + 1;
                     del_flag = 1;
@@ -195,39 +211,34 @@ classdef MofN_TrackInitiatorX < TrackInitiatorX
             end
             if(del_flag)
                 this.DataAssociator.TrackList = this.DataAssociator.TrackList(~cellfun('isempty',this.DataAssociator.TrackList));
-                this.DataAssociator.NumTracks = this.DataAssociator.NumTracks - del_tracks;
             end
 
-            UnassocMeasInd = find(~any(this.DataAssociator.ValidationMatrix,1));
             % Initiate new tracks
+            UnassocMeasInd = find(~any(this.DataAssociator.ValidationMatrix,1));
             for i=1:numel(UnassocMeasInd)
-                              
-                NewTrack = TrackX();
-                NewTrack.addprop('Filter');
-                NewTrack.addprop('TrackID');
-                NewTrack.addprop('DetectionHistory');
-                NewTrack.TrackID = this.TrackIdGenFcn(this);
-                windowSize = max(this.ConfirmThreshold(2), this.DeleteThreshold(2));
-                NewTrack.DetectionHistory = [-ones(1,windowSize-1),1];
-                NewTrack.Filter = copy(this.InitFilter);
-                stateMean = zeros(this.InitFilter.Model.Dyn.NumStateDims,1);
-                for j=1:this.InitFilter.Model.Obs.NumObsDims
-                    index = this.InitFilter.Model.Obs.Mapping(j);
-                    if(index~=0)
-                        stateMean(index) = this.DataAssociator.MeasurementList(j,UnassocMeasInd(i));
-                    end
-                end
-                if(isa(this.InitFilter,'KalmanFilterX'))
-                    NewTrack.Filter.StateMean = zeros(this.InitFilter.Model.Dyn.NumStateDims,1);
-                    NewTrack.Filter.StateMean = stateMean;
-                    %filter.Params.particles = filter.Params.gen_x0([jpdaf_init.Params.DataList(1,UnassocMeasInd(i)); jpdaf_init.Params.DataList(2,UnassocMeasInd(i));0;0],filter.Params.Np);
-                    %filter.Params.x = sum(filter.Params.w.*filter.Params.particles,2);
+                
+                measurement = this.DataAssociator.MeasurementList.Vectors(:,UnassocMeasInd(i));
+                stateMean = this.InitFilter.Model.Measurement.finv(measurement);
+                dist = GaussianDistributionX(stateMean,... 
+                                            this.InitFilter.StatePrior.Covar);
+                if(~isempty(MeasurementList.Timestamp))
+                    statePrior = GaussianStateX(dist,...
+                                                MeasurementList.Timestamp);
                 else
-                    stateCovar =  NewTrack.Filter.StateCovar;
-                    NewTrack.Filter.initialise(this.InitFilter.Model,'PriorStateMean',stateMean, 'PriorStateCovar',stateCovar);
-                end 
-                this.DataAssociator.TrackList{end+1} = NewTrack;
-                this.DataAssociator.NumTracks = this.DataAssociator.NumTracks + 1;  
+                    statePrior = GaussianStateX(dist);
+                end
+                windowSize = max(this.ConfirmThreshold(2), this.DeleteThreshold(2));
+                track_config = struct('Filter', copy(this.InitFilter), ...
+                                      'Tag', this.TagGenerator.generate(), ...
+                                      'DetectionHistory', [-ones(1,windowSize-1),1],...
+                                      'ExistenceProbability', 0.5,...
+                                      'Associations', MeasurementListX(measurement,MeasurementList.Timestamp));
+                track_config.Filter.initialise('Model',this.InitFilter.Model,...
+                                               'StatePrior', statePrior);       
+                track_config.Trajectory = track_config.Filter.StatePosterior;
+                newTrack = TrackX(track_config);
+
+                this.DataAssociator.TrackList{end+1} = newTrack;
             end
             TentativeTrackList = this.DataAssociator.TrackList;
         end 

@@ -228,6 +228,9 @@ classdef LoopyBeliefPropagationX < HypothesiserX
                     end
 
                     for j = 1:numMeas
+%                         if(this.LikelihoodMatrix(1,j+1)==0)
+%                             this.LikelihoodMatrix(1,j+1) = eps;
+%                         end
                         s = this.LikelihoodMatrix(1,j+1) + sum(nu(:,j));
                         mu(:,j) = 1./(s - nu(:,j));
                     end

@@ -9,7 +9,7 @@
 %     and then produces 1xNk cell array of corrupted and cluttered measurements, Nk being the total number of timesteps
 
 % Load dataset
-load('3_robots.mat');
+%load('3_robots.mat');
 
 tot_ellapsed = 0;
 % Plot settings
@@ -59,9 +59,9 @@ NumIter = size(GroundTruth,2);
 NumTracks = 3;
 
 % Generate DataList
-meas_simulator = MeasurementSimulatorX('Model',ssm);
-meas_simulator.DetectionProbability = 1;
-%[DataList, nGroundTruth] = meas_simulator.simulate(GroundTruth);
+meas_simulator = MultiTargetMeasurementSimulatorX('Model',ssm);
+%meas_simulator.DetectionProbability = 1;
+DataList = meas_simulator.simulate(GroundTruthStateSequence);
 
 % Assign PHD parameter values
 config.Model = ssm;
@@ -101,12 +101,12 @@ end
 for k=1:NumIter
     fprintf('Iteration = %d/%d\n================>\n',k,NumIter);
     
-    % Extract DataList at time k
-    tempDataList = DataList{k}(:,:);
-    tempDataList( :, ~any(tempDataList,1) ) = [];       
+%     % Extract DataList at time k
+%     tempDataList = DataList{k}(:,:);
+%     tempDataList( :, ~any(tempDataList,1) ) = [];       
     
     % Change PHD filter parameters
-    filter.MeasurementList = tempDataList; % New observations
+    filter.MeasurementList = DataList(k); % New observations
     
     tic;
     % Predict PHD filter
@@ -147,7 +147,7 @@ for k=1:NumIter
                 %hold on;
         end
         
-        h2 = plot(ax(1), DataList{k}(1,:),DataList{k}(2,:),'k*','MarkerSize', 10);
+        h2 = plot(ax(1), DataList(k).Vectors(1,:),DataList(k).Vectors(2,:),'k*','MarkerSize', 10);
         str = sprintf('Robot positions (Update)');
         title(ax(1),str)
         xlabel('X position (m)')

@@ -67,7 +67,7 @@ classdef GaussianMixtureX < ProbabilityDistributionX
         %       - Covar: (NumVariables x NumVariables) matrix
         %       - Weight: scalar
         %                       
-        %                     - OR -
+        % -- OR ---
         %
         % means: (NumVariables x 1) column vector
         %   Mean vector of the Gaussian distribution

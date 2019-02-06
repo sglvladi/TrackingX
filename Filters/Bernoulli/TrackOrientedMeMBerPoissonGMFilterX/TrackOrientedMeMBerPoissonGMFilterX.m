@@ -162,7 +162,7 @@ classdef TrackOrientedMeMBerPoissonGMFilterX < FilterX
         % MeasurementLikelihoodsPerComponent
         function MeasurementLikelihoodsPerComponent = getMeasurementLikelihoodsPerComponent(this)
             if(isempty(this.MeasurementLikelihoodsPerComponent_))
-                this.MeasurementLikelihoodsPerComponent_ = this.Model.Measurement.pdf(this.MeasurementList,this.StatePrediction.Means,this.StatePrediction.Covars);
+                this.MeasurementLikelihoodsPerComponent_ = this.Model.Measurement.pdf(this.MeasurementList.Vectors,this.StatePrediction.Means,this.StatePrediction.Covars);
             end
             MeasurementLikelihoodsPerComponent = this.MeasurementLikelihoodsPerComponent_;
         end
@@ -434,16 +434,17 @@ classdef TrackOrientedMeMBerPoissonGMFilterX < FilterX
         % See also UnscentedParticleFilterX, predict, smooth.
                    
             % Interpret sizes from inputs
-            numMeasurements = size(this.MeasurementList,2);
+            numMeasurements = this.MeasurementList.NumMeasurements;
             numBernoulli = this.Bernoulli.StatePrediction.NumComponents;
             numPoisson = this.Poisson.StatePrediction.NumComponents;
             numStateDims = this.Model.Transition.NumStateDims;
             
             % Compute Association Likelihood Matrix for known (Bernoulli) tracks
             this.AssocLikelihoodMatrix = zeros(numBernoulli+1, numMeasurements+1);
+            measurementVectors = this.MeasurementList.Vectors;
             
             % Compute measurement likelihoods
-            g = this.Model.Measurement.pdf(this.MeasurementList,this.Bernoulli.StatePrediction.Means,this.Bernoulli.StatePrediction.Covars);
+            g = this.Model.Measurement.pdf(measurementVectors,this.Bernoulli.StatePrediction.Means,this.Bernoulli.StatePrediction.Covars);
             for i = 1:numBernoulli
                 % Missed detection hypothesis
                 this.AssocLikelihoodMatrix(i+1,1) = ...
@@ -458,12 +459,12 @@ classdef TrackOrientedMeMBerPoissonGMFilterX < FilterX
             new_Bernoulli = GaussianMixtureStateX('empty',numStateDims,numMeasurements);
 
             % Compute measurement likelihoods
-            g = this.Model.Measurement.pdf(this.MeasurementList,this.Poisson.StatePrediction.Means,this.Poisson.StatePrediction.Covars);
+            g = this.Model.Measurement.pdf(measurementVectors,this.Poisson.StatePrediction.Means,this.Poisson.StatePrediction.Covars);
 
             % Compute normalising constant(s)
             Ck = this.DetectionProbability*g.*this.Poisson.StatePrediction.Weights;
             C = sum(Ck,2);
-            C_plus = C + this.Model.Clutter.pdf(this.MeasurementList)';
+            C_plus = C + this.Model.Clutter.pdf(measurementVectors)';
             
             % Pre-allocate memory
             Means = zeros(numStateDims,numPoisson,numMeasurements);

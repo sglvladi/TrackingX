@@ -28,12 +28,18 @@ measurement_model = LinearGaussianX('NumMeasDims',2,'NumStateDims',4,'Measuremen
 clutter_model = PoissonRateUniformPositionX('ClutterRate',lambdaV,'Limits',[V_bounds(1:2);V_bounds(3:4)]);
 
 % Instantiate birth model
-numBirthComponents = 10;
-BirthComponents.Means = [(V_bounds(2)-V_bounds(1))*rand(numBirthComponents,1)';
-                         mvnrnd(zeros(numBirthComponents,1), 0.5)';
-                         (V_bounds(4)-V_bounds(3))*rand(numBirthComponents,1)';
-                         mvnrnd(zeros(numBirthComponents,1), 0.5)'];
-BirthComponents.Covars = repmat(diag([10 1 10 1]),1,1,numBirthComponents);
+numBirthComponents = 9;
+%numBirthComponents = round(sqrt(numBirthComponents))^2; % Adjust to the nearest square-rootable number
+x_birth = linspace(V_bounds(1), V_bounds(2), sqrt(numBirthComponents));
+y_birth = linspace(V_bounds(4), V_bounds(3), sqrt(numBirthComponents));
+[X,Y] = meshgrid(x_birth, y_birth);
+X = reshape(X, [1,numel(X)]);
+Y = reshape(Y, [1,numel(Y)]);
+BirthComponents.Means = [X;
+                         mvnrnd(zeros(numel(X),1), 0.5)';
+                         Y;
+                         mvnrnd(zeros(numel(Y),1), 0.5)'];
+BirthComponents.Covars = repmat(diag([5 1 5 1]),1,1,numBirthComponents);
 BirthComponents.Weights = 0.01*ones(1,numBirthComponents);
 birth_distribution = GaussianMixtureX(BirthComponents.Means,BirthComponents.Covars, BirthComponents.Weights);
 birth_model = DistributionBasedBirthModelX('Distribution', birth_distribution,...

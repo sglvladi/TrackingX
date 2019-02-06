@@ -19,7 +19,6 @@ TrackNum = 1;
 tot_ellapsed = 0;
 
 % Instantiate a Dynamic model
-dyn = ConstantHeadingModelX(
 dyn = ConstantVelocityModelX_2D('VelocityErrVariance',0.0001);
 
 % Instantiate an Observation model

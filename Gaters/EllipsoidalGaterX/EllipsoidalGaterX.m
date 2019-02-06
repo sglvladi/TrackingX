@@ -92,9 +92,9 @@ classdef EllipsoidalGaterX <GaterX
             
             config = parser.Unmatched;
             fields = fieldnames(config);
-            if(numel(fields)>1)
-                error('ELLIPSGATER:INVCONSTRARGS','Either GateLevel or GatingProbability can be passed as input arguments to the constructor, but NOT BOTH.');
-            end
+%             if(numel(fields)>1)
+%                 error('ELLIPSGATER:INVCONSTRARGS','Either GateLevel or GatingProbability can be passed as input arguments to the constructor, but NOT BOTH.');
+%             end
             fieldname = fields{1};
             if(strcmp(fieldname,'GateLevel'))
                 this.GateLevel = config.GateLevel;
@@ -157,7 +157,11 @@ classdef EllipsoidalGaterX <GaterX
         %
         % See also EllipsoidalGaterX/EllipsoidalGaterX
         
-            if(nargin == 3)
+            if(nargin == 2)
+                TrackList = varargin{1};
+                MeasurementList = [];
+                numTracks = numel(TrackList);
+            elseif(nargin == 3)
                 TrackList = varargin{1};
                 MeasurementList = varargin{2};
                 numTracks = numel(TrackList);
@@ -176,7 +180,7 @@ classdef EllipsoidalGaterX <GaterX
             % Construct Validation and GateVolumes Matrices
             for trackInd = 1:numTracks
                 
-                if(nargin==3)
+                if(nargin<=3)
                     % Store pointer to track
                     Track = TrackList{trackInd};
 

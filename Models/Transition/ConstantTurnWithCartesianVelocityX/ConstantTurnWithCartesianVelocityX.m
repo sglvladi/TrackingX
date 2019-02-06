@@ -206,6 +206,10 @@ classdef ConstantTurnWithCartesianVelocityX <  TransitionModelX
                     if(islogical(wk) && wk)
                         wk = this.random(size(xkm1,2),dt);
                     end
+                case 4
+                    if(islogical(wk) && wk)
+                        wk = this.random(size(xkm1,2),dt);
+                    end
             end
             
             % Compute result

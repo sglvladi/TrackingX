@@ -139,7 +139,7 @@ classdef ParticleFilterX < FilterX
         end
         function MeasurementPrediction = setMeasurementPrediction(this,newMeasurementPrediction)
             if(isa(newMeasurementPrediction,'ParticleStateX'))
-                MeasurementPrediction = newMeasurementPrediction
+                MeasurementPrediction = newMeasurementPrediction;
             else
                 particles = newMeasurementPrediction.Distribution.random(this.NumParticles_);
                 weights = repmat(1/this.NumParticles_,1,this.NumParticles_);
@@ -162,7 +162,7 @@ classdef ParticleFilterX < FilterX
         % MeasurementLikelihoodsPerParticle
         function MeasurementLikelihoodsPerParticle = getMeasurementLikelihoodsPerParticle(this)
             if(isempty(this.MeasurementLikelihoodsPerParticle_))
-                this.MeasurementLikelihoodsPerParticle_ = this.Model.Measurement.pdf(this.MeasurementList,this.StatePrediction.Particles);
+                this.MeasurementLikelihoodsPerParticle_ = this.Model.Measurement.pdf(this.MeasurementList.Vectors,this.StatePrediction.Particles);
             end
             MeasurementLikelihoodsPerParticle = this.MeasurementLikelihoodsPerParticle_;
         end
@@ -176,9 +176,9 @@ classdef ParticleFilterX < FilterX
                 StatePosterior = newStatePosterior;
                 this.NumParticles_ = StatePosterior.NumParticles;
             else
-                particles = newStatePosterior.Distribution.random(this.NumParticles_);
+                particles = newStatePosterior.random(this.NumParticles_);
                 weights = repmat(1/this.NumParticles_,1,this.NumParticles_);
-                StatePosterior = ParticleStateX(particles,weights);
+                StatePosterior = ParticleStateX(particles,weights,newStatePosterior.Timestamp);
             end
         end
     end
@@ -297,75 +297,112 @@ classdef ParticleFilterX < FilterX
         end
         
         function varargout = predict(this, varargin)
-        % PREDICT Perform SIR Particle Filter prediction step
-        %   
-        % Usage
-        % -----
-        % * predict(this) calculates the predicted system state and measurement,
-        %   as well as their associated uncertainty covariances.
+        % predict Perform an SIR Particle Filter prediction step and return
+        %   the generated state and measurement predictions.
+        % 
+        % Parameters
+        % ----------
+        % prior: StateX, optional
+        %   The prior state estimate.
+        % timestamp: datetime, optional
+        %   A timestamp indicating the time at which prediction is
+        %   performed.
         %
-        % More details
-        % ------------
-        % * ParticleFilterX uses the Model class property, which should be an
-        %   instance of the TrackingX.Models.StateSpaceModel class, in order
-        %   to extract information regarding the underlying state-space model.
-        % * State prediction is performed using the Model.Dyn property,
-        %   which must be a subclass of TrackingX.Abstract.TransitionModel and
-        %   provide the following interface functions:
-        %   - Model.Dyn.feval(): Returns the model transition matrix
-        %   - Model.Dyn.covariance(): Returns the process noise covariance
-        % * Measurement prediction and innovation covariance calculation is
-        %   performed usinf the Model.Obs class property, which should be
-        %   a subclass of TrackingX.Abstract.TransitionModel and provide the
-        %   following interface functions:
-        %   - Model.Obs.heval(): Returns the model measurement matrix
-        %   - Model.Obs.covariance(): Returns the measurement noise covariance
+        % Returns
+        % -------
+        % ParticleStateX
+        %   The generated state prediction
+        % ParticleStateX, optional
+        %   The generated measurement prediction
         %
         %  See also update, smooth.
-                        
+            
+            timestamp = [];
+            timestamp_old = [];
+            for i = 1:min([2,nargin-1])
+                if isa(varargin{i},'StateX')
+                    this.StatePosterior = varargin{i};
+                    timestamp_old = this.StatePosterior.Timestamp;
+                elseif isdatetime(varargin{i})
+                    timestamp = varargin{i};
+                end
+            end
+            
+            if isempty(timestamp)
+                dt = this.Model.Transition.TimestepDuration;
+                timestamp = this.StatePosterior.Timestamp;
+            else
+                dt = timestamp - timestamp_old;
+            end
+                
             % Extract model parameters
-            f  = @(x,wk) this.Model.Transition.feval(x, wk); % Transition function
-            wk = this.Model.Transition.random(this.StatePosterior.NumParticles); % Process noise
+            f  = @(x,wk) this.Model.Transition.feval(x, wk, dt); % Transition function
+            wk = this.Model.Transition.random(this.StatePosterior.NumParticles, dt); % Process noise
         
             % Propagate particles through the dynamic model
             predParticles = ParticleFilterX_Predict(f,this.StatePosterior.Particles,wk);
             predWeights = this.StatePosterior.Weights;
             
-            this.StatePrediction = ParticleStateX(predParticles,predWeights);
-            
+            % Create a state prediction object
+            this.StatePrediction = ParticleStateX(predParticles,...
+                                                  predWeights,...
+                                                  timestamp);
+            % Return arguments
             varargout{1} = this.StatePrediction;
-            
             if(nargout==2)
+                % Optionally, compute and return measurement prediction
                 varargout{2} = this.MeasurementPrediction;
             end
         end
         
         function posterior = update(this, varargin)
-        % UPDATE Perform SIR Particle Filter update step
-        %   
+        % update Perform SIR Particle Filter update step
+        % 
+        % Parameters
+        % ----------
+        % prediction: StateX
+        %   An object containing the prediction estimate
+        % measurement: MeasurementX
+        %   A single measurement/detection object.    
+        %
+        % Returns
+        % -------
+        % posterior: StateX
+        %   The generated posterior state estimate.   
+        %
         % Usage
         % -----
         % * update(this) calculates the corrected sytem state and the 
         %   associated uncertainty covariance.
         %
         % See also ParticleFilterX, predict, smooth.
-            
-            if(nargin>1)
-                this.MeasurementList = varargin{1};
+            if nargin>1
+                if isa(varargin{1},'MeasurementX')
+                    this.MeasurementList = varargin{1};
+                elseif isa(varargin{1}, 'StateX')
+                    this.StatePrediction = varargin{1};
+                    this.MeasurementList = varargin{2};
+                end
+            end
+            if(this.MeasurementList.NumMeasurements)
+                timestamp = this.MeasurementList.Timestamp;
+            else
+                timestamp = this.StatePrediction.Timestamp;
             end
             
-            % Perform update
+            % Perform weight update
             weights = ...
                 ParticleFilterX_UpdateWeights(@(y,x) this.Model.Measurement.pdf(y,x),...
-                        this.MeasurementList,this.StatePrediction.Particles,this.StatePrediction.Weights);
-                    
+                        this.MeasurementList.Vectors,this.StatePrediction.Particles,this.StatePrediction.Weights);
+            
+            % Resampling
             if(strcmp(this.ResamplingPolicy(1),"TimeInterval"))
                 [particles,weights] = ...
                     this.Resampler.resample(this.StatePrediction.Particles,weights);
             end
             
-            this.StatePosterior = ParticleStateX(particles,weights);
-            
+            % Store and return posterior
+            this.StatePosterior = ParticleStateX(particles,weights,timestamp);
             posterior = this.StatePosterior;
         end
         
@@ -386,11 +423,16 @@ classdef ParticleFilterX < FilterX
             if(nargin<3)
                 measurementLikelihoodsPerParticle = this.MeasurementLikelihoodsPerParticle;  
             end
+            if(this.MeasurementList.NumMeasurements)
+                timestamp = this.MeasurementList.Timestamp;
+            else
+                timestamp = this.StatePrediction.Timestamp;
+            end
             
             % Perform update
             weights = ...
                 ParticleFilterX_UpdatePDA(@(y,x) this.Model.Measurement.feval(y,x),...
-                                          this.MeasurementList,this.StatePrediction.Particles,...
+                                          this.MeasurementList.Vectors,this.StatePrediction.Particles,...
                                           this.StatePrediction.Weights, assocWeights, measurementLikelihoodsPerParticle);
             
             if(strcmp(this.ResamplingPolicy(1),"TimeInterval"))
@@ -398,7 +440,7 @@ classdef ParticleFilterX < FilterX
                     this.Resampler.resample(this.StatePrediction.Particles,weights);
             end
             
-            this.StatePosterior = ParticleStateX(particles,weights);
+            this.StatePosterior = ParticleStateX(particles,weights,timestamp);
             
             posterior = this.StatePosterior;
         end

@@ -5,10 +5,12 @@ state = [1;2;0.1;pi/3];
 % variance equal to 0.1 and specifying a mapping between the 1st index of
 % the measurement vector to the 1st index of the state vector and from the
 % 2nd index of the measurement vector to the 3rd index of the state vector.
-ch = ConstantHeadingModelX('VelocityErrVariance',0.0001,'HeadingErrVariance',0.09);
+ch = ConstantHeadingX('VelocityErrVariance',0.01,...
+                      'HeadingErrVariance',0.09,...
+                      'TimestepDuration',duration(0,0,5));
 
 % View the transition matrix and process covariance matrices
-Q = ch.covariance();
+Q = ch.covar();
 
 % Predict the target's position and velocity after the interval has passed
 newState  = ch.feval(state);

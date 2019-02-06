@@ -1,13 +1,10 @@
-classdef StateSpaceModelX < BaseX
+classdef StateSpaceModelX < BaseX & dynamicprops
 % StateSpaceModelX Abstract class
 %
 % Summary of StateSpaceModelX:
 %  This is the base class for all TrackingX state-space models.
-%  State-space model brings together and provides a common interface to all
-%  of 2/3 underlying models, i.e.:
-%       * Transition model, making use of TransitionModelX.
-%       * Measurement model, making use of MeasurementModelX.
-%       * ( Control model, making use of ControlModel ) - Optional!
+%  State-space model is effectivevely a container that brings together and 
+%  provides a common interface to all underlying models
 %
 % StateSpaceModelX Properties:
 %   - Transition     Object handle to a TransitionModelX subclass

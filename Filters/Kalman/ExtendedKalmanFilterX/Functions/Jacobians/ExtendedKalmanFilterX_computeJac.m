@@ -18,8 +18,8 @@ function [xT,Jac] = ExtendedKalmanFilterX_computeJac(fun,x)
 %   The computed Jacobian
     
     xT   = fun(x);
-    %Jac     = jacobianest(fun,x);
-    xDim    = numel(x);
-    h       = xDim*eps;
-    Jac     = imag(fun(x(:,ones(1,xDim))+eye(xDim)*h*1i))./h;
+    Jac     = jacobian(fun,x);
+%     xDim    = numel(x);
+%     h       = xDim*eps;
+%     Jac     = imag(fun(x(:,ones(1,xDim))+eye(xDim)*h*1i))./h;
 end

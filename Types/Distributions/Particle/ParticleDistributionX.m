@@ -63,7 +63,7 @@ classdef ParticleDistributionX < ProbabilityDistributionX
         %   The number of particles to use to represent the new
         %   distribution
         %
-        %   - OR -
+        % -- OR ---
         %
         % mean: (NumVariables x 1) column vector
         %   Mean vector of the Gaussian distribution
@@ -144,7 +144,7 @@ classdef ParticleDistributionX < ProbabilityDistributionX
         end
         
         function reset(this, varargin)
-        %reset Reset the distribution with a new number of random variables
+        % reset Reset the distribution with a new number of random variables
         %
         % Parameters
         % ----------
@@ -155,7 +155,7 @@ classdef ParticleDistributionX < ProbabilityDistributionX
         %   The number of particles to use to represent the new
         %   distribution
         %
-        %   - OR -
+        % -- OR ---
         %
         % mean: (NumVariables x 1) column vector
         %   Mean vector of the Gaussian distribution
@@ -185,10 +185,10 @@ classdef ParticleDistributionX < ProbabilityDistributionX
                         % Other distribution
                         otherDist = varargin{1};
                         numParticles = this.NumParticles_;
-                        this.Particles = otherDist.random(numParticles)';
+                        this.Particles = otherDist.random(numParticles);
                         this.Weights = repmat(1/numParticles,1,numParticles);
                     end
-                case(3)
+                otherwise
                     if(isa(varargin{1}, 'ParticleDistributionX'))
                         otherDist = varargin{1};
                         this.NumParticles_ = varargin{2};
@@ -197,21 +197,13 @@ classdef ParticleDistributionX < ProbabilityDistributionX
                         % Other distribution
                         otherDist = varargin{1};
                         this.NumParticles_ = varargin{2};
-                        this.Particles = otherDist.random(this.NumParticles_)';
+                        this.Particles = otherDist.random(this.NumParticles_);
                         this.Weights = repmat(1/this.NumParticles_,1,this.NumParticles_);
                     else
                         % Particles
                         this.Particles = varargin{1};
                         this.Weights = varargin{2};
                     end
-                otherwise
-                     % Moments
-                    mean = varargin{1};
-                    covar = varargin{2};
-                    numParticles = varargin{3};
-
-                    this.Particles = mvnrnd(mean',covar,numParticles)';
-                    this.Weights = repmat(1/numParticles,1,numParticles);
             end            
         end
     end
@@ -230,7 +222,7 @@ classdef ParticleDistributionX < ProbabilityDistributionX
         
         function set.Particles(this, particles)
             this.Particles_ = particles;
-            [this.NumVariables_,this.NumParticles_] = size(particles);
+            [this.NumVariables_, this.NumParticles_] = size(particles);
         end
         
         function weights = get.Weights(this)

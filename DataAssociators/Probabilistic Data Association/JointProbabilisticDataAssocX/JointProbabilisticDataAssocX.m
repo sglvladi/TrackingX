@@ -187,7 +187,7 @@ classdef JointProbabilisticDataAssocX < ProbabilisticDataAssocX
                        this.AssocLikelihoodMatrix(trackInd,1) = clutterDensity*(1-this.DetectionProbability*GatingProbability);
                     end
                     
-                    this.AssocLikelihoodMatrix(trackInd,2:end) = this.DetectionProbability*GatingProbability*this.LikelihoodMatrix;
+                    this.AssocLikelihoodMatrix(:,2:end) = this.DetectionProbability*GatingProbability*this.LikelihoodMatrix;
                     
                     this.AssocWeightsMatrix = this.Hypothesiser.hypothesise(this.AssocLikelihoodMatrix);                                                           
                     
@@ -234,7 +234,7 @@ classdef JointProbabilisticDataAssocX < ProbabilisticDataAssocX
                                 clutterDensity = ...
                                     GatingProbability*numClusterMeasurements/sum(this.GateVolumes(TrackIndList));
                             else
-                                clutterDensity = this.ClutterModel.pdf(this.TrackList{trackInd}.Filter.MeasurementPrediction.Mean);
+                                clutterDensity = this.ClutterModel.pdf(this.TrackList{trackInd}.Filter.MeasurementPrediction.Mean)+eps;
                             end
                             this.ClusterList{clusterInd}.AssocLikelihoodMatrix(t,1) = clutterDensity*(1-this.DetectionProbability*GatingProbability);
                             this.TrackList{trackInd}.ClutterDensity = clutterDensity; 

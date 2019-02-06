@@ -455,6 +455,10 @@ classdef EfficientHypothesisManagementX < HypothesiserX
             for j = 1:TrackNum
                 betta(j,:) = betta(j,:)/sum(betta(j,:),2);
             end
+            
+            if any(isnan(betta))
+                
+            end
 
             NetObj.betta = betta;
             AssocWeightsMatrix = betta;
