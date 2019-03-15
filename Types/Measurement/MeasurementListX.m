@@ -11,6 +11,8 @@ classdef MeasurementListX < BaseX
 
     properties
         Vectors
+        Models
+        Tags
         Timestamp
     end
     
@@ -28,10 +30,16 @@ classdef MeasurementListX < BaseX
             elseif nargin && ~isempty(varargin{1})
                 if isa(varargin{1},'MeasurementListX')
                     this.Vectors = varargin{1}.Vectors;
+                    this.Tags = varargin{1}.Tags;
+                    this.Models = varargin{1}.Models;
                     this.Timestamp = varargin{1}.Timestamp;
+%                     if(isfield(varargin{1},'Tags'))
+%                         this.Tags
                 elseif isa(varargin{1},'MeasurementX')
                     measurements = varargin{1};
                     this.Vectors = [measurements.Vector];
+                    this.Tags = [measurements.Tag];
+                    this.Models = [measurements.Model];
                     this.Timestamp = measurements.Timestamp;
                 else
                     this.Vectors = varargin{1};
@@ -52,20 +60,21 @@ classdef MeasurementListX < BaseX
                 measurements = MeasurementX.empty();
             else
                 for k = 1 : this.NumMeasurements
+                    if ~isempty(this.Models)
+                        model = this.Models(k);
+                    else
+                        model = [];
+                    end
+                    if ~isempty(this.Tags)
+                        tag = this.Tags(k);
+                    else
+                        tag = [];
+                    end
                     measurements(k) = MeasurementX(this.Vectors(:,k),...
-                                                   this.Timestamp);
+                                                   this.Timestamp,...
+                                                   model,...
+                                                   tag);
                 end
-            end
-        end
-    end
-    
-    methods (Static)
-        function [model, other] = extract_model(varargs)
-            model = [];
-            other = varargs;
-            if numel(varargs) && isa(varargs{end}, 'StateSpaceModelX')
-                model = varargs{end};
-                other = varargs(1:end-1);
             end
         end
     end

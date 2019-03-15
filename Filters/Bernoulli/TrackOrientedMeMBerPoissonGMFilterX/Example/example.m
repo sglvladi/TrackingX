@@ -9,14 +9,14 @@
 %     and then produces 1xNk cell array of corrupted and cluttered measurements, Nk being the total number of timesteps
 
 % Load dataset
-%load('3_robots.mat');
+load('multiple-robot-tracking.mat');
 
 tot_ellapsed = 0;
 % Plot settings
 ShowPlots = 1;              % Set to 0 to hide plots
 ShowPrediction = 0;         % Set to 0 to skip showing prediction
 ShowUpdate = 1;             % Set to 0 to skip showing update
-NumTracks = 3;
+SmoothTrajectories = 0;
 
 % Recording settings
 clear F;
@@ -25,7 +25,7 @@ FrameRate = 10;            % Number of frames per second
 VideoQuality = 100;         % Set to desired quality percentage
 VideoPathName = 'tomb_tracks_only.avi'; % Set to the desired path and name of produced recording
 
-lambdaV = 10; % Expected number of clutter measurements over entire surveillance region
+lambdaV = 1; % Expected number of clutter measurements over entire surveillance region
 V = 10^2;     % Volume of surveillance region (10x10 2D-grid)
 V_bounds = [0 10 0 10]; % [x_min x_max y_min y_max]
 
@@ -33,8 +33,8 @@ V_bounds = [0 10 0 10]; % [x_min x_max y_min y_max]
 transition_model = ConstantVelocityX('NumDims',2,'VelocityErrVariance',0.0001);
 
 % Instantiate a Measurement model
-measurement_model = LinearGaussianX('NumMeasDims',2,'NumStateDims',4,'MeasurementErrVariance',0.02,'Mapping',[1 3]);
-%measurement_model = RangeBearing2CartesianX('NumStateDims',4,'MeasurementErrVariance',[0.001,0.02],'Mapping',[1 3]);
+%measurement_model = LinearGaussianX('NumMeasDims',2,'NumStateDims',4,'MeasurementErrVariance',0.02,'Mapping',[1 3]);
+measurement_model = RangeBearing2CartesianX('NumStateDims',4,'MeasurementErrVariance',[(pi/50)^2,0.02],'Mapping',[1 3]);
 
 % Instantiate a clutter model
 clutter_model = PoissonRateUniformPositionX('ClutterRate',lambdaV,'Limits',[V_bounds(1:2);V_bounds(3:4)]);
@@ -130,21 +130,15 @@ for k=1:NumIter
         hold(ax(1),'on');
 
         hold(ax(1),'on');
-%         for j=1:NumTracks
-%             h2 = plot(GroundTruth{k}(1,1:i),Logs{j}.Groundtruth.State(2,1:i),'b.-','LineWidth',1);
-%             if j==2
-%                 set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
-%             end
-%             h2 = plot(Logs{j}.Groundtruth.State(1,i),Logs{j}.Groundtruth.State(2,i),'bo','MarkerSize', 10);
-%             set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off'); % 
-%         end
         for i=1:filter.Bernoulli.StatePosterior.NumComponents
-            %if(numel(filter.Posterior.Bernoulli{i}.Trajectory.ProbOfExistence)>10&&mean(filter.Posterior.Bernoulli{i}.Trajectory.ProbOfExistence)>0.8)
             if(filter.Bernoulli.StatePosterior.Weights(i)>0.8)
-                plot(ax(1),filter.Bernoulli.StatePosterior.Trajectories{i}.StateMean(1,:),filter.Bernoulli.StatePosterior.Trajectories{i}.StateMean(3,:),'.-');
+                means = filter.Bernoulli.StatePosterior.Trajectories{i}.StateMean;
+                if SmoothTrajectories
+                    means = smoothdata(means','gaussian',10)';
+                end
+                plot(ax(1),means(1,:),means(3,:),'.-');
                 plot_gaussian_ellipsoid(filter.Bernoulli.StatePosterior.Trajectories{i}.StateMean([1,3],end),filter.Bernoulli.StatePosterior.Trajectories{i}.StateCovar([1,3],[1,3],end),'r',1,50,ax(1));
             end
-                %hold on;
         end
         
         h2 = plot(ax(1), DataList(k).Vectors(1,:),DataList(k).Vectors(2,:),'k*','MarkerSize', 10);
@@ -154,22 +148,22 @@ for k=1:NumIter
         ylabel('Y position (m)')
             
         % Plot PHD
-%         cla(ax(2), 'reset');
-%         p = filter.Poisson.StatePosterior.random(100000);
-%         [bandwidth,density,X,Y]=kde2d(p([1,3],:)');
-%         %contour3(X,Y,density,50);
-%         h = surf(ax(2),X,Y,density);        
-%         shading interp
-%         colormap(ax(2), jet(3000))
-%         %set(h, 'edgecolor','none')
-%         hold on;
-%         plot(ax(2), filter.MeasurementList(1,:), filter.MeasurementList(2,:), 'y*');
-%         axis(ax(2), [V_bounds]);
-%         str = sprintf('PHD intensity (Update)');
-%         xlabel(ax(2),'X position (m)')
-%         ylabel(ax(2),'Y position (m)')
-%         zlabel(ax(2),'Intensity')
-%         title(ax(2),str)
+        cla(ax(2), 'reset');
+        p = filter.Bernoulli.StatePosterior.random(100000);
+        [bandwidth,density,X,Y]=kde2d(p([1,3],:)');
+        %contour3(X,Y,density,50);
+        h = surf(ax(2),X,Y,density);        
+        shading interp
+        colormap(ax(2), jet(3000))
+        %set(h, 'edgecolor','none')
+        hold on;
+        plot(ax(2), filter.MeasurementList.Vectors(1,:), filter.MeasurementList.Vectors(2,:), 'y*');
+        axis(ax(2), [V_bounds]);
+        str = sprintf('PHD intensity (Update)');
+        xlabel(ax(2),'X position (m)')
+        ylabel(ax(2),'Y position (m)')
+        zlabel(ax(2),'Intensity')
+        title(ax(2),str)
         pause(0.01)
         
         % Store video frame

@@ -235,7 +235,7 @@ classdef TrackOrientedMeMBerPoissonGMFilterX < FilterX
             this.Bernoulli.StatePosterior = GaussianMixtureStateX();
             this.Poisson.StatePosterior = GaussianMixtureStateX();
             
-            this.Filter = KalmanFilterX(varargin{:});
+            this.Filter = UnscentedKalmanFilterX(varargin{:});
             
             if(nargin==0)
                 return;

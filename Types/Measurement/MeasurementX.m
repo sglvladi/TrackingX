@@ -8,6 +8,10 @@ classdef MeasurementX < StateX
         % Model: StateSpaceModelX
         %   The ssm from which the measurement was generated
         Model = []
+        
+        % Tag: TagX
+        %   An optional tag
+        Tag = []
     end
     
     methods
@@ -25,10 +29,11 @@ classdef MeasurementX < StateX
             
             
             [model, other] = MeasurementX.extract_model(varargin);
-            
+            [tag, other] = MeasurementX.extract_tag(varargin);
             this@StateX(other{:});
             
             this.Model = model;
+            this.Tag = tag;
         end
         
     end
@@ -37,9 +42,24 @@ classdef MeasurementX < StateX
         function [model, other] = extract_model(varargs)
             model = [];
             other = varargs;
-            if numel(varargs) && isa(varargs{end}, 'StateSpaceModelX')
-                model = varargs{end};
-                other = varargs(1:end-1);
+            for i = 1:nargin
+                if isa(varargs{i}, 'StateSpaceModelX')
+                     model = varargs{i};
+                     varargs{i} = [];
+                     other = varargs;
+                end
+            end
+        end
+        
+        function [tag, other] = extract_tag(varargs)
+            tag = [];
+            other = varargs;
+            for i = 1:numel(varargs)
+                if isa(varargs{i}, 'TagX')
+                     tag = varargs{i};
+                     varargs{i} = [];
+                     other = varargs(~cellfun('isempty',varargs));
+                end
             end
         end
     end

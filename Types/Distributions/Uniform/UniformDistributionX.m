@@ -80,7 +80,10 @@ classdef UniformDistributionX < ProbabilityDistributionX
         %   The evaluated density for the corresponding set of samples
             
             numSamples = size(samples,2);
-            assert(numSamples >= 1);
+            try
+                assert(numSamples >= 1);
+            catch
+            end
             prob = prod(unifpdf(samples,this.Limits(:,ones(1,numSamples)),this.Limits(:,2*ones(1,numSamples))),1);
         end
         
