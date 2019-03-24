@@ -40,6 +40,7 @@ classdef RangeBearing2CartesianX < MeasurementModelX
         NumStateDims = 2
         MeasurementErrVariance
         Mapping = [1 2]
+        TranslationOffset = [0; 0];
     end
     
     properties (Dependent)
@@ -49,12 +50,14 @@ classdef RangeBearing2CartesianX < MeasurementModelX
     methods (Access = private)
         function yk = h(this,xk)
            yk = zeros(2,size(xk,2));
-           [yk(1,:),yk(2,:)] = cart2pol(xk(this.Mapping(1),:),xk(this.Mapping(2),:));
+           [yk(1,:),yk(2,:)] = cart2pol(xk(this.Mapping(1),:)-this.TranslationOffset(1),xk(this.Mapping(2),:)-this.TranslationOffset(2));
         end
         
         function xk = h_inv(this,yk)
            xk = zeros(this.NumStateDims,size(yk,2));
            [xk(this.Mapping(1),:),xk(this.Mapping(2),:)] = pol2cart(yk(1,:),yk(2,:));
+           xk(this.Mapping(1),:) = xk(this.Mapping(1),:)+this.TranslationOffset(1);
+           xk(this.Mapping(2),:) = xk(this.Mapping(2),:)+this.TranslationOffset(2);
         end
         
         function initialise_(this, config)
