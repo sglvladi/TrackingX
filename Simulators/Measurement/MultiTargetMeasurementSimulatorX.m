@@ -76,7 +76,7 @@ classdef MultiTargetMeasurementSimulatorX < BaseX
         %   scan at each timestep.
             
             % Dummy Detection probability
-            detectionProbability = 1; %this.DetectionProbability;
+            detectionProbability = this.Model.Detection.pdf();
             
             % Initialise storage
             GroundTruth = varargin{1};
