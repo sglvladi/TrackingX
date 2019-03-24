@@ -96,7 +96,7 @@ classdef NaiveClustererX < ClustererX
                     NumClusters = numel(ClusterList);
                     matchedClusterIndFlags = zeros(1, NumClusters); 
                     for ClusterInd=1:NumClusters
-                        if (sum(ismember(validMeasInds, ClusterList{ClusterInd}.MeasIndList)))
+                        if (sum(ismember(validMeasInds, ClusterList(ClusterInd).MeasIndList)))
                             matchedClusterIndFlags(ClusterInd) = 1; % Store matched cluster ids
                         end   
                     end
@@ -107,31 +107,34 @@ classdef NaiveClustererX < ClustererX
                     % If only matched with a single cluster, join.
                     switch(NumMatchedClusters)
                         case(1)
-                            ClusterList{matchedClusterInds}.TrackIndList = union(ClusterList{matchedClusterInds}.TrackIndList, trackInd);
-                            ClusterList{matchedClusterInds}.MeasIndList = union(ClusterList{matchedClusterInds}.MeasIndList, validMeasInds);
+                            ClusterList(matchedClusterInds).TrackIndList = union(ClusterList(matchedClusterInds).TrackIndList, trackInd);
+                            ClusterList(matchedClusterInds).MeasIndList = union(ClusterList(matchedClusterInds).MeasIndList, validMeasInds);
                         case(0)
-                            ClusterObj.TrackIndList = trackInd;
-                            ClusterObj.MeasIndList = validMeasInds;
-                            ClusterList{end+1} = ClusterObj;
+                            ClusterList(end+1).TrackIndList = trackInd;
+                            ClusterList(end).MeasIndList = validMeasInds;
+                            %ClusterList(end+1) = ClusterObj;
                         otherwise
                             % Start from last cluster, joining each one with the previous
                             %   and removing the former.  
                             for matchedClusterInd = NumMatchedClusters-1:-1:1
-                                ClusterList{matchedClusterInds(matchedClusterInd)}.TrackIndList = ...
-                                    union(ClusterList{matchedClusterInds(matchedClusterInd)}.TrackIndList, ...
-                                        ClusterList{matchedClusterInds(matchedClusterInd+1)}.TrackIndList);
-                                ClusterList{matchedClusterInds(matchedClusterInd)}.MeasIndList = ...
-                                    union(ClusterList{matchedClusterInds(matchedClusterInd)}.MeasIndList, ...
-                                        ClusterList{matchedClusterInds(matchedClusterInd+1)}.MeasIndList);
+                                ClusterList(matchedClusterInds(matchedClusterInd)).TrackIndList = ...
+                                    union(ClusterList(matchedClusterInds(matchedClusterInd)).TrackIndList, ...
+                                        ClusterList(matchedClusterInds(matchedClusterInd+1)).TrackIndList);
+                                ClusterList(matchedClusterInds(matchedClusterInd)).MeasIndList = ...
+                                    union(ClusterList(matchedClusterInds(matchedClusterInd)).MeasIndList, ...
+                                        ClusterList(matchedClusterInds(matchedClusterInd+1)).MeasIndList);
                                 ClusterList(matchedClusterInds(matchedClusterInd+1)) = [];
                             end
                             % Finally, join with associated track.
-                            ClusterList{matchedClusterInds(matchedClusterInd)}.TrackIndList = ...
-                                union(ClusterList{matchedClusterInds(matchedClusterInd)}.TrackIndList, trackInd);
-                            ClusterList{matchedClusterInds(matchedClusterInd)}.MeasIndList = ...
-                                union(ClusterList{matchedClusterInds(matchedClusterInd)}.MeasIndList, validMeasInds);
+                            ClusterList(matchedClusterInds(matchedClusterInd)).TrackIndList = ...
+                                union(ClusterList(matchedClusterInds(matchedClusterInd)).TrackIndList, trackInd);
+                            ClusterList(matchedClusterInds(matchedClusterInd)).MeasIndList = ...
+                                union(ClusterList(matchedClusterInds(matchedClusterInd)).MeasIndList, validMeasInds);
                     end
                 else
+                    ClusterList(end+1).TrackIndList = trackInd;
+                    ClusterList(end).MeasIndList = [];
+                    %ClusterList(end+1) = ClusterObj;
                     UnassocTrackInds = [UnassocTrackInds trackInd];
                 end
                 this.ClusterList = ClusterList;
