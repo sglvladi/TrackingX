@@ -45,7 +45,7 @@ classdef (Abstract) StateX < BaseX & dynamicprops
                     else
                         this.Timestamp = varargin{1};
                     end
-                case(2)
+                otherwise
                     this.Vector_ = varargin{1};
                     this.Timestamp = varargin{2};
             end
