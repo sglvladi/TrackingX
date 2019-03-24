@@ -67,6 +67,15 @@ classdef StateSpaceModelX < BaseX & dynamicprops
                     if (isfield(varargin{1},'Control'))
                         this.Control = varargin{1}.Control;
                     end
+                    if (isfield(varargin{1},'Clutter'))
+                        this.Clutter = varargin{1}.Clutter;
+                    end
+                    if (isfield(varargin{1},'Birth'))
+                        this.Birth = varargin{1}.Birth;
+                    end
+                    if (isfield(varargin{1},'Detection'))
+                        this.Detection = varargin{1}.Detection;
+                    end
                 end
                 return;
             end
