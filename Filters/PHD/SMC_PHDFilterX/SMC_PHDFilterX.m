@@ -71,9 +71,7 @@ classdef SMC_PHDFilterX < ParticleFilterX
     properties       
         BirthScheme = {'Mixture',0.5};
         SurvivalProbability  
-        DetectionProbability 
         MeasWeights = 1;
-        
         
         weightsPerHypothesis_
     end
@@ -93,9 +91,6 @@ classdef SMC_PHDFilterX < ParticleFilterX
             end
             if (isfield(config,'SurvivalProbability'))
                 this.SurvivalProbability = config.SurvivalProbability;
-            end
-            if (isfield(config,'DetectionProbability'))
-                this.DetectionProbability = config.DetectionProbability;
             end
         end
     end
@@ -148,8 +143,6 @@ classdef SMC_PHDFilterX < ParticleFilterX
         % SurvivalProbability: scalar
         %   The probability that a target may cease to exist between consecutive 
         %   iterations of the filter.
-        % DetectionProbability: scalar
-        %   The probablity that a target will be detected in a given measurement scan.
         % NumTargets: scalar
         %   The estimated number of targets following an update step.
         %
@@ -226,8 +219,6 @@ classdef SMC_PHDFilterX < ParticleFilterX
         % SurvivalProbability: scalar
         %   The probability that a target may cease to exist between consecutive 
         %   iterations of the filter.
-        % DetectionProbability: scalar
-        %   The probablity that a target will be detected in a given measurement scan.
         %
         % Usage
         % ----- 
@@ -309,22 +300,22 @@ classdef SMC_PHDFilterX < ParticleFilterX
         %
         % See also UnscentedParticleFilterX, predict, smooth.
         
-            numMeasurements = size(this.MeasurementList,2);
+            numMeasurements = this.MeasurementList.NumMeasurements;
             
             % Compute g(z|x) matrix as in [1] 
             g = this.MeasurementLikelihoodsPerParticle;
                                     
             % Calculate w^{n,i} Eq. (20) of [2]
-            Ck = this.DetectionProbability*g.*this.StatePrediction.Weights;
+            P_D = this.Model.Detection.pdf(this.StatePrediction.Particles);
+            Ck = P_D.*g.*this.StatePrediction.Weights;
             C = sum(Ck,2);
-            C_plus = C + this.Model.Clutter.pdf(this.MeasurementList)';
-            this.weightsPerHypothesis_ = [(1-this.DetectionProbability).*this.StatePrediction.Weights;
+            C_plus = C + this.Model.Clutter.pdf(this.MeasurementList.Vectors)';
+            this.weightsPerHypothesis_ = [(1-P_D).*this.StatePrediction.Weights;
                                           zeros(numMeasurements, this.StatePrediction.NumParticles)];
             if(numMeasurements>0)
                 % Compute C_k(z) Eq. (27) of [1]
-                this.weightsPerHypothesis_(2:end,:) = Ck./C_plus;
+                this.weightsPerHypothesis_(2:end,:) = this.MeasWeights'.*Ck./C_plus;
             end
-            %this.weightsPerHypothesis_(2:end,:) = this.MeasWeights'.*this.weightsPerHypothesis_(2:end,:).*this.StatePrediction.Weights;
             
             % Update weights Eq. (28) of [1]
             postWeights = sum(this.weightsPerHypothesis_,1);
@@ -336,6 +327,8 @@ classdef SMC_PHDFilterX < ParticleFilterX
                 this.Resampler.resample(postParticles, ...
                     (postWeights/numTargets),this.NumParticles); % Resample
             postWeights = postWeights*numTargets; % Rescale
+            
+            % Store posterior
             this.StatePosterior = ParticleStateX(postParticles,postWeights);
         end
         

@@ -8,14 +8,18 @@
 %  * The "gen_obs_cluttered_multi3" function takes as an input the ground truth data, including information about the measurement noise and clutter rate
 %     and then produces 1xNk cell array of corrupted and cluttered measurements, Nk being the total number of timesteps
 
+% Load the ground truth data
+load('multiple-robot-tracking.mat');
+
 % Plot settings
 ShowPlots = 1;              % Set to 0 to hide plots
 ShowPrediction = 0;         % Set to 0 to skip showing prediction
 ShowUpdate = 1;             % Set to 0 to skip showing update
 
-lambdaV = 10; % Expected number of clutter measurements over entire surveillance region
+lambdaV = 0; % Expected number of clutter measurements over entire surveillance region
 V = 10^2;     % Volume of surveillance region (10x10 2D-grid)
 V_bounds = [0 10 0 10]; % [x_min x_max y_min y_max]
+P_D = 1; 
 
 % Instantiate a Transitionamic model
 transition_model = ConstantVelocityX('NumDims',2,'VelocityErrVariance',0.0001);
@@ -32,29 +36,34 @@ birth_model = DistributionBasedBirthModelX('Distribution', UniformDistributionX(
                                                                                 [-0.1 0.1 ];...
                                                                                 V_bounds(3:4);...
                                                                                 [-0.1 0.1 ]]),...
-                                           'BirthIntensity', 0.000001);
+                                           'BirthIntensity', 0.0001);
+
+% Instantiate detection model                                       
+detection_model = ConstantDetectionProbabilityX('DetectionProbability',P_D);
+                                       
 % Compile the State-Space model
-ssm = StateSpaceModelX(transition_model,measurement_model,'Clutter',clutter_model, 'Birth', birth_model);
+model = StateSpaceModelX(transition_model,...
+                       measurement_model,...
+                       'Clutter',clutter_model,...
+                       'Birth', birth_model,...
+                       'Detection', detection_model);
 
 % Extract the ground truth data from the example workspace
-load('example.mat');
 NumIter = size(GroundTruth,2);
 
 % Set BirthIntensity
 NumTracks = 3;
 
 % Generate DataList
-meas_simulator = MeasurementSimulatorX('Model',ssm);
-meas_simulator.DetectionProbability = 1;
-[DataList, nGroundTruth] = meas_simulator.simulate(GroundTruth);
+meas_simulator = MultiTargetMeasurementSimulatorX('Model',model);
+DataList = meas_simulator.simulate(GroundTruthStateSequence);
 
 % Assign PHD parameter values
-config.Model = ssm;
-[priorParticles, priorWeights] = ssm.Birth.random(50000);
+config.Model = model;
+[priorParticles, priorWeights] = model.Birth.random(50000);
 config.StatePrior = ParticleStateX(priorParticles,10*priorWeights);
 config.BirthScheme = {'Expansion', 5000};
 config.SurvivalProbability = 0.99;
-config.DetectionProbability = 0.9; %meas_simulator.DetectionProbability;
 
 % Instantiate PHD filter
 myphd = SMC_PHDFilterX(config);
@@ -86,7 +95,7 @@ for k=1:NumIter
     fprintf('Iteration = %d/%d\n================>\n',k,NumIter);
     
     % Extract DataList at time k
-    tempDataList = DataList{k}(:,:);     
+    tempDataList = DataList(k);     
     
     % Change PHD filter parameters
     myphd.MeasurementList = tempDataList; % New observations
@@ -107,13 +116,14 @@ for k=1:NumIter
 
         % NOTE: if your image is RGB, you should use flipdim(img, 1) instead of flipud.
         hold on;
-        h2 = plot(ax(1), DataList{k}(1,:),DataList{k}(2,:),'k*','MarkerSize', 10);
+        h2 = plot(ax(1), DataList(k).Vectors(1,:),DataList(k).Vectors(2,:),'k*','MarkerSize', 10);
         for j=1:NumTracks
-            h2 = plot(ax(1), x_true(1:k,j),y_true(1:k,j),'b.-','LineWidth',1);
-            h2 = plot(ax(1), x_true(k,j),y_true(k,j),'bo','MarkerSize', 10);
+            states = [GroundTruthTracks(j).Trajectory.Vector];
+            h2 = plot(ax(1), states(1,1:k), states(3,1:k),'b.-','LineWidth',1);
+            h2 = plot(ax(1), states(1,k), states(3,k),'bo','MarkerSize', 10);
         end
         p_i = myphd.IntensityPerHypothesis(2:end);
-%         disp(p_i);
+
         ValidHypothesisInds = find(p_i>0.8)+1;
         for j = 1:length(ValidHypothesisInds)
             hypInd = ValidHypothesisInds(j);
@@ -142,7 +152,7 @@ for k=1:NumIter
         hold on;
 %         plot(ax(2), myphd.Particles(1,:), myphd.Particles(3,:), '.')
 %         hold on;
-        plot(ax(2), myphd.MeasurementList(1,:), myphd.MeasurementList(2,:), 'y*');
+        plot(ax(2), myphd.MeasurementList.Vectors(1,:), myphd.MeasurementList.Vectors(2,:), 'y*');
         axis(ax(2), [V_bounds]);
         str = sprintf('PHD intensity (Update)');
         xlabel(ax(2),'X position (m)')

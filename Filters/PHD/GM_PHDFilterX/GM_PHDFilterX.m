@@ -161,7 +161,7 @@ classdef GM_PHDFilterX < FilterX
         % MeasurementLikelihoodsPerComponent
         function MeasurementLikelihoodsPerComponent = getMeasurementLikelihoodsPerComponent(this)
             if(isempty(this.MeasurementLikelihoodsPerComponent_))
-                this.MeasurementLikelihoodsPerComponent_ = this.Model.Measurement.pdf(this.MeasurementList,this.StatePrediction.Means,this.StatePrediction.Covars);
+                this.MeasurementLikelihoodsPerComponent_ = this.Model.Measurement.pdf(this.MeasurementList.Vectors,this.StatePrediction.Means,this.StatePrediction.Covars);
             end
             MeasurementLikelihoodsPerComponent = this.MeasurementLikelihoodsPerComponent_;
         end
@@ -378,7 +378,7 @@ classdef GM_PHDFilterX < FilterX
                      
             % 4) Update
             % ---------
-            numMeasurements = size(this.MeasurementList,2);
+            numMeasurements = this.MeasurementList.NumMeasurements;
             numPredComponents = this.StatePrediction.NumComponents;
             numUpdateComponents = (1+numMeasurements)*numPredComponents;
             numStateDims = this.Model.Transition.NumStateDims;
@@ -399,13 +399,13 @@ classdef GM_PHDFilterX < FilterX
             % Compute normalising constant
             Ck = this.DetectionProbability*g.*this.StatePrediction.Weights;
             C = sum(Ck,2);
-            Ck_plus = C + this.Model.Clutter.pdf(this.MeasurementList)';
+            Ck_plus = C + this.Model.Clutter.pdf(this.MeasurementList.Vectors)';
             
             % Compute the weights for all hypotheses (including null)
             weightsPerHypothesis_ = [Weights(1:numPredComponents);
                                      zeros(numMeasurements, numPredComponents)]; % Null
             weightsPerHypothesis_(2:end,:) = Ck./Ck_plus; % True
-            a = sum(weightsPerHypothesis_,1);
+%             a = sum(weightsPerHypothesis_,1);
             
             % Create true measurement hypothesis components
             for i = 1:numPredComponents
