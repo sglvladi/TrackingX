@@ -215,7 +215,6 @@ classdef UnscentedKalmanFilterX < KalmanFilterX
                 this.predictState_(this.Alpha, this.Kappa, this.Beta,...
                               this.StatePosterior.Mean, this.StatePosterior.Covar,...
                               f, Q, this.ControlInput, b, Qu);  
-                          
             statePrediction = GaussianStateX(statePredictionMean, statePredictionCovar, timestamp);
             this.StatePrediction = statePrediction;
         end
@@ -264,39 +263,7 @@ classdef UnscentedKalmanFilterX < KalmanFilterX
                                                    measurementPredictionCovar,...
                                                    this.StatePrediction.Timestamp);
             this.MeasurementPrediction = measurementPrediction;
-        end
-        
-        function posterior = update(this, varargin)
-        % ppdate Perform Unscented Kalman Filter update step
-        %   
-        % Usage
-        % -----
-        % * update(this) calculates the corrected sytem state and the 
-        %   associated uncertainty covar.
-        %
-        %   See also KalmanFilterX, predict, iterate, smooth.
-            
-            % Call SuperClass method
-            posterior = update@KalmanFilterX(this, varargin{:});
-        end
-        
-        function posterior = updatePDA(this, assocWeights, varargin)
-        % UPDATEPDA - Performs UKF update step, for multiple measurements
-        %             Update is performed according to the generic (J)PDAF equations [1] 
-        % 
-        % DESCRIPTION:
-        %  * updatePDA(assocWeights) Performs UKF-PDA update step for multiple 
-        %    measurements based on the provided (1-by-Nm+1) association weights 
-        %    matrix assocWeights.
-        %
-        %   [1] Y. Bar-Shalom, F. Daum and J. Huang, "The probabilistic data association filter," in IEEE Control Models, vol. 29, no. 6, pp. 82-100, Dec. 2009.
-        %
-        %   See also KalmanFilterX, Predict, Iterate, Smooth, resample.
-        
-            % Call SuperClass method
-            posterior = updatePDA@KalmanFilterX(this, assocWeights, varargin{:});
-        end
-        
+        end        
     end
     
      methods (Static)
@@ -363,7 +330,7 @@ classdef UnscentedKalmanFilterX < KalmanFilterX
                     Qu = 0;
             end
 
-           [xPred,PPred]  = UnscentedKalmanFilterX.predictState_(alpha,kappa,beta,x,P,f,Q,u,b,Qu);
+           [xPred,PPred] = UnscentedKalmanFilterX.predictState_(alpha,kappa,beta,x,P,f,Q,u,b,Qu);
            [yPred,S,K]  = UnscentedKalmanFilterX.predictMeasurement_(alpha,kappa,beta,xPred,PPred,h,R);
         end
         
@@ -423,17 +390,23 @@ classdef UnscentedKalmanFilterX < KalmanFilterX
             
             numStateDims = size(x,1);
             
+%             % Form the sigma points
+%             [X1, Wm, Wc] = gauss2sigma(x,P,alpha,beta,kappa);
+% 
+%             % Perform Unscented Transform to get predicted measurement mean,
+%             % covariance and cross-covariance
+%             [xPred1,PPred1] = unscentedtf(f,X(1:numStateDims,:),...
+%                                         Wm,Wc,0);
             % Calculate unscented transformation parameters
             [c, Wmean, Wcov, OOM] = ...
                 matlabshared.tracking.internal.calcUTParameters(alpha,beta,kappa,numStateDims);
-
             % Form the sigma points
             X = formSigmaPoints(x, P, c);           
-
             % Perform Unscented Transform to get predicted State and Covariance     
             [xPred,PPred] = unscentedTransform(f,X,Wmean,Wcov,OOM);
             % Add uncertainty to our prediction due to process noise
             PPred = PPred + Q;
+            
         end
         
         function [yPred, S, K] = predictMeasurement_(alpha,kappa,beta,xPred,PPred,h,R)
@@ -469,7 +442,17 @@ classdef UnscentedKalmanFilterX < KalmanFilterX
         % October 2017 Lyudmil Vladimirov, University of Liverpool.
             
             numStateDims = size(xPred,1);
+            numMeasDims = size(R,1);
             
+%             % Form augmented sigma points
+%             [X1, Wm, Wc] = gauss2sigma(xPred, PPred,...
+%                                             alpha,beta,kappa);
+% 
+%             % Perform Unscented Transform to get predicted measurement mean,
+%             % covariance and cross-covariance
+%             [yPred1,S1,Pxy1] = unscentedtf(h,X(1:numStateDims,:),...
+%                                         Wm,Wc,0);
+
             % Calculate unscented transformation parameters
             [c, Wmean, Wcov, OOM] = matlabshared.tracking.internal.calcUTParameters(alpha,beta,kappa,numStateDims);
             
@@ -486,95 +469,5 @@ classdef UnscentedKalmanFilterX < KalmanFilterX
             % Compute the Kalman gain
             K = Pxy/(S);
         end
-        
-        function [x,P] = update_(xPred,PPred,y,yPred,S,K)
-        % KALMANFILTERX_UPDATE Perform the discrete-time KF update step, under the  
-        % assumption of additive process noisem for a single measurement.
-        %
-        % Parameters
-        % ----------
-        % xPred: column vector
-        %   The (xDim x 1) predicted state estimate.
-        % PPred: matrix
-        %   The (xDim x xDim) predicted state covariance matrix.
-        % y: column vector
-        %   The (yDim x 1) measurement vector.
-        % yPred: column vector
-        %   The (yDim x 1) predicted measurement estimate.
-        % S: matrix
-        %   The (yDim x yDim) innovation covariance matrix.
-        % Pxy: matrix
-        %   The (xDim x yDim) cross-covariance matrix.
-        %
-        % Returns
-        % -------
-        % x: column vector
-        %   The (xDim x 1) state estimate at the current time-step.
-        % P: matrix
-        %   The (xDim x xDim) state covariance matrix at the current
-        %   time-step.
-        % K: matrix
-        %   The (xDim x yDim) Kalman gain matrix at the current
-        %   time-step.
-        %
-        %October 2017 Lyudmil Vladimirov, University of Liverpool.
-
-            % Compute the filtered estimates
-            x = xPred + K * (y - yPred);
-            P = PPred - K*S*K';
-        end
-        
-%         function [x,P,K] = updatePDA_(xPred,PPred,Y,W,yPred,S,K)
-%         % KALMANFILTERX_UPDATEPDA Perform the discrete-time Probabilistic Data 
-%         % Association (PDA) KF update step, under the assumption of additive process 
-%         % noise, for multiple measurements (as a Gaussian Mixture)
-%         %
-%         % Parameters
-%         % ----------
-%         % xPred: column vector
-%         %   The (xDim x 1) predicted state estimate.
-%         % PPred: matrix
-%         %   The (xDim x xDim) predicted state covariance matrix.
-%         % Y: matrix
-%         %   The (yDim x nY) measurement vector.
-%         % W: row vector
-%         %   The (1 x nY+1) measurement association/mixture weights 
-%         %   vector. (dummy measurement assumed at index 1)
-%         % yPred: column vector
-%         %   The (yDim x 1) predicted measurement estimate.
-%         % S: matrix
-%         %   The (yDim x yDim) innovation covariance matrix.
-%         % Pxy: matrix
-%         %   The (xDim x yDim) cross-covariance matrix.
-%         %
-%         % Returns
-%         % -------
-%         % x: column vector
-%         %   The (xDim x 1) state estimate at the current time-step.
-%         % P: matrix
-%         %   The (xDim x xDim) state covariance matrix at the current
-%         %   time-step.
-%         % K: matrix
-%         %   The (xDim x yDim) Kalman gain matrix at the current
-%         %   time-step.
-%         %
-%         %October 2017 Lyudmil Vladimirov, University of Liverpool.
-% 
-%             % Get size of observation vector
-%             [yDim,nY] = size(Y);  
-% 
-%             % Compute innovation mean and (cross) covariance
-%             try
-%                 innov_err       = Y - yPred(:,ones(1,nY));
-%             catch
-%             end
-%             tot_innov_err   = innov_err*W(2:end)';
-%             Pc              = PPred - K*S*K';
-%             Pgag            = K*((innov_err.*W(ones(yDim,1),2:end))*innov_err' - tot_innov_err*tot_innov_err')*K';
-% 
-%             % Compute filtered estimates
-%             x    = xPred + K*tot_innov_err;  
-%             P    = W(1)*PPred + (1-W(1))*Pc + Pgag;
-%         end
     end
 end

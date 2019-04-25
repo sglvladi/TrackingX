@@ -64,7 +64,7 @@ classdef KalmanFilterX < FilterX
             if(isa(newStatePrior,'GaussianStateX'))
                 StatePrior = newStatePrior;
             else
-                StatePrior = GaussianStateX(newStatePrior.Mean, newStatePrior.Covar);
+                StatePrior = GaussianStateX(newStatePrior);
             end
         end
         function StatePrediction = setStatePrediction(this,newStatePrediction)
@@ -339,6 +339,7 @@ classdef KalmanFilterX < FilterX
             [posteriorMean, posteriorCovar] = this.update_(this.StatePrediction.Mean,this.StatePrediction.Covar,...
                                                            this.MeasurementList.Vectors,this.MeasurementPrediction.Mean,...
                                                            this.MeasurementPrediction.Covar,this.KalmanGain);
+            posteriorCovar = (posteriorCovar+posteriorCovar')/2;
             
             posterior = GaussianStateX(posteriorMean, posteriorCovar, timestamp);
             this.StatePosterior = posterior;
@@ -367,7 +368,7 @@ classdef KalmanFilterX < FilterX
             [posteriorMean, posteriorCovar] = ...
                 this.updatePDA_(this.StatePrediction.Mean,this.StatePrediction.Covar,this.MeasurementList.Vectors,...
                                 assocWeights,this.MeasurementPrediction.Mean,this.MeasurementPrediction.Covar,this.KalmanGain);
-            
+
             posterior = GaussianStateX(posteriorMean,posteriorCovar,timestamp);
             this.StatePosterior = posterior;
         end

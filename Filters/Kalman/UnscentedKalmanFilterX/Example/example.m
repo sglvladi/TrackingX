@@ -13,11 +13,11 @@ NumIter = size(TrueTrack.Trajectory,2);
 
 %% Models
 % Instantiate a Transitionamic model
-transition_model = ConstantVelocityX('NumDims',2,'VelocityErrVariance',0.0001);
+transition_model = ConstantVelocityX('NumDims',2,'VelocityErrVariance',0.001);
 
 % Instantiate an Observation model
-%measurement_model = LinearGaussianX('NumMeasDims',2,'NumStateDims',4,'MeasurementErrVariance',0.02,'Mapping',[1 3]);
-measurement_model = RangeBearing2CartesianX('NumStateDims',4,'MeasurementErrVariance',[0.001,0.02],'Mapping',[1 3]);
+measurement_model = LinearGaussianX('NumMeasDims',2,'NumStateDims',4,'MeasurementErrVariance',0.02,'Mapping',[1 3]);
+%measurement_model = RangeBearing2CartesianX('NumStateDims',4,'MeasurementErrVariance',[0.001,0.02],'Mapping',[1 3]);
 
 % Compile the State-Space model
 model = StateSpaceModelX(transition_model,measurement_model);
@@ -27,7 +27,7 @@ model = StateSpaceModelX(transition_model,measurement_model);
 dataSim = SingleTargetMeasurementSimulatorX(model);
 
 % Simulate some measurements from ground-truth data
-MeasurementScans = dataSim.simulate(TrueTrack);
+%MeasurementScans = dataSim.simulate(TrueTrack);
 measurements = [MeasurementScans.Vectors];
 
 %% Initiation
@@ -55,7 +55,7 @@ for t = 2:NumIter
     
     % Perform filtering
     prior = track.State;
-    prediction = filter.predict(prior, MeasurementList{1}.Timestamp);
+    prediction = filter.predict(prior, MeasurementList(1).Timestamp);
     posterior = filter.update(prediction, MeasurementList);
     
     % Log the data
