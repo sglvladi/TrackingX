@@ -6,7 +6,7 @@ classdef (Abstract) TagGeneratorX < BaseX
 
     methods (Abstract)
         generate(this); % Generate new tag(s)
-        forget(this);   % Remove tag(s) from list of allocated tags
+%         forget(this);   % Remove tag(s) from list of allocated tags
     end
 
 end
