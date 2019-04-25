@@ -62,8 +62,12 @@ classdef StateSpaceModelX < BaseX & dynamicprops
             % First check to see if a structure was received
             if(nargin==1)
                 if(isstruct(varargin{1}))
-                    this.Transition = varargin{1}.Transition;
-                    this.Measurement = varargin{1}.Measurement;
+                    if (isfield(varargin{1},'Transition'))
+                        this.Transition = varargin{1}.Transition;
+                    end
+                    if (isfield(varargin{1},'Measurement'))
+                        this.Measurement = varargin{1}.Measurement;
+                    end
                     if (isfield(varargin{1},'Control'))
                         this.Control = varargin{1}.Control;
                     end
@@ -83,8 +87,8 @@ classdef StateSpaceModelX < BaseX & dynamicprops
             % Otherwise, fall back to input parser
             parser = inputParser;
             parser.KeepUnmatched = true;
-            parser.addOptional('Transition',[], @(x) isa(x,'TransitionModelX'));
-            parser.addOptional('Measurement',[], @(x) isa(x,'MeasurementModelX'));
+            parser.addOptional('Transition',[]);%, @(x) isa(x,'TransitionModelX'));
+            parser.addOptional('Measurement',[]); %, @(x) isa(x,'MeasurementModelX'));
             parser.addParameter('Control',[]);
             parser.addParameter('Clutter',[]);
             parser.addParameter('Birth',[]);
@@ -93,17 +97,6 @@ classdef StateSpaceModelX < BaseX & dynamicprops
             
             this.Transition = parser.Results.Transition;
             this.Measurement = parser.Results.Measurement;
-            
-            if(this.Transition.NumStateDims ~= this.Measurement.NumStateDims)
-                error('The state dimensions of the Transition and Measurement models do not agree!'); 
-            end
-            
-            if(~isempty(parser.Results.Control))
-                if(this.Transition.StateDim ~= this.Ctr.StateDim)
-                    error('The state dimensions of the Transition and Ctr models do not agree!'); 
-                end
-                this.Control = parser.Results.Control;
-            end
             this.Clutter = parser.Results.Clutter;
             this.Birth = parser.Results.Birth;
             this.Detection = parser.Results.Detection;
