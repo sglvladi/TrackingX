@@ -43,7 +43,6 @@ model = StateSpaceModelX(transition_model, measurement_model,...
 
 %% Simulate measurements, based on ground-truth
 meas_simulator = MultiTargetMeasurementSimulatorX('Model',model);
-% meas_simulator.DetectionProbability = 1;
 DataList = meas_simulator.simulate(GroundTruthStateSequence);
 N = numel(DataList);
 
@@ -67,7 +66,6 @@ config_phd.Model = model;
 config_phd.StatePrior = ParticleStateX(priorParticles,10*priorWeights);
 config_phd.BirthScheme = {'Expansion', 5000};
 config_phd.SurvivalProbability = 0.99;
-config_phd.DetectionProbability = P_D; %meas_simulator.DetectionProbability;
 
 % Instantiate PHD filter
 myphd = SMC_PHDFilterX(config_phd);
@@ -80,7 +78,6 @@ config_ti.TagGenerator = tag_gen;
 config_ti.InitFilter = base_filter;
 config_ti.PhdFilter = myphd;
 config_ti.ConfirmThreshold = 0.8;
-config_ti.DeleteThreshold = 0.1;
 
 % Create the track initiator
 myti = PhdTrackInitiatorX(config_ti);
