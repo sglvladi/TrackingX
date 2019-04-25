@@ -26,11 +26,14 @@ measurement_model = LinearGaussianX('NumMeasDims', 2,...
 clutter_model = PoissonRateUniformPositionX('ClutterRate',lambdaV,...
                                             'Limits',[V_bounds(1:2);...
                                                       V_bounds(3:4)]);
+detection_model = ConstantDetectionProbabilityX('DetectionProbability',P_D);
+
 % Compile the State-Space model
-ssm = StateSpaceModelX(transition_model,measurement_model,'Clutter',clutter_model);
+model = StateSpaceModelX(transition_model,measurement_model,'Clutter',clutter_model, 'Detection', detection_model);
+
 
 %% Generate DataList
-meas_simulator = MultiTargetMeasurementSimulatorX('Model',ssm);
+meas_simulator = MultiTargetMeasurementSimulatorX('Model',model);
 % meas_simulator.DetectionProbability = 1;
 DataList = meas_simulator.simulate(GroundTruthStateSequence);
 N = numel(DataList);
@@ -38,7 +41,7 @@ N = numel(DataList);
 %% Base Filter
 obs_covar= measurement_model.covar();
 PriorState = GaussianStateX(zeros(4,1), transition_model.covar() + blkdiag(obs_covar(1,1), 0, obs_covar(2,2),0));
-base_filter = KalmanFilterX('Model', ssm, 'StatePrior', PriorState);
+base_filter = KalmanFilterX('Model', model, 'StatePrior', PriorState);
 
 %% Data Associator
 config.ClutterModel = clutter_model;
@@ -132,7 +135,7 @@ for k=2:N
         % Plot confirmed tracks
         for j=1:numel(TrackList)
             means = [TrackList{j}.Trajectory.Mean];
-            h2 = plot(ax(1), means(1,:),means(3,:),'.','LineWidth',1);
+            h2 = plot(ax(1), means(1,:),means(3,:),'-','LineWidth',1);
             h2 = plot_gaussian_ellipsoid(TrackList{j}.Filter.StatePosterior.Mean([1 3]), TrackList{j}.Filter.StatePosterior.Covar([1 3],[1 3]),'r',1,20,ax(1)); 
         end
 

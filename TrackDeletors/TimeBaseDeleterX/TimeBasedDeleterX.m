@@ -98,7 +98,7 @@ classdef TimeBasedDeleterX < TrackInitiatorX
             DeletedTracks = [];
             for trackInd = 1:numTracks
                 if(timestamp - Tracks{trackInd}.TimeOfLastUpdate>this.DeleteThreshold)
-                    disp('Deleting TIME based!');
+%                     disp('Deleting TIME based!');
                     DeletedTracks{end+1} = Tracks{trackInd};
                     Tracks{trackInd} = [];
                 end

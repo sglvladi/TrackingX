@@ -2,7 +2,8 @@ classdef NaiveClustererX < ClustererX
 % NAIVECLUSTERERX Class 
 %
 % Summary of NaiveClustererX:
-% This is a class implementation of a naive clusterer.
+% This is a class implementation of a naive clusterer that generates clusters 
+% of tracks sharing common measurements.
 %
 % NaiveClustererX Properties:
 %   + NumMeasDims - The number of observation dimensions.
@@ -34,8 +35,8 @@ classdef NaiveClustererX < ClustererX
         end
         
         function [ClusterList,UnassocTrackInds] = cluster(this,ValidationMatrix)
-        % CLUSTER Perform naive clustering to generate a clusters of
-        % tracks sharing common measurements.
+        % CLUSTER Perform naive clustering to generate clusters of tracks 
+        % sharing common measurements.
         %
         % Parameters
         % ----------

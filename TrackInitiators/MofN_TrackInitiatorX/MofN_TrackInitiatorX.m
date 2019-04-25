@@ -5,7 +5,7 @@ classdef MofN_TrackInitiatorX < TrackInitiatorX
 % This is a simple M out of N track initiator 
 %
 % MofN_TrackInitiatorX Properties:
-%   None
+%   TODO!!
 %
 % MofN_TrackInitiatorX Methods:
 %   + MofN_TrackInitiatorX - Constructor method
@@ -111,12 +111,14 @@ classdef MofN_TrackInitiatorX < TrackInitiatorX
                 % Update detection history
                 for t=1:numConfirmedTracks
                     validInds = find(AssocWeightsMatrix(t,2:end));
-                    if(numel(validInds)>1)
+                    if(~isempty(this.DataAssociator.MeasurementList.Tags))
+                        validMeas = MeasurementListX(MeasurementList.Vectors(:,validInds), MeasurementList.Timestamp, MeasurementList.Tags(validInds));
+                    else
+                        validMeas = MeasurementListX(MeasurementList.Vectors(:,validInds), MeasurementList.Timestamp);
                     end
-                    validMeas = MeasurementListX(MeasurementList.Vectors(validInds), MeasurementList.Timestamp);
                     track_detected = ~isempty(find(ConfirmedTrackList{t}.ValidationMatrix, 1));
                     ConfirmedTrackList{t}.DetectionHistory = [ConfirmedTrackList{t}.DetectionHistory(2:end),track_detected];
-                    ConfirmedTrackList{t}.Trajectory(end+1) = ConfirmedTrackList{t}.Filter.StatePosterior;
+%                     ConfirmedTrackList{t}.Trajectory(end+1) = ConfirmedTrackList{t}.Filter.StatePosterior;
                     ConfirmedTrackList{t}.Associations(end+1) = validMeas;
                 end
 
@@ -129,9 +131,6 @@ classdef MofN_TrackInitiatorX < TrackInitiatorX
                     del_cond = sum(ConfirmedTrackList{t}.DetectionHistory(end-(M-1):end)==0) >= this.DeleteThreshold(1);
                     if isa(this.CustomDeleteConditionFcn, 'function_handle')
                         c_del_cond = this.CustomDeleteConditionFcn(this,ConfirmedTrackList{t});
-                        if(c_del_cond)
-                            print('Deleting COVARIANCE based');
-                        end
                         del_cond = del_cond || c_del_cond;
                     end
                     if(del_cond)
@@ -163,7 +162,7 @@ classdef MofN_TrackInitiatorX < TrackInitiatorX
             end
             UnassocMeasInd = rhi==1; %any(sum(AssocWeightsMatrix,1)==0,1);
 
-            this.DataAssociator.MeasurementList = MeasurementListX(MeasurementList.Vectors(:,UnassocMeasInd), MeasurementList.Timestamp); % Only use unassociated measurements
+            this.DataAssociator.MeasurementList = MeasurementListX(MeasurementList.Measurements(UnassocMeasInd)); % Only use unassociated measurements
             this.DataAssociator.predictTracks();
             this.DataAssociator.associate();    
             this.DataAssociator.updateTracks();
@@ -172,10 +171,14 @@ classdef MofN_TrackInitiatorX < TrackInitiatorX
             for t=1:numel(this.DataAssociator.TrackList)
                 % Update counts
                 validInds = find(this.DataAssociator.ValidationMatrix(t,:));
-                validMeas = MeasurementListX(MeasurementList.Vectors(:,validInds), MeasurementList.Timestamp);
+                if(~isempty(this.DataAssociator.MeasurementList.Tags))
+                    validMeas = MeasurementListX(MeasurementList.Vectors(:,validInds), MeasurementList.Timestamp, MeasurementList.Tags(validInds));
+                else
+                    validMeas = MeasurementListX(MeasurementList.Vectors(:,validInds), MeasurementList.Timestamp);
+                end
                 track_detected = ~isempty(validInds);
                 this.DataAssociator.TrackList{t}.DetectionHistory = [this.DataAssociator.TrackList{t}.DetectionHistory(2:end),track_detected]; 
-                this.DataAssociator.TrackList{t}.Trajectory(end+1) = this.DataAssociator.TrackList{t}.Filter.StatePosterior;
+%                 this.DataAssociator.TrackList{t}.Trajectory(end+1) = this.DataAssociator.TrackList{t}.Filter.StatePosterior;
                 this.DataAssociator.TrackList{t}.Associations(end+1) = validMeas;
             end
 
@@ -191,18 +194,14 @@ classdef MofN_TrackInitiatorX < TrackInitiatorX
                 del_cond = sum(this.DataAssociator.TrackList{t}.DetectionHistory(end-(M_d-1):end)==0) >= this.DeleteThreshold(1);
                 if isa(this.CustomDeleteConditionFcn, 'function_handle')
                     c_del_cond = this.CustomDeleteConditionFcn(this,this.DataAssociator.TrackList{t});
-                    if(del_cond)
-                        print('Deleting COVARIANCE based');
-                    end
                     del_cond = del_cond || c_del_cond;
                 end
                 if(del_cond)
-                    disp("Deleting track");
                     this.DataAssociator.TrackList{t} = []; 
                     del_tracks = del_tracks + 1;
                     del_flag = 1;
                 elseif(sum(this.DataAssociator.TrackList{t}.DetectionHistory(end-(M_c-1):end)==1)>= this.ConfirmThreshold(1))
-                    disp("Confirming new track");
+%                     disp("Confirming new track");
                     ConfirmedTrackList{end+1} = this.DataAssociator.TrackList{t};
                     this.DataAssociator.TrackList{t} = [];
                     del_tracks = del_tracks + 1;
@@ -218,6 +217,11 @@ classdef MofN_TrackInitiatorX < TrackInitiatorX
             for i=1:numel(UnassocMeasInd)
                 
                 measurement = this.DataAssociator.MeasurementList.Vectors(:,UnassocMeasInd(i));
+                if(~isempty(this.DataAssociator.MeasurementList.Tags))
+                    tag = this.DataAssociator.MeasurementList.Tags(UnassocMeasInd(i));
+                else
+                    tag = TagX(i);
+                end
                 stateMean = this.InitFilter.Model.Measurement.finv(measurement);
                 dist = GaussianDistributionX(stateMean,... 
                                             this.InitFilter.StatePrior.Covar);
@@ -232,7 +236,7 @@ classdef MofN_TrackInitiatorX < TrackInitiatorX
                                       'Tag', this.TagGenerator.generate(), ...
                                       'DetectionHistory', [-ones(1,windowSize-1),1],...
                                       'ExistenceProbability', 0.5,...
-                                      'Associations', MeasurementListX(measurement,MeasurementList.Timestamp));
+                                      'Associations', MeasurementListX(measurement,MeasurementList.Timestamp,tag));
                 track_config.Filter.initialise('Model',this.InitFilter.Model,...
                                                'StatePrior', statePrior);       
                 track_config.Trajectory = track_config.Filter.StatePosterior;

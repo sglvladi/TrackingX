@@ -92,9 +92,6 @@ classdef EllipsoidalGaterX <GaterX
             
             config = parser.Unmatched;
             fields = fieldnames(config);
-%             if(numel(fields)>1)
-%                 error('ELLIPSGATER:INVCONSTRARGS','Either GateLevel or GatingProbability can be passed as input arguments to the constructor, but NOT BOTH.');
-%             end
             fieldname = fields{1};
             if(strcmp(fieldname,'GateLevel'))
                 this.GateLevel = config.GateLevel;
@@ -187,10 +184,6 @@ classdef EllipsoidalGaterX <GaterX
                     % Extract predicted measurement and innovation covariance from filter
                     PredMeasMean = Track.Filter.MeasurementPrediction.Mean(this.Mapping(:,2));
                     InnovErrCovar = Track.Filter.MeasurementPrediction.Covar(this.Mapping(:,2),this.Mapping(:,2));
-                else
-                    % Extract predicted measurement and innovation covariance from filter
-%                     PredMeasMean = TrackPredMeasMeans(this.Mapping(:,2),trackInd);
-%                     InnovErrCovar = TrackInnovErrCovars(this.Mapping(:,2),this.Mapping(:,2),trackInd);
                 end
                 
                 % Perform Gating

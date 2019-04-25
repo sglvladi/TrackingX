@@ -27,6 +27,9 @@ classdef MeasurementListX < BaseX
             if nargin>1
                 this.Vectors = varargin{1};
                 this.Timestamp = varargin{2};
+                if (nargin>2)
+                    this.Tags = varargin{3};
+                end
             elseif nargin && ~isempty(varargin{1})
                 if isa(varargin{1},'MeasurementListX')
                     this.Vectors = varargin{1}.Vectors;
