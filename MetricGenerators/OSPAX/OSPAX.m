@@ -15,8 +15,20 @@ classdef OSPAX < MetricGeneratorX
 % 
 % See also SystematicResamplerX
     properties
-        CutOffThreshold
-        Order
+        CutOffThreshold = 1;
+        Order = 1;
+        Mapping = [];
+    end
+    
+    methods (Access=protected)
+        function initialise_(this, config)
+            if (isfield(config,'CutOffThreshold'))
+                this.CutOffThreshold  = config.CutOffThreshold;
+            end
+            if (isfield(config,'Order'))
+                this.Order  = config.Order;
+            end
+        end
     end
     
     methods
@@ -29,9 +41,24 @@ classdef OSPAX < MetricGeneratorX
         %
         % See also OSPAX/evaluate
             
+            % First check to see if a structure was received
+            if(nargin==1)
+                if(isstruct(varargin{1}))
+                    config = varargin{1};
+                    this.initialise_(config);
+                end
+                return;
+            end
+            
+            % Otherwise, fall back to input parser
+            parser = inputParser;
+            parser.KeepUnmatched = true;
+            parser.parse(varargin{:});
+            config = parser.Unmatched;
+            this.initialise_(config);
         end
         
-        function [metric,locDist,cardDist] = evaluate(this,TrackList,GroundTrouth)
+        function [metric,locDist,cardDist] = evaluate(this,GroundTruth,TrackList)
         % EVALUATE Evaluate the OSPA metric of a set of tracks compared to
         % the groundtrouth.
         %   
@@ -43,7 +70,14 @@ classdef OSPAX < MetricGeneratorX
         %
         % See also SystematicResamplerX/resample
             
-            [metric,locDist,cardDist] = ospa_dist(GroundTrouth,TrackList,this.CutOffThreshold,this.Order);
+            gndVectors = [GroundTruth.Vector];
+            trackVectors = [];
+            numTracks = numel(TrackList);
+            for i = 1:numTracks
+                trackVectors(:,i) = TrackList{i}.State.Vector;
+            end
+            
+            [metric,locDist,cardDist] = ospa_dist(gndVectors,trackVectors,this.CutOffThreshold,this.Order);
         end
     end
 
@@ -108,7 +142,7 @@ classdef OSPAX < MetricGeneratorX
             [assignment,cost]= Hungarian(D);
 
             %Calculate final distance
-            dist= ( 1/max(m,n)*( c^p*abs(m-n)+ cost ) ) ^(1/p);
+            dist = ( 1/max(m,n)*( c^p*abs(m-n)+ cost ) ) ^(1/p);
 
             %Output components if called for in varargout
             if nargout == 3
