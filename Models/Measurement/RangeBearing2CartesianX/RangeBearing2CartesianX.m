@@ -178,7 +178,7 @@ classdef RangeBearing2CartesianX < MeasurementModelX
             
             % Compute predicted measurement
             
-            yk = this.h(xk) + vk ;             
+            yk = anglewrap(this.h(xk) + vk, 1) ;             
         end
         
         function xk = finv(this, yk, vk)
@@ -254,7 +254,7 @@ classdef RangeBearing2CartesianX < MeasurementModelX
             end
         
             % Generate noise samples
-            vk = mvnrnd(zeros(this.NumMeasDims,1)',this.R, Ns)';
+            vk = anglewrap(mvnrnd(zeros(this.NumMeasDims,1)',this.R, Ns)',1);
         end
         
         function prob = pdf(this, yk, xk, Pk)
