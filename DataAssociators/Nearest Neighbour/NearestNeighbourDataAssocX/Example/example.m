@@ -1,15 +1,19 @@
+% This is a test/example script which demonstrates the usage of the 
+% ProbabilisticDataAssociationX class.
+% =========================================================================>
+
 %% Load the ground truth data
 load('multiple-robot-tracking.mat');
 
 %% Plot settings
 ShowPlots = 1;              % Set to 0 to hide plots
-NumTracks = 3;
+numTrueTracks = 3;
 
 %% Model parameter shortcuts
-lambdaV = 10; % Expected number of clutter measurements over entire surveillance region
+lambdaV = 1; % Expected number of clutter measurements over entire surveillance region
 V = 10^2;     % Volume of surveillance region (10x10 2D-grid)
 V_bounds = [0 10 0 10]; % [x_min x_max y_min y_max]
-P_D = 0.8;    % Probability of detection
+P_D = 0.6;    % Probability of detection
 timestep_duration = duration(0,0,1);
 
 %% Models
@@ -18,7 +22,7 @@ transition_model = ConstantVelocityX('VelocityErrVariance', 0.01^2,...
                                      'TimestepDuration', timestep_duration);
 measurement_model = LinearGaussianX('NumMeasDims', 2,...
                                     'NumStateDims', 4,...
-                                    'MeasurementErrVariance', 0.1^2,...
+                                    'MeasurementErrVariance', 0.2^2,...
                                     'Mapping', [1 3]);
 clutter_model = PoissonRateUniformPositionX('ClutterRate',lambdaV,...
                                             'Limits',[V_bounds(1:2);...
@@ -37,19 +41,20 @@ N = numel(DataList);
 %% Base Filter
 obs_covar= measurement_model.covar();
 PriorState = GaussianStateX(zeros(4,1), transition_model.covar() + blkdiag(obs_covar(1,1), 0, obs_covar(2,2),0));
-base_filter = KalmanFilterX('Model', model, 'StatePrior', PriorState);
+base_filter = UnscentedKalmanFilterX('Model', model, 'StatePrior', PriorState);
 
 %% Data Associator
 config.ClutterModel = clutter_model;
 config.Clusterer = NaiveClustererX();
 config.Gater = EllipsoidalGaterX(2,'GateLevel',10)';
 config.DetectionModel = detection_model;
-pdaf = JointIntegratedProbabilisticDataAssocX(config);
+pdaf = NearestNeighbourDataAssocX(config);
 
 %% Metric Generator
 ospa = OSPAX('CutOffThreshold',1,'Order',1);
 
 %% Initiate TrackList
+NumTracks = 3;
 TrackList = cell(1,NumTracks);
 for i=1:NumTracks
     xPrior = [GroundTruth{1}(1,i); 0; GroundTruth{1}(2,i); 0];
@@ -59,12 +64,9 @@ for i=1:NumTracks
     TrackList{i}.addprop('Filter');
     TrackList{i}.Filter = copy(base_filter);
     TrackList{i}.Filter.initialise('Model',model,'StatePrior',StatePrior);
-    TrackList{i}.addprop('ExistenceProbability');
-    TrackList{i}.ExistenceProbability = 0.5;
 end
-
 pdaf.TrackList = TrackList;
-Logs.Pe = [];
+
 %% START OF SIMULATION
 %  ===================>
 
@@ -110,7 +112,6 @@ for k=2:N
     %% Update target trajectories
     for t = 1: numel(pdaf.TrackList)
         pdaf.TrackList{t}.Trajectory(end+1) = pdaf.TrackList{t}.Filter.StatePosterior;
-        Logs.Pe(t,k) = pdaf.TrackList{t}.ExistenceProbability;
     end
     
     %% Evaluate performance metric
@@ -134,8 +135,7 @@ for k=2:N
         for j=1:numel(pdaf.TrackList)
             means = [pdaf.TrackList{j}.Trajectory.Mean];
             h2 = plot(ax(1), means(1,:),means(3,:),'-','LineWidth',1);
-            h2 = plot_gaussian_ellipsoid(pdaf.TrackList{j}.Filter.StatePosterior.Mean([1 3]), pdaf.TrackList{j}.Filter.StatePosterior.Covar([1 3],[1 3]),'r',1,20,ax(1));
-            h2 = text(pdaf.TrackList{j}.Filter.StatePosterior.Mean(1),pdaf.TrackList{j}.Filter.StatePosterior.Mean(3), num2str(pdaf.TrackList{j}.ExistenceProbability));
+            h2 = plot_gaussian_ellipsoid(pdaf.TrackList{j}.Filter.StatePosterior.Mean([1 3]), pdaf.TrackList{j}.Filter.StatePosterior.Covar([1 3],[1 3]),'r',1,20,ax(1)); 
         end      
         % set the y-axis back to normal.
         str = sprintf('Target positions (Update)');
@@ -145,23 +145,12 @@ for k=2:N
         ylabel('Y position (m)')
         axis(ax(1), V_bounds)
         
-        % Plot existence probabilities
+        % Plot metric
         subplot(3,1,3);
         cla;
-        for(i = 1:NumTracks)
-            plot(1:k, Logs.Pe(i,1:k));
-            hold on;
-        end
-        %plot(1:k,ospa_vals(1:k,1));
-        title('P(E) vs Time');
+        plot(1:k,ospa_vals(1:k,1));
+        title('OSPA vs Time');
         pause(0.01);
-        
-        % Plot metric
-%         subplot(3,1,3);
-%         cla;
-%         plot(1:k,ospa_vals(1:k,1));
-%         title('OSPA vs Time');
-%         pause(0.01);
         
     end
 end

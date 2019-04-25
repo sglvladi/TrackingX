@@ -26,9 +26,10 @@ classdef ProbabilisticDataAssocX < DataAssociatorX
         NumTracks
         NumMeasurements
     end
+    
     properties
         ClutterModel
-        DetectionProbability = 1
+        DetectionModel
         
         ValidationMatrix
         GateVolumes
@@ -50,8 +51,8 @@ classdef ProbabilisticDataAssocX < DataAssociatorX
             if (isfield(config,'ClutterModel'))
                 this.ClutterModel  = config.ClutterModel;
             end
-            if (isfield(config,'DetectionProbability'))
-                this.DetectionProbability  = config.DetectionProbability;
+            if (isfield(config,'DetectionModel'))
+                this.DetectionModel  = config.DetectionModel;
             end
             if (isfield(config,'Hypothesiser'))
                 this.Hypothesiser  = config.Hypothesiser;
@@ -74,8 +75,8 @@ classdef ProbabilisticDataAssocX < DataAssociatorX
         % Hypothesiser: HypothesiserX subclass, optional
         %   A hypothesiser object used generate and evaluate association
         %   hypotheses. (default = EfficientHypothesisManagementX());
-        % DetectionProbability: scalar, optional
-        %   The target detection probability (default = 1)
+        % DetectionModel: scalar, optional
+        %   The target detection model
         % ClutterModel: ClutterModelX subclass
         %   A clutter model
         %
@@ -205,6 +206,7 @@ classdef ProbabilisticDataAssocX < DataAssociatorX
                     ValidDataInd = find(this.ValidationMatrix(trackInd,:));    % Associated measurements
                     assocWeights = this.AssocWeightsMatrix(trackInd,[1 ValidDataInd+1]);
                     this.TrackList{trackInd}.Filter.updatePDA(assocWeights);
+                    this.TrackList{trackInd}.Trajectory(end+1) = this.TrackList{trackInd}.Filter.StatePosterior;
                 end    
             end
         end
@@ -220,7 +222,11 @@ classdef ProbabilisticDataAssocX < DataAssociatorX
     methods (Access = protected)
         
         function performGating(this)
-            if(isa(this.Gater,'EllipsoidalGaterX') || isa(this.Gater,'BoundingBoxGaterX'))
+            
+            numTracks = size(this.TrackList,2);
+            numMeasurements = this.MeasurementList.NumMeasurements;
+            
+            if(isa(this.Gater,'GaterX'))
                 % Validation matix and volume
                 [this.ValidationMatrix, this.GateVolumes] = this.Gater.gate(this.TrackList,this.MeasurementList.Vectors);
             else
@@ -250,11 +256,8 @@ classdef ProbabilisticDataAssocX < DataAssociatorX
                 ValidMeasInds = find(this.TrackList{trackInd}.ValidationMatrix);
                 if(~isempty(ValidMeasInds))
                     % Extract valid measurements
-                    try
-                        this.TrackList{trackInd}.Filter.MeasurementList = MeasurementListX(this.MeasurementList.Vectors(:,ValidMeasInds),...
+                    this.TrackList{trackInd}.Filter.MeasurementList = MeasurementListX(this.MeasurementList.Vectors(:,ValidMeasInds),...
                                                                                            this.MeasurementList.Timestamp);
-                    catch
-                    end
                     % Evaluate the measurement likelihoods
                     this.LikelihoodMatrix(trackInd, ValidMeasInds) = this.TrackList{trackInd}.Filter.MeasurementLikelihoods;
                 else
@@ -273,37 +276,49 @@ classdef ProbabilisticDataAssocX < DataAssociatorX
             numMeasurements = this.NumMeasurements;
             numTracks = this.NumTracks;
             
-            % Allocate memory for association weights and fill in weights for unassociated tracks
+            % Allocate memory for association weights 
+            % (Dummy measurement at index 1)
             this.AssocLikelihoodMatrix = zeros(numTracks,numMeasurements+1);
-            this.AssocWeightsMatrix = zeros(numTracks,numMeasurements+1); % Dummy measurement weights at index 1
-
+            this.AssocWeightsMatrix = zeros(numTracks,numMeasurements+1);
+            
+            % Iterate over the tracks
             for trackInd=1:numTracks
                 
                 % Extract valid measurements
                 measIndList = find(this.ValidationMatrix(trackInd,:));
                 
                 if(isempty(measIndList))
+                % If no measurements associated to track
                     this.AssocLikelihoodMatrix(trackInd,:) = [1 zeros(1,numMeasurements)];
                     this.AssocWeightsMatrix(trackInd,:) = [1 zeros(1,numMeasurements)];
                     continue;
                 else
-                    % Compute New Track/False Alarm density for the cluster
+                    
+                    % Compute gating probability
+                    Pg = 1;
                     if(isa(this.Gater,'EllipsoidalGaterX'))
-                        GatingProbability = this.Gater.GatingProbability;
-                    else
-                        GatingProbability = 1;
+                        Pg = this.Gater.GatingProbability;
                     end
+                    
+                    % Compute detection probability
+                    Pd = 1;
+                    if(isa(this.DetectionModel, 'DetectionModelX'))
+                        Pd = this.DetectionModel.pdf(this.TrackList{trackInd}.Filter.StatePrediction.Mean);
+                    end
+                        
+                    % Compute clutter density per unit volume
                     if(isempty(this.ClutterModel))
-                        if(isempty(this.GateVolumes))
-                            error('Cannot perform non-parametric (J)PDA as no gater has been set and thus gate volumes cannot be computed.. TODO: Allow for search space volume (V) to be set in the future');
-                        end
-                        clutterDensity = GatingProbability*numel(measIndList)/this.GateVolumes(trackInd);
+                        lambda = numel(measIndList)/this.GateVolumes(trackInd);
                     else
-                        clutterDensity = this.ClutterModel.pdf(this.TrackList{trackInd}.Filter.MeasurementPrediction.Mean)+eps;
+                        lambda = this.ClutterModel.pdf(this.TrackList{trackInd}.Filter.MeasurementPrediction.Mean);
                     end
+                    lambda(lambda==0) = eps; % Ensure lambda is non-zero
+                    
+                    % Construct standard association likelihood matrix
                     this.AssocLikelihoodMatrix(trackInd,:) = ...
-                        [clutterDensity*(1-this.DetectionProbability*GatingProbability), ...
-                        this.DetectionProbability*GatingProbability*this.LikelihoodMatrix(trackInd,:)];
+                        [lambda*(1-Pd*Pg), Pd*Pg*this.LikelihoodMatrix(trackInd,:)];
+                    
+                    % Hypothesise/Compute Association probabilities
                     this.AssocWeightsMatrix(trackInd,:) = this.Hypothesiser.hypothesise(this.AssocLikelihoodMatrix(trackInd,:));
                 end
             end          

@@ -22,11 +22,11 @@ classdef (Abstract) DataAssociatorX < BaseX
 % February 2018 Lyudmil Vladimirov, University of Liverpool.
     
     properties
-        TrackList = {};
-        MeasurementList = MeasurementListX.empty;
-        Gater = GaterX.empty;
-        Hypothesiser = HypothesiserX.empty;
-        Clusterer = ClustererX.empty;
+        TrackList
+        MeasurementList
+        Gater
+        Hypothesiser
+        Clusterer
     end
     
     methods (Abstract, Access = protected)

@@ -1,10 +1,10 @@
-classdef JointProbabilisticDataAssocX < ProbabilisticDataAssocX
-% JointProbabilisticDataAssocX class
+classdef GlobalNearestNeighbourDataAssocX < NearestNeighbourDataAssocX
+% GlobalNearestNeighbourDataAssocX class
 %
-% Summary of JointProbabilisticDataAssocX:
-% This is a class implementation of a Joint Probabilistic Data Association Filter.
+% Summary of GlobalNearestNeighbourDataAssocX:
+% This is a class implementation of a Global Nearest Neighbour Data Association Filter.
 %
-% JointProbabilisticDataAssocX Properties:
+% GlobalNearestNeighbourDataAssocX Properties:
 %   + TrackList        A (1-by-NumTracks) vector of TrackX objects
 %   + MeasurementList           A (1-by-NumMeas) vector of observations/measurements
 %   + Gater             A GaterX object used to perform gating
@@ -12,8 +12,8 @@ classdef JointProbabilisticDataAssocX < ProbabilisticDataAssocX
 %                       tracks
 %   + ClutterDensity    
 %
-% JointProbabilisticDataAssocX Methods:
-%   + JointProbabilisticDataAssocX  - Constructor method
+% GlobalNearestNeighbourDataAssocX Methods:
+%   + GlobalNearestNeighbourDataAssocX  - Constructor method
 %   + associate                     - Performs JPDAF association step
 %   + updateTracks                 - Performs JPDAF update step
 %
@@ -21,22 +21,19 @@ classdef JointProbabilisticDataAssocX < ProbabilisticDataAssocX
 % (¬) denotes dependent properties
 %
 % See also ParticleFilterX, KalmanFilerX.
-
-    properties
-    end
     
     methods
-        function this = JointProbabilisticDataAssocX(varargin)
-        % JointProbabilisticDataAssocX - Constructor method
+        function this = GlobalNearestNeighbourDataAssocX(varargin)
+        % GlobalNearestNeighbourDataAssocX - Constructor method
         %   
         % DESCRIPTION: 
-        % * jpda = JointProbabilisticDataAssocX() returns an unconfigured object 
+        % * gnn = GlobalNearestNeighbourDataAssocX() returns an unconfigured object 
         %   handle. Note that the object will need to be configured at a 
         %   later instance before any call is made to it's methods.
-        % * jpda = JointProbabilisticDataAssocX(gater,clusterer) returns an 
+        % * gnn = GlobalNearestNeighbourDataAssocX(gater,clusterer) returns an 
         %   object handle, preconfigured with the provided GaterX and ClustererX 
         %   object handles gater and clusterer.
-        % * jpda = JointProbabilisticDataAssocX(___,Name,Value,___) instantiates an  
+        % * gnn = GlobalNearestNeighbourDataAssocX(___,Name,Value,___) instantiates an  
         %   object handle, configured with the options specified by one or 
         %   more Name,Value pair arguments.
         %
@@ -48,18 +45,18 @@ classdef JointProbabilisticDataAssocX < ProbabilisticDataAssocX
         % * DetectionProbability        (scalar) The target detection probability
         % * ClutterDensity      (scalar) The spatial density of clutter
         %
-        %  See also JointProbabilisticDataAssocX/associate, JointProbabilisticDataAssocX/updateTracks.   
+        %  See also GlobalNearestNeighbourDataAssocX/associate, GlobalNearestNeighbourDataAssocX/updateTracks.   
                     
-            this@ProbabilisticDataAssocX(varargin{:});
+            this@NearestNeighbourDataAssocX(varargin{:});
         end
         
         function initialise(this,varargin)
-        % INITIALISE Initialise JPDA with a certain set of parameters. 
+        % INITIALISE Initialise gnn with a certain set of parameters. 
         %   
         % DESCRIPTION: 
-        % * initialise(jpda,gater,clusterer) initialises the JointProbabilisticDataAssocX
-        %   object jpda with the provided GaterX and ClustererX object handles gater and clusterer.
-        % * initialise(jpda,___,Name,Value,___) instantiates an  
+        % * initialise(gnn,gater,clusterer) initialises the GlobalNearestNeighbourDataAssocX
+        %   object gnn with the provided GaterX and ClustererX object handles gater and clusterer.
+        % * initialise(gnn,___,Name,Value,___) instantiates an  
         %   object handle, configured with the options specified by one or 
         %   more Name,Value pair arguments.
         %
@@ -69,41 +66,41 @@ classdef JointProbabilisticDataAssocX < ProbabilisticDataAssocX
         % * Clusterer           (ClustererX) A clusterer object which should be used to  
         %                       perform clustering of tracks. Default = None
         %
-        %  See also JointProbabilisticDataAssocX/associate, JointProbabilisticDataAssocX/updateTracks.   
+        %  See also GlobalNearestNeighbourDataAssocX/associate, GlobalNearestNeighbourDataAssocX/updateTracks.   
                     
-            initialise@ProbabilisticDataAssocX(this,varargin{:});
+            initialise@NearestNeighbourDataAssocX(this,varargin{:});
         end
         
         function associate(this,TrackList,MeasurementList)
         % associate - Performs JPDAF association step
         %   
         % DESCRIPTION: 
-        % * associate(jpda) performs data association on the object jpda, based 
-        %   on its  internally stored jpda.TrackList and jpda.MeasurementList properties
-        % * associate(jpda,TrackList,MeasurementList) performs data association on 
-        %   the object jpda, based on the provided list of tracks TrackList 
+        % * associate(gnn) performs data association on the object gnn, based 
+        %   on its  internally stored gnn.TrackList and gnn.MeasurementList properties
+        % * associate(gnn,TrackList,MeasurementList) performs data association on 
+        %   the object gnn, based on the provided list of tracks TrackList 
         %   and list of observations MeasurementList  
         %   
         %   Usage:
-        %       (jpdaf.Params.k = 1; % 1 sec)
-        %       jpdaf.Predict();
+        %       (gnn.Params.k = 1; % 1 sec)
+        %       gnn.Predict();
         %
-        %   See also JointProbabilisticDataAssocX/initialise, JointProbabilisticDataAssocX/updateTracks.
+        %   See also GlobalNearestNeighbourDataAssocX/initialise, GlobalNearestNeighbourDataAssocX/updateTracks.
         
             % Call super class method
             switch(nargin)
                 case 1
-                    associate@ProbabilisticDataAssocX(this);
+                    associate@NearestNeighbourDataAssocX(this);
                 case 2
-                    associate@ProbabilisticDataAssocX(this,TrackList);
+                    associate@NearestNeighbourDataAssocX(this,TrackList);
                 case 3
-                    associate@ProbabilisticDataAssocX(this,TrackList,MeasurementList);
+                    associate@NearestNeighbourDataAssocX(this,TrackList,MeasurementList);
             end
-        end        
+        end   
     end
     
     methods (Access = protected)
-                
+        
         function performClustering(this)
             % Use the defined this.Clusterer to perform clustering
             if(~isempty(this.Clusterer))

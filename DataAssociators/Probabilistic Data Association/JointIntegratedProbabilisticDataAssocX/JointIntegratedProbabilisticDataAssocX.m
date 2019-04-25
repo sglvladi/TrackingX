@@ -77,196 +77,138 @@ classdef JointIntegratedProbabilisticDataAssocX < JointProbabilisticDataAssocX
     methods (Access = protected)
                 
         function evaluateAssociations(this)
+            
             numTracks = this.NumTracks;
             numMeasurements = this.NumMeasurements;
             
-            if(isa(this.Gater,'EllipsoidalGaterX'))
-                GatingProbability = this.Gater.GatingProbability;
-            else
-                GatingProbability = 1;
-            end
-            
-            % If no valid measurement associations exist
-            if(sum(sum(this.ValidationMatrix))==0)
-                
-                this.AssocLikelihoodMatrix = [ones(numTracks,1) zeros(numTracks,numMeasurements)];
-                this.AssocWeightsMatrix = [ones(numTracks,1) zeros(numTracks,numMeasurements)];
-                
-                clutterDensity = eps;
-                
-                % Calculate the likelihood ratio
-                a = [clutterDensity*(1-cellfun(@(x) x.ExistenceProbability, this.TrackList))',...
-                     clutterDensity*(1-this.DetectionProbability*GatingProbability)*cellfun(@(x) x.ExistenceProbability, this.TrackList)'];
-                w = a(:,1)./a(:,2);
+            % Allocate memory for association likelihoods & weights 
+            % (Dummy measurement at index 1)
+            this.AssocLikelihoodMatrix = zeros(numTracks, numMeasurements+1); 
+            this.AssocWeightsMatrix = zeros(numTracks,numMeasurements+1);
 
+            % Create Hypothesis net for each cluster and populate association weights matrix
+            NumClusters = numel(this.ClusterList);
+            for clusterInd=1:NumClusters
+                % Create Hypothesis net for each cluster and 
+                % populate association weights matrix
 
-                % Update existence probabilities
-                for trackInd = 1:numTracks
-                    this.TrackList{trackInd}.ExistenceProbability = this.AssocWeightsMatrix(trackInd,1)/(1+w(trackInd)) + sum(this.AssocWeightsMatrix(trackInd,2:end),2);
+                % Extract track and measurement list for cluster
+                MeasIndList = this.ClusterList(clusterInd).MeasIndList;
+                TrackIndList = this.ClusterList(clusterInd).TrackIndList;
+                numClusterMeasurements = length(MeasIndList);
+                numClusterTracks = length(TrackIndList);
+                
+                % Compute gating probability
+                Pg = 1;
+                if(isa(this.Gater,'EllipsoidalGaterX'))
+                    Pg = this.Gater.GatingProbability;
                 end
-                return;
-            else
-                if(isempty(this.Clusterer))
-                    
-                    % Compute combined association likelihood
-                    this.AssocLikelihoodMatrix = zeros(numTracks, numMeasurements+1);
-                    for trackInd = 1:numTracks
-                        % Compute New Track/False Alarm density for the cluster
-                        if(isempty(this.ClutterModel))
-                            if(isempty(this.GateVolumes))
-                                error('Cannot perform non-parametric (J)PDA as no gater has been set and thus gate volumes cannot be computed.. TODO: Allow for search space volume (V) to be set in the future');
-                            end
-                            clutterDensity = GatingProbability*numMeasurements/sum(this.GateVolumes);
-                        else
-                            clutterDensity = this.ClutterModel.pdf(this.TrackList{trackInd}.Filter.MeasurementPrediction.Mean);
-                        end
-                        if(clutterDensity==0)
-                            clutterDensity = eps;
-                        end
-                    
-                        this.AssocLikelihoodMatrix(trackInd,1) = ...
-                            clutterDensity*((1-this.TrackList{trackInd}.ExistenceProbability)...
-                            +(1-this.DetectionProbability*GatingProbability)*this.TrackList{trackInd}.ExistenceProbability);
-                        this.AssocLikelihoodMatrix(trackInd,2:end) = ...
-                            this.DetectionProbability*GatingProbability*this.TrackList{trackInd}.ExistenceProbability...
-                                * this.LikelihoodMatrix(trackInd,:);
-                    end
-                    
-                    % Generate joint association weights
-                    this.AssocWeightsMatrix = this.Hypothesiser.hypothesise(this.AssocLikelihoodMatrix);                                       
-                                        
+                
+                if(numClusterMeasurements==0)
+                % If no measurements associated to cluster
+                    % Simply set all cluster tracks to be missed
+                    % (No need to perform data-association)
+                    this.AssocLikelihoodMatrix(TrackIndList,:) = [1 zeros(1,numMeasurements)];
+                    this.AssocWeightsMatrix(TrackIndList,:) = [1 zeros(1,numMeasurements)];
                     
                     % Update existence probabilities
-                    a = zeros(numTracks,2);
-                    w = zeros(numTracks,1);
-                    for trackInd = 1:numTracks
+                    for t = 1:numClusterTracks
+                        trackInd = TrackIndList(t);
+
+                        % Compute detection probability
+                        Pd = 1;
+                        if(isa(this.DetectionModel, 'DetectionModelX'))
+                            Pd = this.DetectionModel.pdf(this.TrackList{trackInd}.Filter.StatePrediction.Mean);
+                        end
+
+                        % Compute clutter density per unit volume
                         if(isempty(this.ClutterModel))
-                            if(isempty(this.GateVolumes))
-                                error('Cannot perform non-parametric (J)PDA as no gater has been set and thus gate volumes cannot be computed.. TODO: Allow for search space volume (V) to be set in the future');
-                            end
-                            clutterDensity = GatingProbability*numMeasurements/sum(this.GateVolumes);
+                            lambda = numClusterMeasurements/sum(this.GateVolumes(TrackIndList));
                         else
-                            clutterDensity = this.ClutterModel.pdf(this.TrackList{trackInd}.Filter.MeasurementPrediction.Mean);
+                            lambda = this.ClutterModel.pdf(this.TrackList{trackInd}.Filter.MeasurementPrediction.Mean);
                         end
-                        if(clutterDensity==0)
-                            clutterDensity = eps;
-                        end
+                        lambda(lambda==0) = eps; % Ensure lambda is non-zero
+                        
+                        % Extract existence probability
+                        Pe = this.TrackList{trackInd}.ExistenceProbability;
+                        
                         % Calculate the likelihood ratio
-                        a(trackInd,:) = [clutterDensity*(1-this.TrackList{trackInd}.ExistenceProbability),...
-                             clutterDensity*(1-this.DetectionProbability*GatingProbability)*this.TrackList{trackInd}.ExistenceProbability];
-                        w(trackInd) = a(trackInd,1)./a(trackInd,2);
-                        this.TrackList{trackInd}.ExistenceProbability = this.AssocWeightsMatrix(trackInd,1)/(1+w(trackInd)) + sum(this.AssocWeightsMatrix(trackInd,2:end),2);
-                    end
+                        b = [lambda*(1 - Pe),...
+                             lambda*(1 - Pd*Pg)*Pe];
+                        w = b(1)/b(2);
+                        
+                        % Compute updated existence probability
+                        this.TrackList{trackInd}.ExistenceProbability = 1/(1+w);
                     
-                    % Condition on existence
-                    this.AssocWeightsMatrix(:,1) = this.AssocWeightsMatrix(:,1)./(1+w);
-                    this.AssocWeightsMatrix = this.AssocWeightsMatrix./sum(this.AssocWeightsMatrix,2);
-                           
+                    end
+                    continue;
                 else
-                    % Get all clusters
-                    [this.ClusterList, this.UnassocTrackInds] = this.Clusterer.cluster(this.ValidationMatrix);
-
-                    % Allocate memory for association weights and fill in weights for unassociated tracks
-                    this.AssocWeightsMatrix = zeros(numTracks, numMeasurements+1); % Dummy measurement weights at index 1
-                    this.AssocWeightsMatrix(this.UnassocTrackInds,1) = 1;
                     
-                    % Process unassociated tracks
-                    if(numel(this.UnassocTrackInds)>0)
-                        clutterDensity = eps;
-
-                        % Calculate the likelihood ratio
-                        a = [clutterDensity*(1-cellfun(@(x) x.ExistenceProbability, this.TrackList(this.UnassocTrackInds)))',...
-                             clutterDensity*(1-this.DetectionProbability*GatingProbability)*cellfun(@(x) x.ExistenceProbability, this.TrackList(this.UnassocTrackInds))'];
-                        w = a(:,1)./a(:,2);
-
-                        % Update existence probabilities
-                        for i = 1:numel(this.UnassocTrackInds)
-                            trackInd = this.UnassocTrackInds(i);
-                            this.TrackList{trackInd}.ExistenceProbability = ...
-                                this.AssocWeightsMatrix(trackInd,1)/(1+w(i)) + sum(this.AssocWeightsMatrix(trackInd,2:end),2);
+                    % Pre-allocate memory
+                    this.ClusterList(clusterInd).AssocLikelihoodMatrix = ...
+                        zeros(numClusterTracks, numClusterMeasurements+1);
+                    this.ClusterList(clusterInd).AssocWeightsMatrix = ...
+                        zeros(numClusterTracks, numClusterMeasurements+1);
+                        
+                    % Compute New Track/False Alarm density for the cluster
+                    w = zeros(1,numClusterTracks);
+                    for t = 1:numClusterTracks
+                        trackInd = TrackIndList(t);
+                        
+                        % Compute detection probability
+                        Pd = 1;
+                        if(isa(this.DetectionModel, 'DetectionModelX'))
+                            Pd = this.DetectionModel.pdf(this.TrackList{trackInd}.Filter.StatePrediction.Mean);
                         end
-                    end
-                    
-                    % Create Hypothesis net for each cluster and populate association weights matrix
-                    NumClusters = numel(this.ClusterList);
-                    for clusterInd=1:NumClusters
-                        
-                        % Extract track and measurement list for cluster
-                        MeasIndList = this.ClusterList{clusterInd}.MeasIndList;
-                        TrackIndList = this.ClusterList{clusterInd}.TrackIndList;
-                        numClusterMeasurements = length(MeasIndList);
-                        numClusterTracks = length(TrackIndList);
-                        
-                        % Compute probability of gating
-                        if(isa(this.Gater,'EllipsoidalGaterX'))
-                            GatingProbability = this.Gater.GatingProbability;
+
+                        % Compute clutter density per unit volume
+                        if(isempty(this.ClutterModel))
+                            lambda = numClusterMeasurements/sum(this.GateVolumes(TrackIndList));
                         else
-                            GatingProbability = 1;
+                            lambda = this.ClutterModel.pdf(this.TrackList{trackInd}.Filter.MeasurementPrediction.Mean);
                         end
+                        lambda(lambda==0) = eps; % Ensure lambda is non-zero
                         
-                        % Compute New Track/False Alarm density for the cluster
-                         for t = 1:numClusterTracks
-                            trackInd = TrackIndList(t);
-                            if(~isprop(this.TrackList{trackInd},'ClutterDensity'))
-                               this.TrackList{trackInd}.addprop('ClutterDensity');
-                            end
-                            if(isempty(this.ClutterModel))
-                                if(isempty(this.GateVolumes))
-                                    error('Cannot perform non-parametric (J)PDA as no gater has been set and thus gate volumes cannot be computed.. TODO: Allow for search space volume (V) to be set in the future');
-                                end
-                                clutterDensity = ...
-                                    GatingProbability*numClusterMeasurements/sum(this.GateVolumes(TrackIndList));
-                            else
-                                clutterDensity = this.ClutterModel.pdf(this.TrackList{trackInd}.Filter.MeasurementPrediction.Mean)+eps;
-                            end
-                            this.TrackList{trackInd}.ClutterDensity = clutterDensity; 
-                        end
+                        % Extract existence probability
+                        Pe = this.TrackList{trackInd}.ExistenceProbability;
                         
                         % Compute combined association likelihood
-                        this.ClusterList{clusterInd}.AssocLikelihoodMatrix = ...
-                                zeros(numel(TrackIndList), numel(MeasIndList)+1);
-                        for i = 1:numel(TrackIndList)
-                            trackInd = TrackIndList(i);
-                            this.ClusterList{clusterInd}.AssocLikelihoodMatrix(i,1) = ...
-                                this.TrackList{trackInd}.ClutterDensity*((1-this.TrackList{trackInd}.ExistenceProbability)...
-                                +(1-this.DetectionProbability*GatingProbability)*this.TrackList{trackInd}.ExistenceProbability);
-                            this.ClusterList{clusterInd}.AssocLikelihoodMatrix(i,2:end) = ...
-                                this.DetectionProbability*GatingProbability*this.TrackList{trackInd}.ExistenceProbability...
-                                    * this.LikelihoodMatrix(trackInd,MeasIndList);
-                        end
-
-                        % Generate joint association weights
-                        this.ClusterList{clusterInd}.AssocWeightsMatrix = ...
-                            this.Hypothesiser.hypothesise(this.ClusterList{clusterInd}.AssocLikelihoodMatrix);
+                        this.ClusterList(clusterInd).AssocLikelihoodMatrix(t,:) = ...
+                            [lambda*((1-Pe)+(1-Pd*Pg)*Pe), Pd*Pg*Pe*this.LikelihoodMatrix(trackInd,MeasIndList)];
                         
                         % Calculate the likelihood ratio
-                        a = [cellfun(@(x) x.ClutterDensity, this.TrackList(TrackIndList))'.*(1-cellfun(@(x) x.ExistenceProbability, this.TrackList(TrackIndList)))',...
-                             cellfun(@(x) x.ClutterDensity, this.TrackList(TrackIndList))'.*(1-this.DetectionProbability*GatingProbability).*cellfun(@(x) x.ExistenceProbability, this.TrackList(TrackIndList))'];
-                        w = a(:,1)./a(:,2);
+                        b = [lambda*(1 - Pe),...
+                             lambda*(1 - Pd*Pg)*Pe];
+                        w(t) = b(1)/b(2); 
+                    end
+                    
+                    % Compute likelihood matrix
+                    this.AssocLikelihoodMatrix(TrackIndList,[1 MeasIndList+1]) = ...
+                        this.ClusterList(clusterInd).AssocLikelihoodMatrix;
+                    
+                    % Generate joint association weights
+                    this.ClusterList(clusterInd).AssocWeightsMatrix = ...
+                        this.Hypothesiser.hypothesise(this.ClusterList(clusterInd).AssocLikelihoodMatrix);
 
-                        % Update existence probabilities
-                        for i = 1:numel(TrackIndList)
-                            trackInd = TrackIndList(i);
-                            try
-                                this.TrackList{trackInd}.ExistenceProbability = ...
-                                    this.ClusterList{clusterInd}.AssocWeightsMatrix(i,1)/(1+w(i))...
-                                    + sum(this.ClusterList{clusterInd}.AssocWeightsMatrix(i,2:end),2);
-                            catch
-                            end
-                        end
-                        
-                        % Condition on existence
-                        this.ClusterList{clusterInd}.AssocWeightsMatrix(:,1) = ...
-                            this.ClusterList{clusterInd}.AssocWeightsMatrix(:,1)./(1+w);
-                        this.ClusterList{clusterInd}.AssocWeightsMatrix = ...
-                            this.ClusterList{clusterInd}.AssocWeightsMatrix./sum(this.ClusterList{clusterInd}.AssocWeightsMatrix,2);
-                        
-                        % Store cluster association weights in global
-                        % associatiopn weights matrix
-                        this.AssocWeightsMatrix(TrackIndList, [1 MeasIndList+1]) = ...
-                            this.ClusterList{clusterInd}.AssocWeightsMatrix;
-                    end 
-                end
+                    % Update existence probabilities
+                    for t = 1:numClusterTracks
+                        trackInd = TrackIndList(t);
+                        this.TrackList{trackInd}.ExistenceProbability = ...
+                                this.ClusterList(clusterInd).AssocWeightsMatrix(t,1)/(1+w(t))...
+                                + sum(this.ClusterList(clusterInd).AssocWeightsMatrix(t,2:end),2);
+                    end
+
+                    % Condition on existence
+                    this.ClusterList(clusterInd).AssocWeightsMatrix(:,1) = ...
+                        this.ClusterList(clusterInd).AssocWeightsMatrix(:,1)./(1+w)';
+                    this.ClusterList(clusterInd).AssocWeightsMatrix = ...
+                        this.ClusterList(clusterInd).AssocWeightsMatrix./sum(this.ClusterList(clusterInd).AssocWeightsMatrix,2);
+
+                    % Store cluster association weights in global
+                    % associatiopn weights matrix
+                    this.AssocWeightsMatrix(TrackIndList, [1 MeasIndList+1]) = ...
+                        this.ClusterList(clusterInd).AssocWeightsMatrix;
+                end 
             end
         end
     end

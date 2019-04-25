@@ -1,28 +1,32 @@
-%% Load the ground truth data
+% This is a test script which demonstrates the usage of the 
+% JointProbabilisticDataAssociation class.
+% =========================================================================>
+
+% Load the ground truth data
 load('multiple-robot-tracking.mat');
 
-%% Plot settings
+% Plot settings
 ShowPlots = 1;              % Set to 0 to hide plots
-NumTracks = 3;
+numTrueTracks = 3;
 
-%% Model parameter shortcuts
-lambdaV = 10; % Expected number of clutter measurements over entire surveillance region
+% Model parameter shortcuts
+lambdaV = 0; % Expected number of clutter measurements over entire surveillance region
 V = 10^2;     % Volume of surveillance region (10x10 2D-grid)
 V_bounds = [0 10 0 10]; % [x_min x_max y_min y_max]
-P_D = 0.8;    % Probability of detection
+P_D = 0.6;    % Probability of detection
 timestep_duration = duration(0,0,1);
 
 %% Models
-transition_model = ConstantVelocityX('VelocityErrVariance', 0.01^2,...
+transition_model = ConstantVelocityX('VelocityErrVariance', 0.0001,...
                                      'NumDims', 2,...
                                      'TimestepDuration', timestep_duration);
 measurement_model = LinearGaussianX('NumMeasDims', 2,...
                                     'NumStateDims', 4,...
-                                    'MeasurementErrVariance', 0.1^2,...
+                                    'MeasurementErrVariance', 0.2^2,...
                                     'Mapping', [1 3]);
 clutter_model = PoissonRateUniformPositionX('ClutterRate',lambdaV,...
                                             'Limits',[V_bounds(1:2);...
-                                                      V_bounds(3:4)]);   
+                                                      V_bounds(3:4)]);
 detection_model = ConstantDetectionProbabilityX('DetectionProbability',P_D);
 
 % Compile the State-Space model
@@ -30,7 +34,6 @@ model = StateSpaceModelX(transition_model,measurement_model,'Clutter',clutter_mo
 
 %% Generate DataList
 meas_simulator = MultiTargetMeasurementSimulatorX('Model',model);
-
 DataList = meas_simulator.simulate(GroundTruthStateSequence);
 N = numel(DataList);
 
@@ -41,15 +44,14 @@ base_filter = KalmanFilterX('Model', model, 'StatePrior', PriorState);
 
 %% Data Associator
 config.ClutterModel = clutter_model;
-config.Clusterer = NaiveClustererX();
+% config.Clusterer = NaiveClustererX();
 config.Gater = EllipsoidalGaterX(2,'GateLevel',10)';
-config.DetectionModel = detection_model;
-pdaf = JointIntegratedProbabilisticDataAssocX(config);
-
-%% Metric Generator
-ospa = OSPAX('CutOffThreshold',1,'Order',1);
+config.DetectionProbability = P_D;
+%assocFilter = JointProbabilisticDataAssocX(config);
+assocFilter = GlobalNearestNeighbourDataAssocX(config);
 
 %% Initiate TrackList
+NumTracks = 3;
 TrackList = cell(1,NumTracks);
 for i=1:NumTracks
     xPrior = [GroundTruth{1}(1,i); 0; GroundTruth{1}(2,i); 0];
@@ -59,16 +61,22 @@ for i=1:NumTracks
     TrackList{i}.addprop('Filter');
     TrackList{i}.Filter = copy(base_filter);
     TrackList{i}.Filter.initialise('Model',model,'StatePrior',StatePrior);
-    TrackList{i}.addprop('ExistenceProbability');
-    TrackList{i}.ExistenceProbability = 0.5;
 end
+assocFilter.TrackList = TrackList;
+% 
+% %% Instantiate Log to store output
+% N=size(DataList,2);
+% Logs = cell(1, NumTracks); % 4 tracks
+% N = size(x_true,1)-2;
+% for i=1:NumTracks
+%     Logs{i}.Estimates.StateMean = zeros(4,N);
+%     Logs{i}.Estimates.StateCovar = zeros(4,4,N);
+%     Logs{i}.Groundtruth.State = zeros(2,N);
+% end
 
-pdaf.TrackList = TrackList;
-Logs.Pe = [];
 %% START OF SIMULATION
 %  ===================>
 
-% Create figure windows
 % Create figure windows
 if(ShowPlots)
     img = imread('maze.png');
@@ -85,10 +93,9 @@ if(ShowPlots)
     y = (6/8)*x;
 
     figure('units','normalized','outerposition',[0 0 .5 1])
-    subplot(2,1,1);
+    ax(1) = gca;
 end
 
-ospa_vals= zeros(N,3);
 for k=2:N
     fprintf('Iteration = %d/%d\n================>\n',k,N);
     
@@ -101,28 +108,22 @@ for k=2:N
     fprintf('Timestamp = %s\n================>\n',timestamp_k);
     
     %% Process JPDAF
-    pdaf.MeasurementList = MeasurementList;
-    pdaf.TrackList = TrackList;
-    pdaf.predictTracks();
-    pdaf.associate();    
-    pdaf.updateTracks();
+    assocFilter.MeasurementList = MeasurementList;
+    assocFilter.TrackList = TrackList;
+    assocFilter.predictTracks();
+    assocFilter.associate();    
+    assocFilter.updateTracks();
     
     %% Update target trajectories
-    for t = 1: numel(pdaf.TrackList)
-        pdaf.TrackList{t}.Trajectory(end+1) = pdaf.TrackList{t}.Filter.StatePosterior;
-        Logs.Pe(t,k) = pdaf.TrackList{t}.ExistenceProbability;
+    for t = 1: numel(assocFilter.TrackList)
+        assocFilter.TrackList{t}.Trajectory(end+1) = assocFilter.TrackList{t}.Filter.StatePosterior;
     end
-    
-    %% Evaluate performance metric
-    [ospa_vals(k,1), ospa_vals(k,2), ospa_vals(k,3)]= ospa.evaluate(GroundTruthStateSequence{k},pdaf.TrackList);
     
      %% Plot update step results
     if(ShowPlots)
             
-        subplot(3,1,1:2);
-        ax(1) = gca;
         cla(ax(1));
-        imagesc(ax(1), V_bounds(1:2), V_bounds(3:4), flipud(img));
+        %imagesc(ax(1),[min_x max_x], [min_y max_y], flipud(img));
         hold on;
         if(exist('data_plot','var'))
             delete(data_plot);
@@ -131,41 +132,36 @@ for k=2:N
         data_plot = plot(ax(1), data_inv(1,:), data_inv(3,:),'k*','MarkerSize', 10);
 
         % Plot tracks
-        for j=1:numel(pdaf.TrackList)
-            means = [pdaf.TrackList{j}.Trajectory.Mean];
+        for j=1:numel(assocFilter.TrackList)
+            means = [assocFilter.TrackList{j}.Trajectory.Mean];
             h2 = plot(ax(1), means(1,:),means(3,:),'-','LineWidth',1);
-            h2 = plot_gaussian_ellipsoid(pdaf.TrackList{j}.Filter.StatePosterior.Mean([1 3]), pdaf.TrackList{j}.Filter.StatePosterior.Covar([1 3],[1 3]),'r',1,20,ax(1));
-            h2 = text(pdaf.TrackList{j}.Filter.StatePosterior.Mean(1),pdaf.TrackList{j}.Filter.StatePosterior.Mean(3), num2str(pdaf.TrackList{j}.ExistenceProbability));
-        end      
+            h2 = plot_gaussian_ellipsoid(assocFilter.TrackList{j}.Filter.StatePosterior.Mean([1 3]), assocFilter.TrackList{j}.Filter.StatePosterior.Covar([1 3],[1 3]),'r',1,20,ax(1)); 
+        end
+        
         % set the y-axis back to normal.
-        str = sprintf('Target positions (Update)');
-        set(ax(1), 'ydir','normal');
-        title(str)
+        set(ax(1),'ydir','normal');
+        str = sprintf('Robot positions (Update)');
+        title(ax(1),str)
         xlabel('X position (m)')
         ylabel('Y position (m)')
-        axis(ax(1), V_bounds)
-        
-        % Plot existence probabilities
-        subplot(3,1,3);
-        cla;
-        for(i = 1:NumTracks)
-            plot(1:k, Logs.Pe(i,1:k));
-            hold on;
-        end
-        %plot(1:k,ospa_vals(1:k,1));
-        title('P(E) vs Time');
-        pause(0.01);
-        
-        % Plot metric
-%         subplot(3,1,3);
-%         cla;
-%         plot(1:k,ospa_vals(1:k,1));
-%         title('OSPA vs Time');
-%         pause(0.01);
-        
+        axis(ax(1),V_bounds)
+        pause(0.01)
     end
 end
 
+    
+ospa_vals= zeros(N,3);
+ospa_c= 1;
+ospa_p= 1;
+for k=1:N
+    trueX = [x_true(k,:);y_true(k,:)];
+    estX = zeros(2,NumTracks);
+    for i=1:NumTracks
+        estX(:,i) = Logs{i}.Estimates.StateMean([1 3],k);
+    end
+    [ospa_vals(k,1), ospa_vals(k,2), ospa_vals(k,3)]= ospa_dist(trueX,estX,ospa_c,ospa_p);
+end
+ospa = mean(ospa_vals,2);
 figure
 subplot(2,2,[1 2]), plot(1:k,ospa_vals(1:k,1));
 subplot(2,2,3), plot(1:k,ospa_vals(1:k,2));
