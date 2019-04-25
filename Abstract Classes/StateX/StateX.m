@@ -83,9 +83,14 @@ classdef (Abstract) StateX < BaseX & dynamicprops
         function [timestamp, other] = extract_timestamp(varargs)
             timestamp = [];
             other = varargs;
-            if numel(varargs) && isdatetime(varargs{end})
+            if numel(varargs)
+                if isdatetime(varargs{end})
                 timestamp = varargs{end};
                 other = varargs(1:end-1);
+                elseif isa(varargs{1},'StateX')
+                    timestamp = varargs{1}.Timestamp;
+                    other = varargs;
+                end
             end
         end
     end
