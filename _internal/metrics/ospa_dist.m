@@ -1,5 +1,10 @@
 function [dist varargout]= ospa_dist(X,Y,c,p)
-
+% Compute OSPA distance between two finite sets X and Y
+% Inputs: X,Y-   matrices of column vectors
+%        c  -   cut-off parameter
+%        p  -   p-parameter for the metric
+% Output: scalar distance between X and Y
+% Note: the Euclidean 2-norm is used as the "base" distance on the region
 % This is the MATLAB code for OSPA distance proposed in
 % 
 % D. Schuhmacher, B.-T. Vo, and B.-N. Vo, "A consistent metric for performance evaluation in multi-object filtering," IEEE Trans. Signal Processing, Vol. 56, No. 8 Part 1, pp. 3447– 3457, 2008.
@@ -13,15 +18,13 @@ function [dist varargout]= ospa_dist(X,Y,c,p)
 % month={Aug},
 % volume={56},
 % number={8},
-% pages={3447-3457}}  
+% pages={3447-3457}} 
+% 
+% Credit: 
+% -------
+% * This code has been taken from http://ba-tuong.vo-au.com/codes.html.
+% * Minor modifications may have been applied to the original version.
 %---
-
-% Compute OSPA distance between two finite sets X and Y
-% Inputs: X,Y-   matrices of column vectors
-%        c  -   cut-off parameter
-%        p  -   p-parameter for the metric
-% Output: scalar distance between X and Y
-% Note: the Euclidean 2-norm is used as the "base" distance on the region
 
 if nargout ~=1 & nargout ~=3
    error('Incorrect number of outputs'); 
@@ -49,7 +52,6 @@ if isempty(X) | isempty(Y)
     return;
 end
 
-
 %Calculate sizes of the input point patterns
 n = size(X,2);
 m = size(Y,2);
@@ -60,18 +62,11 @@ YY= reshape(repmat(Y,[n 1]),[size(Y,1) n*m]);
 D = reshape(sqrt(sum((XX-YY).^2)),[n m]);
 D = min(c,D).^p;
 
-% %Calculate cost/weight matrix for pairings - slow method with for loop
-% D= zeros(n,m);
-% for j=1:m
-%     D(:,j)= sqrt(sum( ( repmat(Y(:,j),[1 n])- X ).^2 )');
-% end
-% D= min(c,D).^p;
-
-%Compute optimal assignment and cost using the Hungarian algorithm
-[assignment,cost]= Hungarian(D);
+% Compute optimal assignment and cost using the Hungarian algorithm
+[~,cost]= Hungarian(D);
 
 %Calculate final distance
-dist= ( 1/max(m,n)*( c^p*abs(m-n)+ cost ) ) ^(1/p);
+dist = ( 1/max(m,n)*( c^p*abs(m-n)+ cost ) ) ^(1/p);
 
 %Output components if called for in varargout
 if nargout == 3
