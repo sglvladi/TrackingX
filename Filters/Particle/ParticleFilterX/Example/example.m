@@ -55,7 +55,7 @@ for t = 2:NumIter
     
     % Perform filtering
     prior = track.State;
-    prediction = filter.predict(prior, MeasurementList{1}.Timestamp);
+    prediction = filter.predict(prior, MeasurementList.Timestamp);
     posterior = filter.update(prediction, MeasurementList);
     
     % Log the data
@@ -67,7 +67,7 @@ for t = 2:NumIter
     true_means = [TrueTrack.Trajectory(1:t).Vector];
     track_means = [track.Trajectory(1:t).Mean];
     plot(true_means(1,1:t), true_means(3,1:t),'.-k', track_means(1,1:t), track_means(3,1:t), 'b-', meas(1,:), meas(3,:), 'rx');
-    plot_gaussian_ellipsoid(track.Trajectory(t).Mean([1,3],1), track.Trajectory(t).Covar([1,3],[1,3]));
+    plotgaussellipse(track.Trajectory(t).Mean([1,3],1), track.Trajectory(t).Covar([1,3],[1,3]));
     legend('GroundTrouth','Estimated Mean','Measurements', 'Estimated Covariance');
     xlabel("x coordinate (m)");
     ylabel("y coordinate (m)");

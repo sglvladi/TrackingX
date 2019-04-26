@@ -136,7 +136,10 @@ for k=2:N
         for j=1:numel(TrackList)
             means = [TrackList{j}.Trajectory.Mean];
             h2 = plot(ax(1), means(1,:),means(3,:),'-','LineWidth',1);
-            h2 = plot_gaussian_ellipsoid(TrackList{j}.Filter.StatePosterior.Mean([1 3]), TrackList{j}.Filter.StatePosterior.Covar([1 3],[1 3]),'r',1,20,ax(1)); 
+            h2 = plotgaussellipse(TrackList{j}.Filter.StatePosterior.Mean([1 3]),...
+                                  TrackList{j}.Filter.StatePosterior.Covar([1 3],[1 3]),...
+                                  'Color','r',...
+                                  'Axis',ax(1)); 
         end
 
         % Plot tentative tracks
@@ -145,7 +148,10 @@ for k=2:N
             if j==2
                 set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
             end
-            h2 = plot_gaussian_ellipsoid(TentativeTrackList{j}.Filter.StatePosterior.Mean([1 3]), TentativeTrackList{j}.Filter.StatePosterior.Covar([1 3],[1 3]),'g',1,20,ax(1));
+            h2 = plotgaussellipse(TentativeTrackList{j}.Filter.StatePosterior.Mean([1 3]),...
+                                  TentativeTrackList{j}.Filter.StatePosterior.Covar([1 3],[1 3]),...
+                                  'Color','g',...
+                                  'Axis',ax(1));
         end
         
         % set the y-axis back to normal.

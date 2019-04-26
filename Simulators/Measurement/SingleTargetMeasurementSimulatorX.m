@@ -60,7 +60,11 @@ classdef SingleTargetMeasurementSimulatorX < MeasurementSimulatorX
                 timestamp = targetState.Timestamp;
                 
                 % Compute number of tracks and clutter measurements
-                detectionProbability = this.Model.Detection.pdf(targetState.Vector);
+                detectionProbability = 1;
+                if ~isempty(this.Model.Clutter)
+                    detectionProbability = this.Model.Detection.pdf(targetState.Vector);
+                end
+                    
                 targetDetected = binornd(1,detectionProbability);
                 numClutter = 0;
                 if ~isempty(this.Model.Clutter)

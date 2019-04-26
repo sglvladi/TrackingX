@@ -16,7 +16,7 @@ NumIter = size(TrueTrack.Trajectory,2);
 lambdaV = 5; % Expected number of clutter measurements over entire surveillance region
 V = 10^2;     % Volume of surveillance region (10x10 2D-grid)
 V_bounds = [0 10 0 10]; % [x_min x_max y_min y_max]
-P_D = 0.8; 
+P_D = 0.5; 
 
 % Instantiate a Transitionamic model
 transition_model = ConstantVelocityX('NumDims',2,'VelocityErrVariance',0.0001);
@@ -92,7 +92,9 @@ for t = 2:NumIter
     true_means = [TrueTrack.Trajectory(1:t).Vector];
     track_means = [track.Trajectory(1:t).Mean];
     plot(true_means(1,1:t), true_means(3,1:t),'.-k', track_means(1,1:t), track_means(3,1:t), 'b-', meas(1,:), meas(3,:), 'rx');
-    plot_gaussian_ellipsoid(track.Trajectory(t).Mean([1,3],1), track.Trajectory(t).Covar([1,3],[1,3]));
+    plotgaussellipse(track.Trajectory(t).Mean([1,3],1), ...
+                     track.Trajectory(t).Covar([1,3],[1,3]),...
+                     'Color','g');
     legend('GroundTrouth','Estimated Mean','Measurements', 'Estimated Covariance');
     xlabel("x coordinate (m)");
     ylabel("y coordinate (m)");

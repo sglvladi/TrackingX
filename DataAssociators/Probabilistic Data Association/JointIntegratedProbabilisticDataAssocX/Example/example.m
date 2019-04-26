@@ -44,7 +44,7 @@ config.ClutterModel = clutter_model;
 config.Clusterer = NaiveClustererX();
 config.Gater = EllipsoidalGaterX(2,'GateLevel',10)';
 config.DetectionModel = detection_model;
-pdaf = JointIntegratedProbabilisticDataAssocX(config);
+assocFilter = JointIntegratedProbabilisticDataAssocX(config);
 
 %% Metric Generator
 ospa = OSPAX('CutOffThreshold',1,'Order',1);
@@ -63,7 +63,7 @@ for i=1:NumTracks
     TrackList{i}.ExistenceProbability = 0.5;
 end
 
-pdaf.TrackList = TrackList;
+assocFilter.TrackList = TrackList;
 Logs.Pe = [];
 %% START OF SIMULATION
 %  ===================>
@@ -101,20 +101,20 @@ for k=2:N
     fprintf('Timestamp = %s\n================>\n',timestamp_k);
     
     %% Process JPDAF
-    pdaf.MeasurementList = MeasurementList;
-    pdaf.TrackList = TrackList;
-    pdaf.predictTracks();
-    pdaf.associate();    
-    pdaf.updateTracks();
+    assocFilter.MeasurementList = MeasurementList;
+    assocFilter.TrackList = TrackList;
+    assocFilter.predictTracks();
+    assocFilter.associate();    
+    assocFilter.updateTracks();
     
     %% Update target trajectories
-    for t = 1: numel(pdaf.TrackList)
-        pdaf.TrackList{t}.Trajectory(end+1) = pdaf.TrackList{t}.Filter.StatePosterior;
-        Logs.Pe(t,k) = pdaf.TrackList{t}.ExistenceProbability;
+    for t = 1: numel(assocFilter.TrackList)
+        assocFilter.TrackList{t}.Trajectory(end+1) = assocFilter.TrackList{t}.Filter.StatePosterior;
+        Logs.Pe(t,k) = assocFilter.TrackList{t}.ExistenceProbability;
     end
     
     %% Evaluate performance metric
-    [ospa_vals(k,1), ospa_vals(k,2), ospa_vals(k,3)]= ospa.evaluate(GroundTruthStateSequence{k},pdaf.TrackList);
+    [ospa_vals(k,1), ospa_vals(k,2), ospa_vals(k,3)]= ospa.evaluate(GroundTruthStateSequence{k},assocFilter.TrackList);
     
      %% Plot update step results
     if(ShowPlots)
@@ -131,11 +131,14 @@ for k=2:N
         data_plot = plot(ax(1), data_inv(1,:), data_inv(3,:),'k*','MarkerSize', 10);
 
         % Plot tracks
-        for j=1:numel(pdaf.TrackList)
-            means = [pdaf.TrackList{j}.Trajectory.Mean];
+        for j=1:numel(assocFilter.TrackList)
+            means = [assocFilter.TrackList{j}.Trajectory.Mean];
             h2 = plot(ax(1), means(1,:),means(3,:),'-','LineWidth',1);
-            h2 = plot_gaussian_ellipsoid(pdaf.TrackList{j}.Filter.StatePosterior.Mean([1 3]), pdaf.TrackList{j}.Filter.StatePosterior.Covar([1 3],[1 3]),'r',1,20,ax(1));
-            h2 = text(pdaf.TrackList{j}.Filter.StatePosterior.Mean(1),pdaf.TrackList{j}.Filter.StatePosterior.Mean(3), num2str(pdaf.TrackList{j}.ExistenceProbability));
+            h2 = plotgaussellipse(assocFilter.TrackList{j}.Filter.StatePosterior.Mean([1 3]),...
+                                  assocFilter.TrackList{j}.Filter.StatePosterior.Covar([1 3],[1 3]),...
+                                  'Color','r',...
+                                  'Axis',ax(1));
+            h2 = text(assocFilter.TrackList{j}.Filter.StatePosterior.Mean(1),assocFilter.TrackList{j}.Filter.StatePosterior.Mean(3), num2str(assocFilter.TrackList{j}.ExistenceProbability));
         end      
         % set the y-axis back to normal.
         str = sprintf('Target positions (Update)');

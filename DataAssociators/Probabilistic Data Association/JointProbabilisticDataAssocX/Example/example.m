@@ -1,7 +1,7 @@
 % This is a test/example script which demonstrates the usage of the 
-% JointProbabilisticDataAssocX class.
+% ProbabilisticDataAssociationX class.
 % =========================================================================>
-rng(1)
+
 %% Load the ground truth data
 load('multiple-robot-tracking.mat');
 
@@ -10,10 +10,10 @@ ShowPlots = 1;              % Set to 0 to hide plots
 numTrueTracks = 3;
 
 %% Model parameter shortcuts
-lambdaV = 10; % Expected number of clutter measurements over entire surveillance region
+lambdaV = 1; % Expected number of clutter measurements over entire surveillance region
 V = 10^2;     % Volume of surveillance region (10x10 2D-grid)
 V_bounds = [0 10 0 10]; % [x_min x_max y_min y_max]
-P_D = 0.9;    % Probability of detection
+P_D = 0.6;    % Probability of detection
 timestep_duration = duration(0,0,1);
 
 %% Models
@@ -35,20 +35,20 @@ model = StateSpaceModelX(transition_model,measurement_model,'Clutter',clutter_mo
 %% Generate DataList
 meas_simulator = MultiTargetMeasurementSimulatorX('Model',model);
 
-%DataList = meas_simulator.simulate(GroundTruthStateSequence);
+DataList = meas_simulator.simulate(GroundTruthStateSequence);
 N = numel(DataList);
 
 %% Base Filter
 obs_covar= measurement_model.covar();
 PriorState = GaussianStateX(zeros(4,1), transition_model.covar() + blkdiag(obs_covar(1,1), 0, obs_covar(2,2),0));
-base_filter = ParticleFilterX('Model', model, 'StatePrior', PriorState);
+base_filter = UnscentedKalmanFilterX('Model', model, 'StatePrior', PriorState);
 
 %% Data Associator
 config.ClutterModel = clutter_model;
 config.Clusterer = NaiveClustererX();
 config.Gater = EllipsoidalGaterX(2,'GateLevel',10)';
 config.DetectionModel = detection_model;
-pdaf = JointProbabilisticDataAssocX(config);
+assocFilter = JointProbabilisticDataAssocX(config);
 
 %% Metric Generator
 ospa = OSPAX('CutOffThreshold',1,'Order',1);
@@ -65,7 +65,7 @@ for i=1:NumTracks
     TrackList{i}.Filter = copy(base_filter);
     TrackList{i}.Filter.initialise('Model',model,'StatePrior',StatePrior);
 end
-pdaf.TrackList = TrackList;
+assocFilter.TrackList = TrackList;
 
 %% START OF SIMULATION
 %  ===================>
@@ -103,19 +103,19 @@ for k=2:N
     fprintf('Timestamp = %s\n================>\n',timestamp_k);
     
     %% Process JPDAF
-    pdaf.MeasurementList = MeasurementList;
-    pdaf.TrackList = TrackList;
-    pdaf.predictTracks();
-    pdaf.associate();    
-    pdaf.updateTracks();
+    assocFilter.MeasurementList = MeasurementList;
+    assocFilter.TrackList = TrackList;
+    assocFilter.predictTracks();
+    assocFilter.associate();    
+    assocFilter.updateTracks();
     
     %% Update target trajectories
-    for t = 1: numel(pdaf.TrackList)
-        pdaf.TrackList{t}.Trajectory(end+1) = pdaf.TrackList{t}.Filter.StatePosterior;
+    for t = 1: numel(assocFilter.TrackList)
+        assocFilter.TrackList{t}.Trajectory(end+1) = assocFilter.TrackList{t}.Filter.StatePosterior;
     end
     
     %% Evaluate performance metric
-    [ospa_vals(k,1), ospa_vals(k,2), ospa_vals(k,3)]= ospa.evaluate(GroundTruthStateSequence{k},pdaf.TrackList);
+    [ospa_vals(k,1), ospa_vals(k,2), ospa_vals(k,3)]= ospa.evaluate(GroundTruthStateSequence{k},assocFilter.TrackList);
     
      %% Plot update step results
     if(ShowPlots)
@@ -132,10 +132,13 @@ for k=2:N
         data_plot = plot(ax(1), data_inv(1,:), data_inv(3,:),'k*','MarkerSize', 10);
 
         % Plot tracks
-        for j=1:numel(pdaf.TrackList)
-            means = [pdaf.TrackList{j}.Trajectory.Mean];
+        for j=1:numel(assocFilter.TrackList)
+            means = [assocFilter.TrackList{j}.Trajectory.Mean];
             h2 = plot(ax(1), means(1,:),means(3,:),'-','LineWidth',1);
-            h2 = plot_gaussian_ellipsoid(pdaf.TrackList{j}.Filter.StatePosterior.Mean([1 3]), pdaf.TrackList{j}.Filter.StatePosterior.Covar([1 3],[1 3]),'r',1,20,ax(1)); 
+            h2 = plotgaussellipse(assocFilter.TrackList{j}.Filter.StatePosterior.Mean([1 3]),...
+                                  assocFilter.TrackList{j}.Filter.StatePosterior.Covar([1 3],[1 3]),...
+                                  'Color','r',...
+                                  'Axis',ax(1)); 
         end      
         % set the y-axis back to normal.
         str = sprintf('Target positions (Update)');

@@ -1,13 +1,13 @@
-function h = plot_gaussian_ellipsoid(m, C, lineStyle, sdwidth, npts, axh)
-% PLOT_GAUSSIAN_ELLIPSOIDS plots 2-d and 3-d Gaussian distributions
+function h = plotgaussellipse(m, C, varargin)
+% PLOTGAUSSELLIPSE plots 2-d and 3-d Gaussian distributions
 %
-% H = PLOT_GAUSSIAN_ELLIPSOIDS(M, C) plots the distribution specified by 
+% H = PLOTGAUSSELLIPSE(M, C) plots the distribution specified by 
 %  mean M and covariance C. The distribution is plotted as an ellipse (in 
 %  2-d) or an ellipsoid (in 3-d).  By default, the distributions are 
 %  plotted in the current axes. H is the graphics handle to the plotted 
 %  ellipse or ellipsoid.
 %
-% PLOT_GAUSSIAN_ELLIPSOIDS(M, C, SD) uses SD as the standard deviation 
+% PLOTGAUSSELLIPSE(M, C, SD) uses SD as the standard deviation 
 %  along the major and minor axes (larger SD => larger ellipse). By 
 %  default, SD = 1. Note: 
 %  * For 2-d distributions, SD=1.0 and SD=2.0 cover ~ 39% and 86% 
@@ -15,35 +15,35 @@ function h = plot_gaussian_ellipsoid(m, C, lineStyle, sdwidth, npts, axh)
 %  * For 3-d distributions, SD=1.0 and SD=2.0 cover ~ 19% and 73%
 %     of the total probability mass, respectively.
 %  
-% PLOT_GAUSSIAN_ELLIPSOIDS(M, C, SD, NPTS) plots the ellipse or 
+% PLOTGAUSSELLIPSE(M, C, SD, NPTS) plots the ellipse or 
 %  ellipsoid with a resolution of NPTS (ellipsoids are generated 
 %  on an NPTS x NPTS mesh; see SPHERE for more details). By
 %  default, NPTS = 50 for ellipses, and 20 for ellipsoids.
 %
-% PLOT_GAUSSIAN_ELLIPSOIDS(M, C, SD, NPTS, AX) adds the plot to the
+% PLOTGAUSSELLIPSE(M, C, SD, NPTS, AX) adds the plot to the
 %  axes specified by the axis handle AX.
 %
 % Examples: 
 % -------------------------------------------
 %  % Plot three 2-d Gaussians
 %  figure; 
-%  h1 = plot_gaussian_ellipsoid([1 1], [1 0.5; 0.5 1]);
-%  h2 = plot_gaussian_ellipsoid([2 1.5], [1 -0.7; -0.7 1]);
-%  h3 = plot_gaussian_ellipsoid([0 0], [1 0; 0 1]);
+%  h1 = plotgaussellipse([1 1], [1 0.5; 0.5 1]);
+%  h2 = plotgaussellipse([2 1.5], [1 -0.7; -0.7 1]);
+%  h3 = plotgaussellipse([0 0], [1 0; 0 1]);
 %  set(h2,'color','r'); 
 %  set(h3,'color','g');
 % 
 %  % "Contour map" of a 2-d Gaussian
 %  figure;
 %  for sd = [0.3:0.4:4],
-%    h = plot_gaussian_ellipsoid([0 0], [1 0.8; 0.8 1], sd);
+%    h = plotgaussellipse([0 0], [1 0.8; 0.8 1], sd);
 %  end
 %
 %  % Plot three 3-d Gaussians
 %  figure;
-%  h1 = plot_gaussian_ellipsoid([1 1  0], [1 0.5 0.2; 0.5 1 0.4; 0.2 0.4 1]);
-%  h2 = plot_gaussian_ellipsoid([1.5 1 .5], [1 -0.7 0.6; -0.7 1 0; 0.6 0 1]);
-%  h3 = plot_gaussian_ellipsoid([1 2 2], [0.5 0 0; 0 0.5 0; 0 0 0.5]);
+%  h1 = plotgaussellipse([1 1  0], [1 0.5 0.2; 0.5 1 0.4; 0.2 0.4 1]);
+%  h2 = plotgaussellipse([1.5 1 .5], [1 -0.7 0.6; -0.7 1 0; 0.6 0 1]);
+%  h3 = plotgaussellipse([1 2 2], [0.5 0 0; 0 0.5 0; 0 0 0.5]);
 %  set(h2,'facealpha',0.6);
 %  view(129,36); set(gca,'proj','perspective'); grid on; 
 %  grid on; axis equal; axis tight;
@@ -57,9 +57,17 @@ function h = plot_gaussian_ellipsoid(m, C, lineStyle, sdwidth, npts, axh)
 %    - NARGOUT==0 check added.
 %    - Help added on NPTS for ellipsoids
 
-if ~exist('sdwidth', 'var'), sdwidth = 1; end
-if ~exist('npts', 'var'), npts = []; end
-if ~exist('axh', 'var'), axh = gca; end
+parser = inputParser;
+parser.addOptional('NumStds',1);
+parser.addOptional('NumPoints',50);
+parser.addOptional('Color','r');
+parser.addOptional('Axis',gca);
+parser.parse(varargin{:});
+
+sdwidth = parser.Results.NumStds;
+npts = parser.Results.NumPoints;
+axh = parser.Results.Axis;
+colour = parser.Results.Color;
 
 if numel(m) ~= length(m), 
     error('M must be a vector'); 
@@ -78,7 +86,6 @@ switch numel(m)
         %-----------------------------
         % function h = show2d(means, C, sdwidth, npts, axh, lineStyle)
         means = m(:);
-        if isempty(npts), npts=50; end
         % plot the gaussian fits
         tt=linspace(0,2*pi,npts)';
         x = cos(tt); y=sin(tt);
@@ -86,12 +93,10 @@ switch numel(m)
         [v,d]=eig(C); 
         d = sdwidth * sqrt(d); % convert variance to sdwidth*sd
         bp = (v*d*ap) + repmat(means, 1, size(ap,2)); 
-        if(exist('lineStyle','var'))
-            h = plot(bp(1,:), bp(2,:), lineStyle, 'parent', axh, 'LineWidth',2);
-        else
-            h = plot(bp(1,:), bp(2,:), 'parent', axh, 'LineWidth',2);
-        end
-   case 3, h=show3d(m(:),C,sdwidth,npts,axh);
+        h = plot(bp(1,:), bp(2,:), 'Color', colour, 'parent', axh, 'LineWidth',2);
+
+   case 3
+       h=show3d(m(:),C,sdwidth,npts,axh);
    otherwise
       error('Unsupported dimensionality');
 end
