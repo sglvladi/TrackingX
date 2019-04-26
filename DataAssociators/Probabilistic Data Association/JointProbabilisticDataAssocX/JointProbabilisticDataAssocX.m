@@ -45,41 +45,12 @@ classdef JointProbabilisticDataAssocX < ProbabilisticDataAssocX
         %                       perform gating of measurements. Default = None
         % * Clusterer           (ClustererX) A clusterer object which should be used to  
         %                       perform clustering of tracks. Default = None
-        % * ProbOfDetect        (scalar) The target detection probability
+        % * DetectionProbability        (scalar) The target detection probability
+        % * ClutterDensity      (scalar) The spatial density of clutter
         %
         %  See also JointProbabilisticDataAssocX/associate, JointProbabilisticDataAssocX/updateTracks.   
                     
-            % First check to see if a structure was received
-            if(nargin==1)
-                if(isstruct(varargin{1}))
-                    config = varargin{1};
-                    if (isfield(config,'Gater'))
-                        this.Gater  = config.Gater;
-                    end
-                    if (isfield(config,'Clusterer'))
-                        this.Clusterer  = config.Clusterer;
-                    end
-                    if (isfield(config,'ProbOfDetect'))
-                        this.ProbOfDetect  = config.ProbOfDetect;
-                    end
-                end
-                return;
-            end
-            
-            % Otherwise, fall back to input parser
-            parser = inputParser;
-            parser.KeepUnmatched = true;
-            parser.parse(varargin{:});
-            config = parser.Results;
-            if (isfield(config,'Gater'))
-                this.Gater  = config.Gater;
-            end
-            if (isfield(config,'Clusterer'))
-                this.Clusterer  = config.Clusterer;
-            end
-            if (isfield(config,'ProbOfDetect'))
-                this.ProbOfDetect  = config.ProbOfDetect;
-            end
+            this@ProbabilisticDataAssocX(varargin{:});
         end
         
         function initialise(this,varargin)
@@ -100,37 +71,7 @@ classdef JointProbabilisticDataAssocX < ProbabilisticDataAssocX
         %
         %  See also JointProbabilisticDataAssocX/associate, JointProbabilisticDataAssocX/updateTracks.   
                     
-            % First check to see if a structure was received
-            if(nargin==1)
-                if(isstruct(varargin{1}))
-                    config = varargin{1};
-                    if (isfield(config,'Gater'))
-                        this.Gater  = config.Gater;
-                    end
-                    if (isfield(config,'Clusterer'))
-                        this.Clusterer  = config.Clusterer;
-                    end
-                    if (isfield(config,'ProbOfDetect'))
-                        this.ProbOfDetect  = config.ProbOfDetect;
-                    end
-                end
-                return;
-            end
-            
-            % Otherwise, fall back to input parser
-            parser = inputParser;
-            parser.KeepUnmatched = true;
-            parser.parse(varargin{:});
-            config = parser.Results;
-            if (isfield(config,'Gater'))
-                this.Gater  = config.Gater;
-            end
-            if (isfield(config,'Clusterer'))
-                this.Clusterer  = config.Clusterer;
-            end
-            if (isfield(config,'ProbOfDetect'))
-                this.ProbOfDetect  = config.ProbOfDetect;
-            end
+            initialise@ProbabilisticDataAssocX(this,varargin{:});
         end
         
         function associate(this,TrackList,MeasurementList)
@@ -158,118 +99,100 @@ classdef JointProbabilisticDataAssocX < ProbabilisticDataAssocX
                 case 3
                     associate@ProbabilisticDataAssocX(this,TrackList,MeasurementList);
             end
-        end
-        
-        function predictTracks(this)
-        % predictTracks - Performs JPDAF track prediction step
-        %   
-        % DESCRIPTION: 
-        % * predictTracks(jpda) performs JPDAF update on all tracks contained
-        %   in jpda.TrackList.
-        %
-        %   See also JointProbabilisticDataAssocX/initialise, JointProbabilisticDataAssocX/updateTracks.
-        
-            % Call super class method
-            predictTracks@ProbabilisticDataAssocX(this);
-        end
-        
-        function updateTracks(this)
-        % updateTracks - Performs JPDAF track update step
-        %   
-        % DESCRIPTION: 
-        % * updateTracks(jpda) performs JPDAF update on all tracks contained
-        %   in jpda.TrackList.
-        %
-        %   See also JointProbabilisticDataAssocX/initialise, JointProbabilisticDataAssocX/updateTracks.
-        
-            % Call super class method
-            updateTracks@ProbabilisticDataAssocX(this);
-        end
-        
+        end        
     end
     
     methods (Access = protected)
-        
-        function performGating(this)
-            % Call super class method
-            performGating@ProbabilisticDataAssocX(this);
-        end
-        
-        function computeLikelihoods(this)
-            % Call super class method
-            computeLikelihoods@ProbabilisticDataAssocX(this);
-        end
-        
+                
         function performClustering(this)
             % Use the defined this.Clusterer to perform clustering
-            if(isempty(this.Clusterer))
-                % Do nothing
-                return;
-            else
+            if(~isempty(this.Clusterer))
                 % Get all clusters
-                [this.ClusterList, this.UnassocTrackInds] = this.Clusterer.cluster(this.ValidationMatrix);
+                this.ClusterList = this.Clusterer.cluster(this.ValidationMatrix);
+            else
+                this.ClusterList(1).TrackIndList = 1:this.NumTracks;
+                this.ClusterList(1).MeasIndList = find(sum(this.ValidationMatrix,1));
             end
         end
         
         function evaluateAssociations(this)
-            if(sum(sum(this.ValidationMatrix))==0)
-                this.AssocLikelihoodMatrix = [ones(this.NumTracks,1) zeros(this.NumTracks,this.NumMeas)];
-                this.AssocWeightsMatrix = [ones(this.NumTracks,1) zeros(this.NumTracks,this.NumMeas)];
-                return;
-            else
-                if(isempty(this.Clusterer))
-                    % Compute New Track/False Alarm density for the cluster
-                    if(isempty(this.ClutterDensity))
-                        clutterDensity = sum(sum(this.ValidationMatrix))/sum(GateVolumes);
-                    else
-                        clutterDensity = this.ClutterDensity*sum(GateVolumes);
-                    end
-                    if(clutterDensity==0)
-                        clutterDensity = eps;
-                    end
-                    this.AssocLikelihoodMatrix = ...
-                        [ones(this.NumTracks,1)*clutterDensity*(1-this.ProbOfDetect*this.Gater.ProbOfGating), ...
-                         this.ProbOfDetect*this.Gater.ProbOfGating*this.LikelihoodMatrix];
-                    this.AssocWeightsMatrix = this.Hypothesiser.hypothesise(this.LikelihoodMatrix);
-                else
-                    % Get all clusters
-                    [this.ClusterList, this.UnassocTrackInds] = this.Clusterer.cluster(this.ValidationMatrix);
+            
+            numTracks = this.NumTracks;
+            numMeasurements = this.NumMeasurements;
+            
+            % Allocate memory for association likelihoods & weights 
+            % (Dummy measurement at index 1)
+            this.AssocLikelihoodMatrix = zeros(numTracks,numMeasurements+1);
+            this.AssocWeightsMatrix = zeros(numTracks,numMeasurements+1);
+                        
+            % Loop through all clusters
+            NumClusters = numel(this.ClusterList);
+            for clusterInd=1:NumClusters
+                % Create Hypothesis net for each cluster and 
+                % populate association weights matrix
 
-                    % Allocate memory for association weights and fill in weights for unassociated tracks
-                    this.AssocWeightsMatrix = zeros(this.NumTracks, this.NumMeas+1); % Dummy measurement weights at index 1
-                    this.AssocWeightsMatrix(this.UnassocTrackInds,1) = 1;
-
-                    % Create Hypothesis net for each cluster and populate association weights matrix
-                    NumClusters = numel(this.ClusterList);
-                    %this.NetList = cell(1,NumClusters);
-                    for clusterInd=1:NumClusters
-                        ObsIndList = this.ClusterList{clusterInd}.ObsIndList;
-                        TrackIndList = this.ClusterList{clusterInd}.TrackIndList;
-                        % Compute New Track/False Alarm density for the cluster
-                        this.ClusterList{clusterInd}.ClutterDensity = ...
-                            sum(sum(this.ValidationMatrix(TrackIndList,:)))...
-                            /sum(this.GateVolumes(TrackIndList));
-                        for t = 1:numel(TrackIndList)
-                            trackInd = TrackIndList(t);
-                            if(~isprop(this.TrackList{trackInd},'ClutterDensity'))
-                               this.TrackList{trackInd}.addprop('ClutterDensity');
-                            end
-                            this.TrackList{trackInd}.ClutterDensity = this.ClusterList{clusterInd}.ClutterDensity; 
-                        end
-                        if(this.ClusterList{clusterInd}.ClutterDensity==0)
-                            this.ClusterList{clusterInd}.ClutterDensity = 1;
-                        end
-                        this.ClusterList{clusterInd}.AssocLikelihoodMatrix = ...
-                            [ones(numel(TrackIndList),1)*this.ClusterList{clusterInd}.ClutterDensity*(1-this.ProbOfDetect*this.Gater.ProbOfGating), ...
-                            this.ProbOfDetect*this.Gater.ProbOfGating*this.LikelihoodMatrix(TrackIndList,ObsIndList)];
-                        this.AssocLikelihoodMatrix(TrackIndList,[1 ObsIndList+1]) = ...
-                            this.ClusterList{clusterInd}.AssocLikelihoodMatrix;
-                        this.ClusterList{clusterInd}.AssocWeightsMatrix =...
-                            this.Hypothesiser.hypothesise(this.ClusterList{clusterInd}.AssocLikelihoodMatrix);
-                        %this.ClusterList{clusterInd}.NetObj = this.Hypothesiser.NetObj;
-                        this.AssocWeightsMatrix(TrackIndList, [1 ObsIndList+1]) = this.ClusterList{clusterInd}.AssocWeightsMatrix;
-                    end               
+                % Extract track and measurement list for cluster
+                MeasIndList = this.ClusterList(clusterInd).MeasIndList;
+                TrackIndList = this.ClusterList(clusterInd).TrackIndList;
+                numClusterMeasurements = length(MeasIndList);
+                numClusterTracks = length(TrackIndList);
+                
+                % Compute gating probability
+                Pg = 1;
+                if(isa(this.Gater,'EllipsoidalGaterX'))
+                    Pg = this.Gater.GatingProbability;
                 end
+
+                if(numClusterMeasurements==0)
+                % If no measurements associated to cluster
+                    % Simply set all cluster tracks to be missed
+                    this.AssocLikelihoodMatrix(TrackIndList,:) = [1 zeros(1,numMeasurements)];
+                    this.AssocWeightsMatrix(TrackIndList,:) = [1 zeros(1,numMeasurements)];
+                    continue;
+                else
+                    
+                    % Pre-allocate memory
+                    this.ClusterList(clusterInd).AssocLikelihoodMatrix = ...
+                        zeros(numClusterTracks, numClusterMeasurements+1);
+                    this.ClusterList(clusterInd).AssocWeightsMatrix = ...
+                        zeros(numClusterTracks, numClusterMeasurements+1);
+
+                    % Compute New Track/False Alarm density for the cluster
+                    for t = 1:numClusterTracks
+                        trackInd = TrackIndList(t);
+
+                        % Compute detection probability
+                        Pd = 1;
+                        if(isa(this.DetectionModel, 'DetectionModelX'))
+                            Pd = this.DetectionModel.pdf(this.TrackList{trackInd}.Filter.StatePrediction.Mean);
+                        end
+
+                        % Compute clutter density per unit volume
+                        if(isempty(this.ClutterModel))
+                            lambda = numClusterMeasurements/sum(this.GateVolumes(TrackIndList));
+                        else
+                            lambda = this.ClutterModel.pdf(this.TrackList{trackInd}.Filter.MeasurementPrediction.Mean);
+                        end
+                        lambda(lambda==0) = eps; % Ensure lambda is non-zero
+
+                        % Construct cluster association likelihood matrix
+                        this.ClusterList(clusterInd).AssocLikelihoodMatrix(t,:) = ...
+                            [lambda*(1-Pd*Pg), Pd*Pg*this.LikelihoodMatrix(trackInd,MeasIndList)];
+                    end
+
+                    % Compute likelihood matrix
+                    this.AssocLikelihoodMatrix(TrackIndList,[1 MeasIndList+1]) = ...
+                        this.ClusterList(clusterInd).AssocLikelihoodMatrix;
+
+                    % Compute association weights
+                    this.ClusterList(clusterInd).AssocWeightsMatrix =...
+                        this.Hypothesiser.hypothesise(this.ClusterList(clusterInd).AssocLikelihoodMatrix);
+
+                    % Store cluster association weights in global
+                    % associatiopn weights matrix
+                    this.AssocWeightsMatrix(TrackIndList, [1 MeasIndList+1]) = ...
+                        this.ClusterList(clusterInd).AssocWeightsMatrix; %./sum(this.ClusterList(clusterInd).AssocWeightsMatrix,2);
+                end 
             end
         end
     end

@@ -6,11 +6,16 @@ SHOW_PREDICT = 0;
 NUM_SIMS = 10;
 V_BOUNDS = [0 25 0 15];
 
-% Instantiate a Dynamic model
-dyn = ConstantVelocityModelX_2D('VelocityErrVariance',0.0001);
+% Extract the ground truth data from the example workspace
+% load('example.mat');
+% x_true = truth(1,:);
+% y_true = truth(2,:);
+% Instantiate a Transitionamic model
+dyn = ConstantVelocityX('NumDims',2,'VelocityErrVariance',0.001);
 
 % Instantiate an Observation model
-obs = LinGaussObsModelX_2D('NumStateDims',4,'ObsErrVariance',0.2,'Mapping',[1 3]);
+%obs = LinearGaussianX('NumMeasDims',2,'NumStateDims',4,'MeasurementErrVariance',0.02,'Mapping',[1 3]);
+obs = RangeBearing2CartesianX('NumStateDims',4,'MeasurementErrVariance',[0.001,0.04],'Mapping',[1 3]);
 
 % Compile the State-Space model
 ssm = StateSpaceModelX(dyn,obs);
@@ -19,12 +24,12 @@ ssm = StateSpaceModelX(dyn,obs);
 FilterList = [];
 
 % Instantiate all filters
-FilterList{end+1} = KalmanFilterX(ssm);
-FilterList{end+1} = ExtendedKalmanFilterX(ssm);
-FilterList{end+1} = UnscentedKalmanFilterX(ssm);
-FilterList{end+1} = ParticleFilterX(ssm);
-FilterList{end+1} = ExtendedParticleFilterX(ssm);
-FilterList{end+1} = UnscentedParticleFilterX(ssm);
+%FilterList{end+1} = KalmanFilterX('Model',ssm);
+FilterList{end+1} = ExtendedKalmanFilterX('Model',ssm);
+FilterList{end+1} = UnscentedKalmanFilterX('Model',ssm);
+FilterList{end+1} = ParticleFilterX('Model',ssm);
+% FilterList{end+1} = ExtendedParticleFilterX(ssm);
+% FilterList{end+1} = UnscentedParticleFilterX(ssm);
 
 % Store the number of the filters we want to instantiate
 numFilters = numel(FilterList);
@@ -62,6 +67,7 @@ end
 
 for simIter = 1:NUM_SIMS
     
+    fprintf('Sim %d/%d', simIter, NUM_SIMS);
     
     measurementsCellArray = dataGen(obs,GroundTruth,1);
     % Generate ground truth and measurements
@@ -71,18 +77,20 @@ for simIter = 1:NUM_SIMS
         measurement(:,k) = measurementsCellArray{k}; 
     end
     
-    priorStateMean = [measurement(1,1); 0; measurement(2,1); 0];
-    measErrCovar = ssm.Obs.covariance();
-    stateErrCovar = ssm.Dyn.covariance();
-    priorStateCovar = stateErrCovar + blkdiag(measErrCovar(1,1),0,measErrCovar(2,2),0);
+    priorStateMean = obs.finv(measurement(:,1));
+    measErrCovar = ssm.Measurement.covar();
+    stateErrCovar = ssm.Transition.covar();
+    priorStateCovar = 10*stateErrCovar;%+ blkdiag(measErrCovar(1,1),0,measErrCovar(2,2),0);
+    
     
     % Reset all filters to prior
     for filterInd=1:numFilters
         if(isa(FilterList{filterInd},'KalmanFilterX'))
-            FilterList{filterInd}.initialise('PriorStateMean',priorStateMean,'PriorStateCov',priorStateCovar);
+            Prior.State = GaussianStateX(priorStateMean,priorStateCovar);
         elseif(isa(FilterList{i},'ParticleFilterX'))
-            FilterList{filterInd}.initialise('PriorDistFcn',@(N)deal(mvnrnd(priorStateMean(:,ones(1,N))',priorStateCovar)',1/N*ones(1,N)));
+            Prior.State = ParticleStateX(priorStateMean,priorStateCovar,5000);
         end
+        FilterList{filterInd}.initialise('Prior',Prior);
     end
     
     % START OF SIMULATION
@@ -91,7 +99,7 @@ for simIter = 1:NUM_SIMS
 
         % Update measurements
         for i=1:numFilters
-            FilterList{i}.Measurement = measurement(:,k);
+            FilterList{i}.MeasurementList = measurement(:,k);
         end
 
         % Iterate and time all filters
@@ -104,9 +112,9 @@ for simIter = 1:NUM_SIMS
 
         % Store Logs
         for i=1:numFilters
-            Logs{i}.stateMean(:,k,simIter) = FilterList{i}.StateMean;       
-            Logs{i}.stateCovar(:,:,k,simIter) = FilterList{i}.StateCovar;
-            Logs{i}.positionalError(1,k,simIter) = ((truth(1,k) - FilterList{i}.StateMean(1))^2 + (truth(2,k) - FilterList{i}.StateMean(3))^2);
+            Logs{i}.stateMean(:,k,simIter) = FilterList{i}.Posterior.State.Mean;       
+            Logs{i}.stateCovar(:,:,k,simIter) = FilterList{i}.Posterior.State.Covar;
+            Logs{i}.positionalError(1,k,simIter) = ((truth(1,k) - FilterList{i}.Posterior.State.Mean(1))^2 + (truth(2,k) - FilterList{i}.Posterior.State.Mean(3))^2);
         end
 
       % Plot update step results
@@ -121,7 +129,8 @@ for simIter = 1:NUM_SIMS
 
             % NOTE: if your image is RGB, you should use flipdim(img, 1) instead of flipud.
             hold on;
-            h2 = plot(ax(1),measurement(1,k),measurement(2,k),'k*','MarkerSize', 10);
+            meas = obs.finv(measurement(:,k));
+            h2 = plot(ax(1),meas(1),meas(3),'k*','MarkerSize', 10);
             set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off'); % Exclude line from legend
             h2 = plot(ax(1),truth(1,1:k),truth(2,1:k),'b.-','LineWidth',1);
             set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off'); % Exclude line from legend
@@ -135,8 +144,9 @@ for simIter = 1:NUM_SIMS
                 plot(Logs{i}.stateMean(1,1:k,simIter), Logs{i}.stateMean(3,1:k,simIter), '.-', 'MarkerSize', 10);
             end
             %legend('KF','UKF', 'PF', 'UPF')
-            legend('KF','EKF', 'UKF', 'PF', 'EPF', 'UPF')
-
+            %legend('KF','EKF', 'UKF', 'PF');%, 'EPF', 'UPF')
+            legend('EKF', 'UKF', 'PF');
+            
             if(SHOW_ARENA)
                 % set the y-axis back to normal.
                 set(ax(1),'ydir','normal');
@@ -158,12 +168,15 @@ for i=1:numFilters
     hold on;
     plot(sqrt(sum(Logs{i}.positionalError,3)/NUM_SIMS), '.-');
 end
-legend('KF','EKF', 'UKF', 'PF', 'EPF', 'UPF');
+%legend('KF','EKF', 'UKF', 'PF');%, 'EPF', 'UPF');
+legend('EKF', 'UKF', 'PF');%, 'EPF', 'UPF');
 
 figure
 bars = zeros(1, numFilters);
-c = {'KF','EKF', 'UKF', 'PF', 'EPF', 'UPF'};
-c = categorical(c, {'KF','EKF', 'UKF', 'PF', 'EPF', 'UPF'},'Ordinal',true); 
+% c = {'KF','EKF', 'UKF', 'PF'};%, 'EPF', 'UPF'};
+% c = categorical(c, {'KF','EKF', 'UKF', 'PF'},'Ordinal',true); %, 'EPF', 'UPF'
+c = {'EKF', 'UKF', 'PF'};%, 'EPF', 'UPF'};
+c = categorical(c, {'EKF', 'UKF', 'PF'},'Ordinal',true); %, 'EPF', 'UPF'
 for i=1:numFilters
     bars(i) =  mean(Logs{i}.execTime,2);
 end

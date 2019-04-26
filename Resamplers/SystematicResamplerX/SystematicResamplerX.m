@@ -27,7 +27,8 @@ classdef SystematicResamplerX < ResamplerX & matlabshared.tracking.internal.Syst
         % See also SystematicResamplerX/resample
             
         end
-        
+   end 
+   methods   
         function [newSamples, newWeights, idx] = resample(this, samples, weights, Nnew)
         % RESAMPLE Perform systematic resampling
         %   
@@ -67,7 +68,11 @@ classdef SystematicResamplerX < ResamplerX & matlabshared.tracking.internal.Syst
                 Nnew = N;
             end
             
-            idx = resample@matlabshared.tracking.internal.SystematicResampler(this,weights,Nnew);
+            try
+                idx = resample@matlabshared.tracking.internal.SystematicResampler(this,weights,Nnew);
+            catch
+                a= 2;
+            end
             newSamples = samples(:,idx);           
             newWeights = repmat(1/Nnew, 1, Nnew); 
         end

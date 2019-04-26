@@ -109,7 +109,7 @@ classdef EfficientHypothesisManagementX < HypothesiserX
             [this.NetObj, timedOut] = this.buildNetTO(ValidationMatrix, this.timeout);
             if(timedOut)
                 [NumTracks, NumMeasp1] = size(this.LikelihoodMatrix);
-                AssocWeightsMatrix = [ones(NumTracks,1); zeros(NumTracks,NumMeasp1-1)];
+                AssocWeightsMatrix = [ones(NumTracks,1), zeros(NumTracks,NumMeasp1-1)];
                 this.AssocWeightsMatrix = AssocWeightsMatrix;
             else
                 [AssocWeightsMatrix, this.NetObj] = this.computeAssocWeights(this.NetObj,this.LikelihoodMatrix);
@@ -442,19 +442,22 @@ classdef EfficientHypothesisManagementX < HypothesiserX
             % Compute betta
             betta = zeros(TrackNum, PointNum);
             for TrackInd = 1:TrackNum
-                for MeasInd = 1:PointNum
-                    % Get index list L_j of nodes in current measurement layer (TrackInd)
-                    L_j_Ind = find(cell2mat(cellfun(@(sas)sas.TrackInd, NetObj.NodeList, 'uni', false ))==TrackInd);
-                    for j = 1:size(L_j_Ind, 2)
-                        NodeInd = L_j_Ind(j);
-                        betta(TrackInd, MeasInd) = betta(TrackInd, MeasInd) + p_T(MeasInd,NodeInd);
-                    end
+                % Get index list L_j of nodes in current Track layer (TrackInd)
+                L_j_Ind = cell2mat(cellfun(@(sas)sas.TrackInd, NetObj.NodeList, 'uni', false ))==TrackInd;
+                
+                for MeasInd = 1:PointNum    
+                    % Compute betta(j,i)
+                    betta(TrackInd, MeasInd) = sum(p_T(MeasInd,L_j_Ind),2);
                 end
             end
 
             % Normalise
             for j = 1:TrackNum
                 betta(j,:) = betta(j,:)/sum(betta(j,:),2);
+            end
+            
+            if any(isnan(betta))
+                
             end
 
             NetObj.betta = betta;

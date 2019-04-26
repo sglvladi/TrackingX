@@ -2,13 +2,14 @@ classdef TrackX < BaseX & dynamicprops
 % TrackX class
 %
 % Summary of TrackX:
-% This is a class implementation of a target object. TrackX objects can be 
-% used to store the trajectories, as well as other relevant information, of 
-% targets when developing/implementing MTT algorithms within TrackingX. 
+% This is a class implementation of a Track object. TrackX objects can be 
+% used to store the trajectories, as well as other relevant information  
+% about targets. 
 %
 % TrackX Properties:
-%   - Trajectory = A (xDim x N) matrix representing the trajectory of a 
-%     target 
+%  + Trajectory - A (1 x N) StateX array representing the trajectory of a 
+%    target.
+%  + Tag - A TagX identifier object
 %
 % Notes:
 % * TrackX is derived from the dynamicprops MATLAB class, meaning that
@@ -22,56 +23,96 @@ classdef TrackX < BaseX & dynamicprops
 %
 % January 2018 Lyudmil Vladimirov, University of Liverpool.
     
+    properties (Dependent)
+        State
+        TimeOfLastUpdate
+        TimeOfInitiation
+    end
+
     properties
+        Tag
         Trajectory
     end
     
     methods
         function this = TrackX(varargin)
-        % TARGETX Constructor method
+        % TrackX Constructor method
+        %
+        % Parameters
+        % ----------
+        % Trajectory: (1 x N) array of StateX objects
+        %   A sequence of (timestamped) State objects
+        % Tag: TagX
+        %   A (unique) track identifier
+        %
+        % Description
+        % -----------
+        %   TrackX() returns an unconfigured/placeholder TrackX object.
         %   
-        % DESCRIPTION: 
-        % * t = TrackX() returns an unconfigured object handle.
-        % * t = TrackX(traj) returns an object handle, who's "Trajectory"
-        %   property contains the trajectory stored in the matrix traj.
-        %   traj should be a (xDim x N) matrix, where xDim denotes the
-        %   number of state dimensions and N denotes the length of the
-        %   trajectory.
-        % * t = TrackX(___,Name,Value,___) returns an object handle, with
-        %   properties created for each Name,Value pair arguments. Since the 
-        %   "Trajectory" property already exists by default, any Value
-        %   passed to the constructor will be stored within the property.
-        % * t = TrackX(config) returns an object handle, with
-        %   properties created for each field of the config structure,
-        %   using the field name as the name of the property and the field
-        %   value as the value to be stored within that property. Since the 
-        %   "Trajectory" property already exists by default, any Value
-        %   passed to the constructor under "config.Trajectory" will be 
-        %   stored within the property.
+        %   TrackX(T) returns a TrackX object, where T can either be a StateX
+        %   array, i.e. a Trajectory, or a TagX object.
+        %
+        %   TrackX(T,t) returns a TrackX object where T is a trajectory 
+        %   and t is a tag/identifier.
+        %
+        %   TrackX(Name,Value,...) where parameters are supplied in the form
+        %   of (Name,Value) argument pairs. If the constructor comes across 
+        %   any arguments whose Name do not match an existing class property, 
+        %   then new (public) properties will be created for the new object.  
+        %
+        %   TrackX(S) where S is a structure with appropriately set fields.
+        %   Any fieldnames that cannot be matched to existing class properties
+        %   will result in new properties being declared for the object.
         %
         %  See also addprop  
             
-            if(nargin==0)
-                return;
-            end
-            
-            % First check to see if a structure was received
-            if(nargin==1)
-                if(isstruct(varargin{1}))
-                    config = varargin{1};
-                    fields = fieldnames(config);
-                    for i = 1:numel(fields)
-                        fieldname = fields{i};
-                        if(strcmp(fieldname,"Trajectory"))
-                            this.Trajectory = config.(fieldname);
-                        continue;
-                        end
-                        p = this.addprop(fieldname);
-                        p.NonCopyable = false;
-                        this.(fieldname) = config.(fieldname);
+            switch(nargin)
+                case 0
+                    return;
+                case 1
+                    switch(class(varargin{1}))
+                    % 
+                        case 'cell'
+                            fields = varargin{1};
+                            for field = fields
+                                if ~isprop(this,field{:})
+                                    p = this.addprop(field{:});
+                                    p.NonCopyable = false;
+                                end
+                            end
+                        case 'struct'
+                            config = varargin{1};
+                            fields = fieldnames(config);
+                            for i = 1:numel(fields)
+                                fieldname = fields{i};
+                                switch(fieldname)
+                                    case("Trajectory")
+                                        this.Trajectory = config.(fieldname);
+                                    case('Tag')
+                                        this.Tag = config.(fieldname);
+                                    otherwise
+                                        if ~isprop(this,fieldname)
+                                            p = this.addprop(fieldname);
+                                            p.NonCopyable = false;
+                                            this.(fieldname) = config.(fieldname);
+                                        end
+                                end
+                            end
+                        otherwise
+                            if isa(varargin{1},'StateX')
+                                this.Trajectory = varargin{1};
+                            elseif isa(varargin{1},'TagX')
+                                this.Tag = varargin{1};
+                            end
+                            return;
                     end
-                end
-                return;
+                    return;
+                case 2
+                    if isa(varargin{1},'StateX')
+                        this.Trajectory = varargin{1};
+                        this.Tag = varargin{2};
+                        return;
+                    end
             end
             
             % Otherwise, fall back to input parser
@@ -82,14 +123,35 @@ classdef TrackX < BaseX & dynamicprops
             fields = fieldnames(config);
             for i = 1:numel(fields)
                 fieldname = fields{i};
-                if(strcmp(fieldname,"Trajectory"))
-                    this.Trajectory = config.(fieldname);
-                continue;
+                switch(fieldname)
+                    case("Trajectory")
+                        this.Trajectory = config.(fieldname);
+                    case('Tag')
+                        this.Tag = config.(fieldname);
+                    otherwise
+                        if ~isprop(this,fieldname)
+                            p = this.addprop(fieldname);
+                            p.NonCopyable = false;
+                            this.(fieldname) = config.(fieldname);
+                        end
                 end
-                p = this.addprop(fieldname);
-                p.NonCopyable = false;
-                this.(fieldname) = config.(fieldname);
             end
+        end
+        
+        
+        function state = get.State(this)
+        % get.State - Getter for dependent State property
+            state = this.Trajectory(end);
+        end
+        
+        function toi = get.TimeOfInitiation(this)
+        % get.TimeOfInitiation - Getter for dependent TimeOfInitiation property
+            toi = this.Trajectory(1).Timestamp;
+        end
+        
+        function lupd = get.TimeOfLastUpdate(this)
+        % get.TimeOfLastUpdate - Getter for dependent TimeOfLastUpdate property
+            lupd = this.Trajectory(end).Timestamp;
         end
     end
 end

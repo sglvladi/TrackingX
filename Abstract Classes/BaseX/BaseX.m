@@ -26,7 +26,12 @@ classdef (Abstract) BaseX < matlab.mixin.Copyable & matlab.mixin.SetGetExactName
                     if(isa(tmp,'handle')) 
                         cp.(props{i}) = copy(tmp); 
                     else
-                        cp.(props{i}) = tmp ; 
+                        if(~isprop(cp,props{i}) && isa(cp,'dynamicprops'))
+                            cp.addprop(props{i});
+                        end
+                        if(~isempty(tmp))
+                            cp.(props{i}) = tmp;
+                        end
                     end 
                 end
             end  

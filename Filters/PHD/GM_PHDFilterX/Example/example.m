@@ -8,52 +8,77 @@
 %  * The "gen_obs_cluttered_multi3" function takes as an input the ground truth data, including information about the measurement noise and clutter rate
 %     and then produces 1xNk cell array of corrupted and cluttered measurements, Nk being the total number of timesteps
 
-load('example.mat');
-tot_elapsed = 0;
+
+% Load the ground truth data
+load('multiple-robot-tracking.mat');
+
 % Plot settings
-ShowPlots = 1;              % Set to 0 to hide plots
+ShowPlots = 0;              % Set to 0 to hide plots
 ShowPrediction = 0;         % Set to 0 to skip showing prediction
 ShowUpdate = 1;             % Set to 0 to skip showing update
-TrackNum = size(x_true,2);
 
-tot_ellapsed = 0;
-
-% Instantiate a Dynamic model
-dyn = ConstantVelocityModelX_2D('VelocityErrVariance',0.0001);
-
-% Instantiate an Observation model
-obs = LinGaussObsModelX_2D('NumStateDims',4,'ObsErrVariance',0.04,'Mapping',[1 3]);
-
-% Compile the State-Space model
-ssm = StateSpaceModelX(dyn,obs);
-
-% n_x = 4;      % state dimensions
-% q = 0.01;     % std of process noise 
-% n_y = 2;      % measurement dimensions
-% r = 0.1;      % std of measurement noise
-lambdaV = 10; % Expected number of clutter measurements over entire surveillance region
+lambdaV = 50; % Expected number of clutter measurements over entire surveillance region
 V = 10^2;     % Volume of surveillance region (10x10 2D-grid)
 V_bounds = [0 10 0 10]; % [x_min x_max y_min y_max]
+P_D = 0.9;
 
-% Generate observations (Poisson number with rate of lambdaV, positions are uniform over surveillance region)
-[DataList,x1,y1] = gen_obs_cluttered_multi3(TrackNum, x_true, y_true, 0.2, lambdaV, 1); 
-N=size(DataList,2); % timesteps 
+% Instantiate a Transitionamic model
+transition_model = ConstantVelocityX('NumDims',2,'VelocityErrVariance',0.0001);
+
+% Instantiate a Measurement model
+measurement_model = LinearGaussianX('NumMeasDims',2,'NumStateDims',4,'MeasurementErrVariance',0.01,'Mapping',[1 3]);
+%measurement_model = RangeBearing2CartesianX('NumStateDims',4,'MeasurementErrVariance',[0.001,0.02],'Mapping',[1 3]);
+
+% Instantiate a clutter model
+clutter_model = PoissonRateUniformPositionX('ClutterRate',lambdaV,'Limits',[V_bounds(1:2);V_bounds(3:4)]);
+
+% Instantiate detection model                                       
+detection_model = ConstantDetectionProbabilityX('DetectionProbability',P_D);
+
+% Instantiate birth model
+numBirthComponents = 9;
+%numBirthComponents = round(sqrt(numBirthComponents))^2; % Adjust to the nearest square-rootable number
+
+x_birth = linspace(V_bounds(1), V_bounds(2), sqrt(numBirthComponents));
+y_birth = linspace(V_bounds(4), V_bounds(3), sqrt(numBirthComponents));
+[X,Y] = meshgrid(x_birth, y_birth);
+X = reshape(X, [1,numel(X)]);
+Y = reshape(Y, [1,numel(Y)]);
+BirthComponents.Means = [X;
+                         mvnrnd(zeros(numel(X),1), 0.5)';
+                         Y;
+                         mvnrnd(zeros(numel(Y),1), 0.5)'];
+BirthComponents.Covars = repmat(diag([5 1 5 1]),1,1,numBirthComponents);
+BirthComponents.Weights = 0.01*ones(1,numBirthComponents);
+birth_distribution = GaussianMixtureX(BirthComponents.Means,BirthComponents.Covars, BirthComponents.Weights);
+birth_model = DistributionBasedBirthModelX('Distribution', birth_distribution,...
+                                           'BirthIntensity', 0.000001);
+% Compile the State-Space model
+ssm = StateSpaceModelX(transition_model,...
+                       measurement_model,...
+                       'Clutter',clutter_model,...
+                       'Birth', birth_model,...
+                       'Detection', detection_model);
+                   
+% Extract the ground truth data from the example workspace
+load('example.mat');
+NumIter = size(GroundTruth,2);
+
+% Set BirthIntensity
+NumTracks = 3;
+
+% Generate DataList
+meas_simulator = MultiTargetMeasurementSimulatorX('Model',ssm);
+DataList = meas_simulator.simulate(GroundTruthStateSequence);
 
 % Assign PHD parameter values
 config.Model = ssm;
-q = dyn.covariance();
-BirthComponents.Means = [(V_bounds(2)-V_bounds(1))*rand(50,1), mvnrnd(zeros(50,1), 0.05'),(V_bounds(4)-V_bounds(3))*rand(50,1),mvnrnd(zeros(50,1), 0.05')]';
-BirthComponents.Covars = repmat(10*q,1,1,50);
-BirthComponents.Weights = 0.001*ones(1,50);
-config.PriorComponents.Means = [];
-config.PriorComponents.Covars = [];
-config.PriorComponents.Weights = [];
-config.BirthIntFcn = BirthComponents; % Uniform position and heading, Gaussian speed
-config.ProbOfDeath = 0.005;
-config.ProbOfDetection = 0.9;
-config.ProbOfGating = 0.9;
-config.ClutterRate = lambdaV/V;
-config.Filter = UnscentedKalmanFilterX(ssm);
+[priorParticles, priorWeights] = ssm.Birth.random(50000);
+config.Filter = KalmanFilterX('Model',ssm);
+config.StatePrior = GaussianMixtureStateX(birth_distribution);
+config.StatePrior.Weights = config.StatePrior.Weights*100;
+config.SurvivalProbability = 0.99;
+config.DetectionProbability = P_D; 
 
 % Instantiate PHD filter
 myphd = GM_PHDFilterX(config);
@@ -81,31 +106,22 @@ end
 
 % START OF SIMULATION
 % ===================>
-for k=1:N
-    fprintf('Iteration = %d/%d\n================>\n',k,N);
+for k=1:NumIter
+    fprintf('Iteration = %d/%d\n================>\n',k,NumIter);
     
     % Extract DataList at time k
-    tempDataList = DataList{k}(:,:);
-    tempDataList( :, ~any(tempDataList,1) ) = [];       
+    tempDataList = DataList(k);     
     
     % Change PHD filter parameters
     myphd.MeasurementList = tempDataList; % New observations
-    BirthComponents.Means = [(V_bounds(2)-V_bounds(1))*rand(50,1), mvnrnd(zeros(50,1), 0.05'),(V_bounds(4)-V_bounds(3))*rand(50,1),mvnrnd(zeros(50,1), 0.05')]';
-    BirthComponents.Covars = repmat(10*q,1,1,50);
-    BirthComponents.Weights = 0.001*ones(1,50);
-    myphd.BirthIntFcn = BirthComponents; % New birth components
-
-    tic;
+    
     % Predict PHD filter
     myphd.predict();
-            
+        
     % Update PHD filter
     myphd.update();
     
-    ellapsed = toc;
-    tot_ellapsed = tot_ellapsed + ellapsed;
-    fprintf("Estimated number of targets: %f\n", myphd.NumTargets);
-    fprintf("Ellapsed time: %f\n\n", ellapsed);
+    fprintf("Estimated number of targets: %f\n", sum(myphd.StatePosterior.Weights));
     % Plot update step results
     if(ShowPlots && ShowUpdate)
         % Plot data
@@ -115,15 +131,12 @@ for k=1:N
 
         % NOTE: if your image is RGB, you should use flipdim(img, 1) instead of flipud.
         hold on;
-        h2 = plot(ax(1), DataList{k}(1,:),DataList{k}(2,:),'k*','MarkerSize', 10);
-        for j=1:TrackNum
+        h2 = plot(ax(1), DataList(k).Vectors(1,:),DataList(k).Vectors(2,:),'k*','MarkerSize', 10);
+        for j=1:NumTracks
             h2 = plot(ax(1), x_true(1:k,j),y_true(1:k,j),'b.-','LineWidth',1);
-            if j==2
-                set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
-            end
             h2 = plot(ax(1), x_true(k,j),y_true(k,j),'bo','MarkerSize', 10);
-            set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off'); % Exclude line from legend
         end
+        
         % set the y-axis back to normal.
         set(ax(1),'ydir','normal');
         str = sprintf('Robot positions (Update)');
@@ -135,9 +148,9 @@ for k=1:N
         % Plot PHD
         particles = zeros(2,0);
         numParticles = 10000;
-        for i=1:myphd.NumComponents
-            numParts = round(myphd.Components.Weights(i)/sum(myphd.Components.Weights)*numParticles);
-            particles = [particles, mvnrnd(myphd.Components.Means([1,3],i)',myphd.Components.Covars([1,3],[1,3],i)',numParts)'];
+        for i=1:myphd.StatePosterior.NumComponents
+            numParts = round(myphd.StatePosterior.Weights(i)/sum(myphd.StatePosterior.Weights)*numParticles);
+            particles = [particles, mvnrnd(myphd.StatePosterior.Means([1,3],i)',myphd.StatePosterior.Covars([1,3],[1,3],i)',numParts)'];
         end
         %gm = gmdistribution(myphd.Components.Means([1,3],:)',myphd.Components.Covars([1,3],[1,3],:),myphd.Components.Weights/sum(myphd.Components.Weights));
         cla(ax(2), 'reset');
@@ -152,7 +165,7 @@ for k=1:N
         hold on;
         plot(ax(2), particles(1,:), particles(2,:), '.')
         hold on;
-        plot(ax(2), myphd.MeasurementList(1,:), myphd.MeasurementList(2,:), 'y*');
+        plot(ax(2), myphd.MeasurementList.Vectors(1,:), myphd.MeasurementList.Vectors(2,:), 'y*');
         axis(ax(2), [V_bounds]);
         str = sprintf('PHD intensity (Update)');
         xlabel(ax(2),'X position (m)')

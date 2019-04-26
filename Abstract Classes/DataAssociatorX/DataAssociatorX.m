@@ -24,9 +24,9 @@ classdef (Abstract) DataAssociatorX < BaseX
     properties
         TrackList
         MeasurementList
-        Gater = []
-        Hypothesiser = []
-        Clusterer = [] 
+        Gater
+        Hypothesiser
+        Clusterer
     end
     
     methods (Abstract, Access = protected)

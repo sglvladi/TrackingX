@@ -6,15 +6,11 @@ classdef ParticleFilterX < FilterX
 %
 % ParticleFilterX Properties: (*)
 %   + NumParticles - The number of particles employed by the Particle Filter
-%   + Particles - A (NumStateDims x NumParticles) matrix used to store 
-%                       the last computed/set filtered particles  
-%   + Weights - A (1 x NumParticles) vector used to store the weights
-%                       of the last computed/set filtered particles
-%   + PredParticles - A (NumStateDims x NumParticles) matrix used to store 
-%                       the last computed/set predicted particles  
-%   + PredWeights - A (1 x NumParticles) vector used to store the weights
-%                   of the last computed/set predicted particles
-%   + Measurement - A (NumObsDims x 1) matrix used to store the received measurement
+%   + StatePrior - A structure used to store the state prior
+%   + StatePrediction - A structure used to store the state prediction
+%   + MeasurementPrediction - A structure used to store the measurement prediction
+%   + StatePosterior - A structure used to store posterior information  
+%   + MeasurementList - A (yDim x 1) matrix used to store the received measurement
 %   + ControlInput - A (NumCtrDims x 1) matrix used to store the last received 
 %                    control input
 %   + ResamplingScheme - Method used for particle resampling, specified as 
@@ -34,24 +30,10 @@ classdef ParticleFilterX < FilterX
 %                 Resampler is provided, then it will override any choice
 %                 specified within the ResamplingScheme. ResamplingPolicy
 %                 will not be affected.
-%   ¬ StateMean - A (NumStateDims x 1) vector used to store the last 
-%                 computed filtered state mean.  
-%   ¬ StateCovar - A (NumStateDims x NumStateDims) matrix used to store
-%                  the last computed filtered state covariance
-%   ¬ PredStateMean - A (NumStateDims x 1) vector used to store the last 
-%                     computed prediicted state mean  
-%   ¬ PredStateCovar - A (NumStateDims x NumStateDims) matrix used to store
-%                      the last computed/set predicted state covariance
-%   ¬ PredMeasMean - A (NumObsDims x 1) vector used to store the last 
-%                    computed predicted measurement mean
-%   ¬ InnovErrCovar - A (NumObsDims x NumObsDims) matrix used to store the
-%                     last computed innovation error covariance
-%   ¬ CrossCovar - A (NumStateDims x NumObsDims) matrix used to store 
-%                  the last computed cross-covariance Cov(X,Y)  
 %   + Model - An object handle to StateSpaceModelX object
-%       + Dyn - Object handle to DynamicModelX SubClass      
-%       + Obs - Object handle to ObservationModelX SubClass 
-%       + Ctr - Object handle to ControlModelX SubClass    
+%       + Transition (*)  = Object handle to TransitionModelX SubClass      
+%       + Measurement (*)  = Object handle to MeasurementModelX SubClass 
+%       + Control (*)  = Object handle to ControlModelX SubClass   
 %
 %   (*) NumStateDims, NumObsDims and NumCtrDims denote the dimentionality of 
 %       the state, measurement and control vectors respectively.
@@ -68,61 +50,153 @@ classdef ParticleFilterX < FilterX
 %     particle filters for online nonlinear/non-Gaussian Bayesian tracking,"
 %     in IEEE Transactions on Signal Processing, vol. 50, no. 2, pp. 174-188, Feb 2002.
 % 
-% See also DynamicModelX, ObservationModelX and ControlModelX template classes
+% See also TransitionModelX, MeasurementModelX and ControlModelX template classes
+    
+    properties (Dependent)
+        NumParticles
+        MeasurementPrediction
+        MeasurementLikelihoods
+        MeasurementLikelihoodsPerParticle
+    end
+    
     properties
-        NumParticles = 1000
-        Particles
-        Weights
-        PredParticles
-        PredWeights
+        StatePrior
+        StatePrediction
+        StatePosterior
         ControlInput
         ResamplingScheme = 'Systematic'
         ResamplingPolicy = {'TimeInterval',1}
         Resampler = SystematicResamplerX();
-        PriorDistFcn
     end
     
     properties (Access=protected)
-        pmeasLikelihood_ = []
+        MeasurementLikelihoods_ = [];
+        MeasurementLikelihoodsPerParticle_ = [];
+        MeasurementPrediction_ = [];
+        NumParticles_ = 1000;
     end
     
-    properties (Dependent)
-        StateMean
-        StateCovar
-        PredStateMean
-        PredStateCovar
-        PredMeasMean
-        InnovErrCovar
-        CrossCovar
-        MeasLikelihood
+    methods (Access = protected)
+        function initialise_(this, config)
+            initialise_@FilterX(this,config);
+            if (isfield(config,'StatePrior'))
+                this.StatePrior = config.StatePrior;
+                this.StatePosterior = this.StatePrior;
+            end
+            if (isfield(config,'ResamplingScheme'))
+                this.ResamplingScheme = config.ResamplingScheme;
+            end
+            if (isfield(config,'ResamplingPolicy'))
+                this.ResamplingPolicy = config.ResamplingPolicy;
+            end
+            if (isfield(config,'Resampler'))
+                this.Resampler = config.Resampler;
+            end
+        end
+        
+        
+        % ===============================>
+        % ACCESS METHOD HANDLES
+        % ===============================>
+        
+        % MeasurementList
+        function measurementList = setMeasurementList(this, newMeasurementList)
+            measurementList = newMeasurementList;
+            this.MeasurementLikelihoodsPerParticle_ = [];
+            this.MeasurementLikelihoods_ = [];
+        end
+        
+        % StatePrior
+        function StatePrior = setStatePrior(this,newStatePrior)
+            if(isa(newStatePrior,'ParticleStateX'))
+                this.NumParticles_ = newStatePrior.NumParticles;
+            end
+            StatePrior = newStatePrior;
+        end
+        
+        % State Prediction
+        function StatePrediction = setStatePrediction(this,newStatePrediction)
+            if(isa(newStatePrediction,'ParticleStateX'))
+                StatePrediction = newStatePrediction;
+            else
+                particles = newStatePrediction.Distribution.random(this.NumParticles_);
+                weights = repmat(1/this.NumParticles_,1,this.NumParticles_);
+                StatePrediction = ParticleStateX(particles,weights);
+            end
+            this.MeasurementPrediction_ = []; % Reset dependent measurement prediction
+            this.MeasurementLikelihoods_ = [];
+            this.MeasurementLikelihoodsPerParticle_ = [];
+        end
+        
+        % Measurement Prediction
+        function MeasurementPrediction = getMeasurementPrediction(this)
+            if(isempty(this.MeasurementPrediction_))
+                this.MeasurementPrediction_ =  ...
+                    ParticleStateX(this.Model.Measurement.feval(this.StatePrediction.Particles,true),...
+                                   this.StatePrediction.Weights);
+            end
+            MeasurementPrediction = this.MeasurementPrediction_;
+        end
+        function MeasurementPrediction = setMeasurementPrediction(this,newMeasurementPrediction)
+            if(isa(newMeasurementPrediction,'ParticleStateX'))
+                MeasurementPrediction = newMeasurementPrediction;
+            else
+                particles = newMeasurementPrediction.Distribution.random(this.NumParticles_);
+                weights = repmat(1/this.NumParticles_,1,this.NumParticles_);
+                MeasurementPrediction = ParticleStateX(particles,weights);
+            end
+            this.MeasurementLikelihood_ = [];
+        end
+        
+        % MeasurementLikelihoods
+        function MeasurementLikelihoods = getMeasurementLikelihoods(this)
+            if(isempty(this.MeasurementLikelihoods_))
+                this.MeasurementLikelihoods_ = mean(this.getMeasurementLikelihoodsPerParticle(),2)';
+            end
+            MeasurementLikelihoods = this.MeasurementLikelihoods_;
+        end
+        function MeasurementLikelihoods = setMeasurementLikelihoods(this, newMeasurementLikelihoods)
+            MeasurementLikelihoods = newMeasurementLikelihoods;
+        end
+        
+        % MeasurementLikelihoodsPerParticle
+        function MeasurementLikelihoodsPerParticle = getMeasurementLikelihoodsPerParticle(this)
+            if(isempty(this.MeasurementLikelihoodsPerParticle_))
+                this.MeasurementLikelihoodsPerParticle_ = this.Model.Measurement.pdf(this.MeasurementList.Vectors,this.StatePrediction.Particles);
+            end
+            MeasurementLikelihoodsPerParticle = this.MeasurementLikelihoodsPerParticle_;
+        end
+        function MeasurementLikelihoodsPerParticle = setMeasurementLikelihoodsPerParticle(this, newMeasurementLikelihoodsPerParticle)
+            MeasurementLikelihoodsPerParticle = newMeasurementLikelihoodsPerParticle;
+        end
+        
+        % State Posterior
+        function StatePosterior = setStatePosterior(this,newStatePosterior)
+            if(isa(newStatePosterior,'ParticleStateX'))
+                StatePosterior = newStatePosterior;
+                this.NumParticles_ = StatePosterior.NumParticles;
+            else
+                particles = newStatePosterior.random(this.NumParticles_);
+                weights = repmat(1/this.NumParticles_,1,this.NumParticles_);
+                StatePosterior = ParticleStateX(particles,weights,newStatePosterior.Timestamp);
+            end
+        end
     end
     
     methods
         function this = ParticleFilterX(varargin)
-        % PARTICLEFILTERX Constructor method
+        % ParticleFilterX Constructor method
         % 
         % Parameters
         % ----------
         % Model: StateSpaceModelX
         %   An object handle to StateSpaceModelX object.
-        % NumParticles: scalar, optional
-        %   The number of particles to be employed by the Particle Filter. 
-        %   (default = 1000)
-        % PriorDistFcn: function handle, optional 
-        %   A function handle, of the form [parts, weights] = PriorDistFcn(NumParticles),
-        %   which when called generates a set of initial particles and weights, 
-        %   that are consecutively copied into the Particles and Weights properties
-        %   respectively. The function should accept exactly ONE argument, 
-        %   which is the number of particles (NumParticles) to be generated and
-        %   return 2 outputs. If a PriorDistFcn is specified, then any values provided for the
-        %   PriorParticles and PriorWeights arguments are ignored.
-        % PriorParticles: (NumStateDims x NumParticles) matrix, optional
-        %   The initial set of particles to be used by the Particle Filter. 
-        %   These are copied into the Particles property by the constructor.
-        % PriorWeights : (1 x NumParticles) row vector, optional
-        %   The initial set of weights to be used by the Particle Filter. 
-        %   These are copied into the Weights property by the constructor. 
-        %   (default = 1/NumParticles, which implies uniformly distributed weights)
+        % NumParticles: scalar
+        %   The number of particles that should be employed by the filter
+        % StatePrior: struct, optional
+        %   A StateX subclass object describing the state prior. If StatePrior 
+        %   is not a ParticleStateX instance, then it will be converted into
+        %   one by sampling from the provided State's distribution.
         % ResamplingScheme: string , optional
         %   Method used for particle resampling, specified as either 'Multinomial'
         %   or 'Systematic'. (default = 'Systematic')
@@ -144,21 +218,7 @@ classdef ParticleFilterX < FilterX
         %
         % Usage
         % -----
-        % * pf = ParticleFilterX() returns an unconfigured object 
-        %   handle. Note that the object will need to be configured at a 
-        %   later instance before any call is made to it's methods.
-        % * pf = ParticleFilterX(ssm) returns an object handle,
-        %   preconfigured with the provided StateSpaceModelX object handle ssm.
-        % * pf = ParticleFilterX(ssm,priorParticles,priorWeights) 
-        %   returns an object handle, preconfigured with the provided  
-        %   StateSpaceModel object handle ssm and the prior information   
-        %   about the state, provided in the form of the priorParticles 
-        %   and priorWeights variables.
-        % * pf = ParticleFilterX(ssm,priorDistFcn) returns an object handle, 
-        %   preconfigured with the provided StateSpaceModel object handle ssm
-        %   and the prior information about the state, provided in the form 
-        %   of the priorDistFcn function.
-        % * pf = ParticleFilterX(___,Name,Value,___) instantiates an  
+        % * pf = ParticleFilterX(___,Name,Value) instantiates an  
         %   object handle, configured with the options specified by one or 
         %   more Name,Value pair arguments.
         %
@@ -167,39 +227,11 @@ classdef ParticleFilterX < FilterX
             % Call SuperClass method
             this@FilterX(varargin{:});
             
-            if(nargin==0)
-                this.Resampler = SystematicResamplerX();
-                return;
-            end
-            
             % First check to see if a structure was received
             if(nargin==1)
                 if(isstruct(varargin{1}))
                     config = varargin{1};
-                    if (isfield(config,'NumParticles'))
-                        this.NumParticles  = config.NumParticles;
-                    end
-                    if (isfield(config,'PriorDistFcn'))
-                        [this.Particles,this.Weights] = ...
-                            config.PriorDistFcn(this.NumParticles);
-                    elseif ((isfield(config,'PriorParticles'))&&(isfield(config,'PriorParticles')))
-                         this.Particles = config.PriorParticles;
-                         this.Weights = config.PriotWeights;
-                    end
-                     if (isfield(config,'Resampler'))
-                         this.Resampler = config.Resampler;
-                     elseif (isfield(config,'ResamplingScheme'))
-                         if(strcmp(config.ResamplingScheme,'Systematic'))
-                             this.Resampler = SystematicResamplerX();
-                         elseif(strcmp(config.ResamplingScheme,'Multinomial'))
-                             this.Resampler = MultinomialResamplerX();
-                         end
-                     else
-                         this.Resampler = SystematicResamplerX();
-                     end
-                     if (isfield(config,'ResamplingPolicy'))
-                         this.ResamplingPolicy = config.ResamplingPolicy;
-                     end
+                    this.initialise_(config);
                 end
                 return;
             end
@@ -209,30 +241,7 @@ classdef ParticleFilterX < FilterX
             parser.KeepUnmatched = true;
             parser.parse(varargin{:});
             config = parser.Unmatched;
-            if (isfield(config,'NumParticles'))
-                this.NumParticles  = config.NumParticles;
-            end
-            if (isfield(config,'PriorDistFcn'))
-                [this.Particles,this.Weights] = ...
-                    config.PriorDistFcn(this.NumParticles);
-            elseif ((isfield(config,'PriorParticles'))&&(isfield(config,'PriorParticles')))
-                 this.Particles = config.PriorParticles;
-                 this.Weights = config.PriotWeights;
-            end
-            if (isfield(config,'Resampler'))
-                 this.Resampler = config.Resampler;
-            elseif (isfield(config,'ResamplingScheme'))
-                if(strcmp(config.ResamplingScheme,'Systematic'))
-                     this.Resampler = SystematicResamplerX();
-                 elseif(strcmp(config.ResamplingScheme,'Multinomial'))
-                     this.Resampler = MultinomialResamplerX();
-                end
-            else
-                 this.Resampler = SystematicResamplerX();
-            end
-            if (isfield(config,'ResamplingPolicy'))
-                 this.ResamplingPolicy = config.ResamplingPolicy;
-            end 
+            this.initialise_(config);
         end
         
         function initialise(this,varargin)
@@ -243,24 +252,10 @@ classdef ParticleFilterX < FilterX
         % ----------
         % Model: StateSpaceModelX
         %   An object handle to StateSpaceModelX object.
-        % NumParticles: scalar, optional
-        %   The number of particles to be employed by the Particle Filter. 
-        %   (default = 1000)
-        % PriorDistFcn: function handle, optional 
-        %   A function handle, of the form [parts, weights] = PriorDistFcn(NumParticles),
-        %   which when called generates a set of initial particles and weights, 
-        %   that are consecutively copied into the Particles and Weights properties
-        %   respectively. The function should accept exactly ONE argument, 
-        %   which is the number of particles (NumParticles) to be generated and
-        %   return 2 outputs. If a PriorDistFcn is specified, then any values provided for the
-        %   PriorParticles and PriorWeights arguments are ignored.
-        % PriorParticles: (NumStateDims x NumParticles) matrix, optional
-        %   The initial set of particles to be used by the Particle Filter. 
-        %   These are copied into the Particles property by the constructor.
-        % PriorWeights : (1 x NumParticles) row vector, optional
-        %   The initial set of weights to be used by the Particle Filter. 
-        %   These are copied into the Weights property by the constructor. 
-        %   (default = 1/NumParticles, which implies uniformly distributed weights)
+        % StatePrior: struct, optional
+        %   A StateX subclass object describing the state prior. If StatePrior 
+        %   is not a ParticleStateX instance, then it will be converted into
+        %   one by sampling from the provided State's distribution.
         % ResamplingScheme: string , optional
         %   Method used for particle resampling, specified as either 'Multinomial'
         %   or 'Systematic'. (default = 'Systematic')
@@ -280,57 +275,15 @@ classdef ParticleFilterX < FilterX
         %   then it will override any choice specified within the ResamplingScheme. 
         %   ResamplingPolicy will not be affected.
         %
-        % Usage
-        % -----
-        % * initialise(pf,ssm) initialises the ParticleFilterX object kf
-        %   with the provided StateSpaceModelX object ssm.
-        % * initialise(pf,PriorParticles,PriorWeights)initialises the 
-        %   ParticleFilterX object pf with the provided StateSpaceModel object    
-        %   ssm and the prior information about the state, provided in the form  
-        %   of the PriorParticles and PriorWeights variables.
-        % * initialise(pf,ssm,PriorDistFcn) initialises the ParticleFilterX
-        %   object pf with the provided StateSpaceModel object handle ssm
-        %   and the prior information about the state, provided in the form 
-        %   of the PriorDistFcn function.
-        % * initialise(pf,___,Name,Value,___) instantiates an  
-        %   object handle, configured with the options specified by one or 
-        %   more Name,Value pair arguments.
-        %
         %  See also predict, update, smooth. 
                     
             initialise@FilterX(this);
             
             % First check to see if a structure was received
-            if(nargin==1)
+            if(nargin==2)
                 if(isstruct(varargin{1}))
                     config = varargin{1};
-                    if (isfield(config,'Model'))
-                        this.Model = config.Model;
-                    end
-                    if (isfield(config,'NumParticles'))
-                        this.NumParticles  = config.NumParticles;
-                    end
-                    if (isfield(config,'PriorDistFcn'))
-                        [this.Particles,this.Weights] = ...
-                            config.PriorDistFcn(this.NumParticles);
-                    elseif ((isfield(config,'priorParticles'))&&(isfield(config,'priorParticles')))
-                         this.Particles = config.PriorParticles;
-                         this.Weights = config.PriotWeights;
-                    end
-                     if (isfield(config,'Resampler'))
-                         this.Resampler = config.Resampler;
-                     elseif (isfield(config,'ResamplingScheme'))
-                         if(strcmp(config.ResamplingScheme,'Systematic'))
-                             this.Resampler = SystematicResamplerX();
-                         elseif(strcmp(config.ResamplingScheme,'Multinomial'))
-                             this.Resampler = MultinomialResamplerX();
-                         end
-                     else
-                         this.Resampler = SystematicResamplerX();
-                     end
-                     if (isfield(config,'ResamplingPolicy'))
-                         this.ResamplingPolicy = config.ResamplingPolicy;
-                     end
+                    this.initialise_(config);
                 end
                 return;
             end
@@ -340,106 +293,120 @@ classdef ParticleFilterX < FilterX
             parser.KeepUnmatched = true;
             parser.parse(varargin{:});
             config = parser.Unmatched;
-            if (isfield(config,'Model'))
-                this.Model = config.Model;
-            end
-            if (isfield(config,'NumParticles'))
-                this.NumParticles  = config.NumParticles;
-            end
-            if (isfield(config,'PriorDistFcn'))
-                [this.Particles,this.Weights] = ...
-                    config.PriorDistFcn(this.NumParticles);
-            elseif ((isfield(config,'priorParticles'))&&(isfield(config,'priorParticles')))
-                 this.Particles = config.PriorParticles;
-                 this.Weights = config.PriotWeights;
-            end
-            if (isfield(config,'Resampler'))
-                 this.Resampler = config.Resampler;
-            elseif (isfield(config,'ResamplingScheme'))
-                if(strcmp(config.ResamplingScheme,'Systematic'))
-                     this.Resampler = SystematicResamplerX();
-                 elseif(strcmp(config.ResamplingScheme,'Multinomial'))
-                     this.Resampler = MultinomialResamplerX();
-                end
-            else
-                 this.Resampler = SystematicResamplerX();
-            end
-            if (isfield(config,'ResamplingPolicy'))
-                 this.ResamplingPolicy = config.ResamplingPolicy;
-            end 
+            this.initialise_(config);
         end
         
-        function predict(this)
-        % PREDICT Perform SIR Particle Filter prediction step
-        %   
-        % Usage
-        % -----
-        % * predict(this) calculates the predicted system state and measurement,
-        %   as well as their associated uncertainty covariances.
+        function varargout = predict(this, varargin)
+        % predict Perform an SIR Particle Filter prediction step and return
+        %   the generated state and measurement predictions.
+        % 
+        % Parameters
+        % ----------
+        % prior: StateX, optional
+        %   The prior state estimate.
+        % timestamp: datetime, optional
+        %   A timestamp indicating the time at which prediction is
+        %   performed.
         %
-        % More details
-        % ------------
-        % * ParticleFilterX uses the Model class property, which should be an
-        %   instance of the TrackingX.Models.StateSpaceModel class, in order
-        %   to extract information regarding the underlying state-space model.
-        % * State prediction is performed using the Model.Dyn property,
-        %   which must be a subclass of TrackingX.Abstract.DynamicModel and
-        %   provide the following interface functions:
-        %   - Model.Dyn.feval(): Returns the model transition matrix
-        %   - Model.Dyn.covariance(): Returns the process noise covariance
-        % * Measurement prediction and innovation covariance calculation is
-        %   performed usinf the Model.Obs class property, which should be
-        %   a subclass of TrackingX.Abstract.DynamicModel and provide the
-        %   following interface functions:
-        %   - Model.Obs.heval(): Returns the model measurement matrix
-        %   - Model.Obs.covariance(): Returns the measurement noise covariance
+        % Returns
+        % -------
+        % ParticleStateX
+        %   The generated state prediction
+        % ParticleStateX, optional
+        %   The generated measurement prediction
         %
         %  See also update, smooth.
             
-            % reset measLikelihood matrix
-            this.pmeasLikelihood_ = [];
+            timestamp = [];
+            timestamp_old = [];
+            for i = 1:min([2,nargin-1])
+                if isa(varargin{i},'StateX')
+                    this.StatePosterior = varargin{i};
+                    timestamp_old = this.StatePosterior.Timestamp;
+                elseif isdatetime(varargin{i})
+                    timestamp = varargin{i};
+                end
+            end
             
+            if isempty(timestamp)
+                dt = this.Model.Transition.TimestepDuration;
+                timestamp = this.StatePosterior.Timestamp;
+            else
+                dt = timestamp - timestamp_old;
+            end
+                
             % Extract model parameters
-            f  = @(x,wk) this.Model.Dyn.feval(x, wk); % Transition function
-            wk = this.Model.Dyn.random(this.NumParticles); % Process noise
+            f  = @(x,wk) this.Model.Transition.feval(x, wk, dt); % Transition function
+            wk = this.Model.Transition.random(this.StatePosterior.NumParticles, dt); % Process noise
         
             % Propagate particles through the dynamic model
-            this.PredParticles = ParticleFilterX_Predict(f,this.Particles,wk);
-            this.PredWeights = this.Weights;
+            predParticles = ParticleFilterX_Predict(f,this.StatePosterior.Particles,wk);
+            predWeights = this.StatePosterior.Weights;
             
-            predict@FilterX(this);
+            % Create a state prediction object
+            this.StatePrediction = ParticleStateX(predParticles,...
+                                                  predWeights,...
+                                                  timestamp);
+            % Return arguments
+            varargout{1} = this.StatePrediction;
+            if(nargout==2)
+                % Optionally, compute and return measurement prediction
+                varargout{2} = this.MeasurementPrediction;
+            end
         end
         
-        function update(this)
-        % UPDATE Perform SIR Particle Filter update step
-        %   
+        function posterior = update(this, varargin)
+        % update Perform SIR Particle Filter update step
+        % 
+        % Parameters
+        % ----------
+        % prediction: StateX
+        %   An object containing the prediction estimate
+        % measurement: MeasurementX
+        %   A single measurement/detection object.    
+        %
+        % Returns
+        % -------
+        % posterior: StateX
+        %   The generated posterior state estimate.   
+        %
         % Usage
         % -----
         % * update(this) calculates the corrected sytem state and the 
         %   associated uncertainty covariance.
         %
         % See also ParticleFilterX, predict, smooth.
-        
-            if(size(this.Measurement,2)>1)
-                error('[PF] More than one measurement have been provided for update. Use ParticleFilterX.UpdateMulti() function instead!');
-            elseif size(this.Measurement,2)==0
-                warning('[PF] No measurements have been supplied to update track! Skipping Update step...');
+            if nargin>1
+                if isa(varargin{1},'MeasurementX')
+                    this.MeasurementList = varargin{1};
+                elseif isa(varargin{1}, 'StateX')
+                    this.StatePrediction = varargin{1};
+                    this.MeasurementList = varargin{2};
+                end
+            end
+            if(this.MeasurementList.NumMeasurements)
+                timestamp = this.MeasurementList.Timestamp;
+            else
+                timestamp = this.StatePrediction.Timestamp;
             end
             
-            % Perform update
-            this.Weights = ...
-                ParticleFilterX_UpdateWeights(@(y,x) this.Model.Obs.pdf(y,x),...
-                        this.Measurement,this.PredParticles,this.PredWeights);
-                    
+            % Perform weight update
+            weights = ...
+                ParticleFilterX_UpdateWeights(@(y,x) this.Model.Measurement.pdf(y,x),...
+                        this.MeasurementList.Vectors,this.StatePrediction.Particles,this.StatePrediction.Weights);
+            
+            % Resampling
             if(strcmp(this.ResamplingPolicy(1),"TimeInterval"))
-                [this.Particles,this.Weights] = ...
-                    this.Resampler.resample(this.PredParticles,this.Weights);
+                [particles,weights] = ...
+                    this.Resampler.resample(this.StatePrediction.Particles,weights);
             end
             
-            update@FilterX(this);
+            % Store and return posterior
+            this.StatePosterior = ParticleStateX(particles,weights,timestamp);
+            posterior = this.StatePosterior;
         end
         
-        function updatePDA(this, assocWeights, MeasLikelihood)
+        function posterior = updatePDA(this, assocWeights, measurementLikelihoodsPerParticle)
         % UPDATEPDA - Performs PF update step, for multiple measurements
         %             Update is performed according to the generic (J)PDAF equations [1] 
         % 
@@ -453,152 +420,89 @@ classdef ParticleFilterX < FilterX
         %
         % See also KalmanFilterX, Predict, Iterate, Smooth, resample.
         
-            NumMeasurements = size(this.Measurement,2);  
-            if(~NumMeasurements)
-                warning('[PF] No measurements have been supplied to update track! Skipping Update step...');
-                this.Particles = this.PredParticles;
-                this.Weights = this.PredWeights;
-                return;
-            end
-            
-            if(~exist('assocWeights','var'))
-                assocWeights = [0, ones(1,ObsNum)/ObsNum]; % (1 x Nm+1)
-            end
             if(nargin<3)
-                MeasLikelihood = this.MeasLikelihood;  
+                measurementLikelihoodsPerParticle = this.MeasurementLikelihoodsPerParticle;  
+            end
+            if(this.MeasurementList.NumMeasurements)
+                timestamp = this.MeasurementList.Timestamp;
+            else
+                timestamp = this.StatePrediction.Timestamp;
             end
             
             % Perform update
-            this.Weights = ...
-                ParticleFilterX_UpdatePDA(@(y,x) this.Model.Obs.heval(y,x),this.Measurement,this.PredParticles,...
-                                          this.PredWeights, assocWeights, MeasLikelihood);
+            weights = ...
+                ParticleFilterX_UpdatePDA(@(y,x) this.Model.Measurement.feval(y,x),...
+                                          this.MeasurementList.Vectors,this.StatePrediction.Particles,...
+                                          this.StatePrediction.Weights, assocWeights, measurementLikelihoodsPerParticle);
             
             if(strcmp(this.ResamplingPolicy(1),"TimeInterval"))
-                [this.Particles,this.Weights] = ...
-                    this.Resampler.resample(this.PredParticles,this.Weights);
+                [particles,weights] = ...
+                    this.Resampler.resample(this.StatePrediction.Particles,weights);
             end
-        end
-                
-        function smoothed_estimates = Smooth(this, filtered_estimates)
-        % Smooth - Performs FBS smoothing on a provided set of estimates
-        %           (Based on [1])
-        %   
-        %   Inputs:
-        %       filtered_estimates: a (1 x N) cell array, where N is the total filter iterations and each cell is a copy of this.Params after each iteration
-        %   
-        %   Outputs:
-        %       smoothed_estimates: a copy of the input (1 x N) cell array filtered_estimates, where the .x and .P fields have been replaced with the smoothed estimates   
-        %
-        %   (Virtual inputs at each iteration)        
-        %           -> filtered_estimates{k}.particles          : Filtered state mean estimate at timestep k
-        %           -> filtered_estimates{k}.P          : Filtered state covariance estimate at each timestep
-        %           -> filtered_estimates{k+1}.x_pred   : Predicted state at timestep k+1
-        %           -> filtered_estimates{k+1}.P_pred   : Predicted covariance at timestep k+1
-        %           -> smoothed_estimates{k+1}.x        : Smoothed state mean estimate at timestep k+1
-        %           -> smoothed_estimates{k+1}.P        : Smoothed state covariance estimate at timestep k+1 
-        %       where, smoothed_estimates{N} = filtered_estimates{N} on initialisation
-        %
-        %   (NOTE: The filtered_estimates array can be accumulated by running "filtered_estimates{k} = ukf.Params" after each iteration of the filter recursion) 
-        %   
-        %   Usage:
-        %       ukf.Smooth(filtered_estimates);
-        %
-        %   [1] Mike Klaas, Mark Briers, Nando de Freitas, Arnaud Doucet, Simon Maskell, and Dustin Lang. 2006. Fast particle smoothing: if I had a million particles. In Proceedings of the 23rd international conference on Machine learning (ICML '06). ACM, New York, NY, USA, 481-488.
-        %
-        %   See also ParticleFilterX, Predict, Update, Iterate.
-        
-            % Allocate memory
-            N                           = length(filtered_estimates);
-            smoothed_estimates          = cell(1,N);
-            smoothed_estimates{N}       = filtered_estimates{N}; 
             
-            % Perform Rauch–Tung–Striebel Backward Recursion
-            for k = N-1:-1:1
-                lik = this.DynModel.eval(filtered_estimates{k}.k, filtered_estimates{k+1}.particles, filtered_estimates{k}.particles);
-                denom = sum(filtered_estimates{k}.w(ones(this.Params.Np,1),:).*lik,2)'; % denom(1,j)
-                smoothed_estimates{k}.w = filtered_estimates{k}.w(1,:) .* sum(smoothed_estimates{k+1}.w(ones(this.Params.Np,1),:).*lik'./denom(ones(this.Params.Np,1),:),2)';
-                smoothed_estimates{k}.particles =  filtered_estimates{k}.particles;
-                smoothed_estimates{k}.x = sum(smoothed_estimates{k}.w.*smoothed_estimates{k}.particles,2);
-            end
-        end        
+            this.StatePosterior = ParticleStateX(particles,weights,timestamp);
+            
+            posterior = this.StatePosterior;
+        end
         
         % ===============================>
         % ACCESS METHODS
         % ===============================>
         
-        function StateMean = get.StateMean(this)
-            StateMean = getStateMean(this);
+        % StatePrior        
+        function statePrior = get.StatePrior(this)
+            statePrior = this.StatePrior;
+        end
+        function set.StatePrior(this, newStatePrior)
+            this.StatePrior = setStatePrior(this, newStatePrior);
         end
         
-        function StateCovar = get.StateCovar(this)
-            StateCovar = getStateCovar(this);
+        % StatePrediction
+        function statePrediction = get.StatePrediction(this)
+            statePrediction = this.StatePrediction;
+        end
+        function set.StatePrediction(this, newStatePrediction)
+            this.StatePrediction = setStatePrediction(this, newStatePrediction);
         end
         
-        function PredStateMean = get.PredStateMean(this)
-            PredStateMean = getPredStateMean(this);
+        % MeasurementPrediction
+        function measurementPrediction = get.MeasurementPrediction(this)
+            measurementPrediction = getMeasurementPrediction(this);
+        end
+        function set.MeasurementPrediction(this, newMeasurementPrediction)
+            this.MeasurementPrediction_ = setMeasurementPrediction(this, newMeasurementPrediction);
         end
         
-        function PredStateCovar = get.PredStateCovar(this)
-            PredStateCovar = getPredStateCovar(this);
+        % MeasurementLikelihood
+        function MeasurementLikelihoods = get.MeasurementLikelihoods(this)
+            MeasurementLikelihoods = getMeasurementLikelihoods(this);
+        end
+        function set.MeasurementLikelihoods(this, newMeasurementLikelihoods)
+            this.MeasurementLikelihoods_ = setMeasurementLikelihoods(this, newMeasurementLikelihoods);
         end
         
-        function PredMeasMean = get.PredMeasMean(this)
-            PredMeasMean = getPredMeasMean(this);
+        % MeasurementLikelihoodsPerParticle
+        function MeasurementLikelihoodsPerParticle = get.MeasurementLikelihoodsPerParticle(this)
+            MeasurementLikelihoodsPerParticle = getMeasurementLikelihoodsPerParticle(this);
+        end
+        function set.MeasurementLikelihoodsPerParticle(this, newMeasurementLikelihoodsPerParticle)
+            this.MeasurementLikelihoodsPerParticle_ = setMeasurementLikelihoodsPerParticle(this, newMeasurementLikelihoodsPerParticle);
         end
         
-        function InnovErrCovar = get.InnovErrCovar(this)
-            InnovErrCovar = getInnovErrCovar(this);
+        % StatePosterior
+        function statePosterior = get.StatePosterior(this)
+            statePosterior = this.StatePosterior;
+        end
+        function set.StatePosterior(this, newStatePosterior)
+            this.StatePosterior = setStatePosterior(this, newStatePosterior);
         end
         
-        function MeasLikelihood = get.MeasLikelihood(this)
-            MeasLikelihood = getMeasLikelihood(this);
+        % NumParticles
+        function numParticles = get.NumParticles(this)
+            numParticles = this.NumParticles_;
         end
-
-%         function set.Measurement(this,newMeasurement)
-%             setMeasurement(this,newMeasurement);
-%         end
-    end
-    
-    methods (Access = protected)
-        
-        % ===============================>
-        % ACCESS METHOD HANDLES
-        % ===============================>
-        
-        function StateMean = getStateMean(this)
-            StateMean = sum(this.Weights.*this.Particles,2);
+        function set.NumParticles(this, numParticles)
+            this.NumParticles_ = numParticles;
         end
-        
-        function StateCovar = getStateCovar(this)
-            StateCovar = weightedcov(this.Particles,this.Weights);
-        end
-        
-        function PredStateMean = getPredStateMean(this)
-            PredStateMean = sum(this.PredWeights.*this.PredParticles,2);
-        end
-        
-        function PredStateCovar = getPredStateCovar(this)
-            PredStateCovar = weightedcov(this.PredParticles,this.PredWeights);
-        end
-        
-        function PredMeasMean = getPredMeasMean(this)
-            PredMeasMean = this.Model.Obs.heval(this.PredStateMean);
-        end
-        
-        function InnovErrCovar = getInnovErrCovar(this)
-            transParticles = this.Model.Obs.heval(this.PredParticles,true);
-            InnovErrCovar = weightedcov(transParticles,this.PredWeights);
-        end
-        
-        function MeasLikelihood = getMeasLikelihood(this)
-            if(isempty(this.pmeasLikelihood_))
-                this.pmeasLikelihood_ = this.Model.Obs.pdf(this.Measurement,this.PredParticles);               
-            end
-            MeasLikelihood = this.pmeasLikelihood_;
-        end
-        
-%         function setMeasurement(this,newMeasurement)
-%             this.Measurement = newMeasurement;
-%         end
     end
 end

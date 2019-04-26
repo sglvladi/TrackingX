@@ -2,19 +2,16 @@ classdef UnscentedParticleFilterX < ParticleFilterX
 % UnscentedParticleFilterX class
 %
 % Summary of UnscentedParticleFilterX:
-% This is a class implementation of a SIR Particle Filter. (Alg. 4 of [1])
+% This is a class implementation of a Particle Filter that utilises an Unscented
+% Kalman Filter to generate its importance/proposal density.
 %
 % UnscentedParticleFilterX Properties: (*)
 %   + NumParticles - The number of particles employed by the Particle Filter
-%   + Particles - A (NumStateDims x NumParticles) matrix used to store 
-%                 the last computed/set filtered particles  
-%   + Weights - A (1 x NumParticles) vector used to store the weights
-%               of the last computed/set filtered particles
-%   + PredParticles - A (NumStateDims x NumParticles) matrix used to store 
-%                     the last computed/set predicted particles  
-%   + PredWeights - A (1 x NumParticles) vector used to store the weights
-%                   of the last computed/set predicted particles
-%   + Measurement - A (NumObsDims x 1) matrix used to store the received measurement
+%   + StatePrior - A structure used to store the state prior
+%   + StatePrediction - A structure used to store the state prediction
+%   + MeasurementPrediction - A structure used to store the measurement prediction
+%   + StatePosterior - A structure used to store posterior information  
+%   + MeasurementList - A (yDim x 1) matrix used to store the received measurement
 %   + ControlInput - A (NumCtrDims x 1) matrix used to store the last received 
 %                    control input
 %   + ResamplingScheme - Method used for particle resampling, specified as 
@@ -34,20 +31,6 @@ classdef UnscentedParticleFilterX < ParticleFilterX
 %                 Resampler is provided, then it will override any choice
 %                 specified within the ResamplingScheme. ResamplingPolicy
 %                 will not be affected.
-%   ¬ StateMean - A (NumStateDims x 1) vector used to store the last 
-%                 computed filtered state mean.  
-%   ¬ StateCovar - A (NumStateDims x NumStateDims) matrix used to store
-%                  the last computed filtered state covariance
-%   ¬ PredStateMean - A (NumStateDims x 1) vector used to store the last 
-%                     computed prediicted state mean  
-%   ¬ PredStateCovar - A (NumStateDims x NumStateDims) matrix used to store
-%                      the last computed/set predicted state covariance
-%   ¬ PredMeasMean - A (NumObsDims x 1) vector used to store the last 
-%                    computed predicted measurement mean
-%   ¬ InnovErrCovar - A (NumObsDims x NumObsDims) matrix used to store the
-%                     last computed innovation error covariance
-%   ¬ CrossCovar - A (NumStateDims x NumObsDims) matrix used to store 
-%                  the last computed cross-covariance Cov(X,Y)  
 %   + Model - An object handle to StateSpaceModelX object
 %       + Dyn - Object handle to DynamicModelX SubClass      
 %       + Obs - Object handle to ObservationModelX SubClass 
@@ -85,24 +68,9 @@ classdef UnscentedParticleFilterX < ParticleFilterX
         % ----------
         % Model: StateSpaceModelX
         %   An object handle to StateSpaceModelX object.
-        % NumParticles: scalar, optional
-        %   The number of particles to be employed by the Particle Filter. 
-        %   (default = 1000)
-        % PriorDistFcn: function handle, optional 
-        %   A function handle, of the form [parts, weights] = PriorDistFcn(NumParticles),
-        %   which when called generates a set of initial particles and weights, 
-        %   that are consecutively copied into the Particles and Weights properties
-        %   respectively. The function should accept exactly ONE argument, 
-        %   which is the number of particles (NumParticles) to be generated and
-        %   return 2 outputs. If a PriorDistFcn is specified, then any values provided for the
-        %   PriorParticles and PriorWeights arguments are ignored.
-        % PriorParticles: (NumStateDims x NumParticles) matrix, optional
-        %   The initial set of particles to be used by the Particle Filter. 
-        %   These are copied into the Particles property by the constructor.
-        % PriorWeights : (1 x NumParticles) row vector, optional
-        %   The initial set of weights to be used by the Particle Filter. 
-        %   These are copied into the Weights property by the constructor. 
-        %   (default = 1/NumParticles, which implies uniformly distributed weights)
+        % Prior: struct, optional
+        %   A (NumStateDims x 1) column vector, representing the prior
+        %   state mean, which is copied over to Posterior.
         % ResamplingScheme: string , optional
         %   Method used for particle resampling, specified as either 'Multinomial'
         %   or 'Systematic'. (default = 'Systematic')
@@ -130,21 +98,7 @@ classdef UnscentedParticleFilterX < ParticleFilterX
         %
         % Usage
         % -----  
-        % * upf = UnscentedParticleFilterX() returns an unconfigured object 
-        %   handle. Note that the object will need to be configured at a 
-        %   later instance before any call is made to it's methods.
-        % * upf = UnscentedParticleFilterX(ssm) returns an object handle,
-        %   preconfigured with the provided StateSpaceModelX object handle ssm.
-        % * upf = UnscentedParticleFilterX(ssm,priorParticles,priorWeights) 
-        %   returns an object handle, preconfigured with the provided  
-        %   StateSpaceModel object handle ssm and the prior information   
-        %   about the state, provided in the form of the priorParticles 
-        %   and priorWeights variables.
-        % * upf = UnscentedParticleFilterX(ssm,priorDistFcn) returns an object
-        %   handle, preconfigured with the provided StateSpaceModel object 
-        %   handle ssm and the prior information about the state, provided  
-        %   in the form of the priorDistFcn function.
-        % * upf = UnscentedParticleFilterX(___,Name,Value,___) instantiates an  
+        % * upf = UnscentedParticleFilterX(___,Name,Value) instantiates an  
         %   object handle, configured with the options specified by one or 
         %   more Name,Value pair arguments.
         %
@@ -165,24 +119,9 @@ classdef UnscentedParticleFilterX < ParticleFilterX
         % ----------
         % Model: StateSpaceModelX
         %   An object handle to StateSpaceModelX object.
-        % NumParticles: scalar, optional
-        %   The number of particles to be employed by the Particle Filter. 
-        %   (default = 1000)
-        % PriorDistFcn: function handle, optional 
-        %   A function handle, of the form [parts, weights] = PriorDistFcn(NumParticles),
-        %   which when called generates a set of initial particles and weights, 
-        %   that are consecutively copied into the Particles and Weights properties
-        %   respectively. The function should accept exactly ONE argument, 
-        %   which is the number of particles (NumParticles) to be generated and
-        %   return 2 outputs. If a PriorDistFcn is specified, then any values provided for the
-        %   PriorParticles and PriorWeights arguments are ignored.
-        % PriorParticles: (NumStateDims x NumParticles) matrix, optional
-        %   The initial set of particles to be used by the Particle Filter. 
-        %   These are copied into the Particles property by the constructor.
-        % PriorWeights : (1 x NumParticles) row vector, optional
-        %   The initial set of weights to be used by the Particle Filter. 
-        %   These are copied into the Weights property by the constructor. 
-        %   (default = 1/NumParticles, which implies uniformly distributed weights)
+        % Prior: struct, optional
+        %   A (NumStateDims x 1) column vector, representing the prior
+        %   state mean, which is copied over to Posterior.
         % ResamplingScheme: string , optional
         %   Method used for particle resampling, specified as either 'Multinomial'
         %   or 'Systematic'. (default = 'Systematic')
@@ -210,17 +149,7 @@ classdef UnscentedParticleFilterX < ParticleFilterX
         %
         % Usage
         % ----- 
-        % * initialise(upf,ssm) initialises the UnscentedParticleFilterX object 
-        %   epf with the provided StateSpaceModelX object ssm.
-        % * initialise(upf,priorParticles,priorWeights)initialises the 
-        %   UnscentedParticleFilterX object pf with the provided StateSpaceModel     
-        %   object ssm and the prior information about the state, provided in  
-        %   the form  of the priorParticles and priorWeights variables.
-        % * initialise(upf,ssm,priorDistFcn) initialises the UnscentedParticleFilterX
-        %   object pf with the provided StateSpaceModel object handle ssm
-        %   and the prior information about the state, provided in the form 
-        %   of the priorDistFcn function.
-        % * initialise(upf,___,Name,Value,___) instantiates an object handle, 
+        % * initialise(upf,___,Name,Value) instantiates an object handle, 
         %   configured with the options specified by one or more Name,Value
         %   pair arguments.
         %
@@ -260,17 +189,11 @@ classdef UnscentedParticleFilterX < ParticleFilterX
         %
         %  See also update, smooth.
             
-            % reset measLikelihood matrix
-            this.pmeasLikelihood_ = [];
-                                
-            % Compute UKF prior mean and covariance
-            this.ukf.StateMean  = this.StateMean;
-            this.ukf.StateCovar = this.StateCovar;
+            % Compute EKF prior mean and covariance
+            this.ukf.StatePosterior = this.StatePosterior;
             
-            % Iterate UKF to obtain Optimal Proposal
-            this.ukf.predict();
-            
-            predict@FilterX(this);
+            % Iterate EKF to obtain Optimal Proposal
+            this.StatePrediction = this.ukf.predict();
         end
         
         function update(this)
@@ -286,12 +209,11 @@ classdef UnscentedParticleFilterX < ParticleFilterX
             % Perform UKF update to obtain Optimal Proposal
             this.ukf.update();
             
-            % Sample from UKF proposal
-            this.PredParticles = mvnrnd(this.ukf.StateMean', this.ukf.StateCovar,this.NumParticles)'; 
-            this.PredWeights = this.Weights;
+             % Sample from EKF proposal
+            this.StatePrediction = ParticleStateX(this.ukf.StatePosterior.Mean, this.ukf.StatePosterior.Covar, this.NumParticles);
             
             % Call SuperClass method
-            update@ParticleFilterX(this);             
+            update@ParticleFilterX(this);                      
         end
         
         function updatePDA(this, assocWeights, MeasLikelihood)
@@ -341,38 +263,14 @@ classdef UnscentedParticleFilterX < ParticleFilterX
         % ACCESS METHOD HANDLES
         % ===============================>
         
-        function StateMean = getStateMean(this)
-            StateMean = sum(this.Weights.*this.Particles,2);
-        end
-        
-        function StateCovar = getStateCovar(this)
-            StateCovar = weightedcov(this.Particles,this.Weights);
-        end
-        
-        function PredStateMean = getPredStateMean(this)
-            PredStateMean = this.ukf.StateMean;
-        end
-        
-        function PredStateCovar = getPredStateCovar(this)
-            PredStateCovar = this.ukf.StateCovar;
-        end
-        
-        function PredMeasMean = getPredMeasMean(this)
-            PredMeasMean = this.Model.Obs.heval(this.PredStateMean);
-        end
-        
-        function InnovErrCovar = getInnovErrCovar(this)
-            InnovErrCovar = this.ukf.InnovErrCovar;
-        end
-        
         function Model = setModel(this,newModel)
             Model = newModel;
             this.ukf.Model = newModel;
         end
         
-        function Measurement = setMeasurement(this,newMeasurement)
-            Measurement = newMeasurement;
-            this.ukf.Measurement = newMeasurement;
+        function MeasurementList = setMeasurementList(this,newMeasurementList)
+            MeasurementList = newMeasurementList;
+            this.ukf.MeasurementList = newMeasurementList;
         end
     end
 end
