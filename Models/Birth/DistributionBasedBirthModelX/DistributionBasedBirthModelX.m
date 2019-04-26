@@ -15,7 +15,11 @@ classdef DistributionBasedBirthModelX < BirthModelX
 % (+) denotes puplic properties/methods
 %
 %  February 2018 Lyudmil Vladimirov, University of Liverpool   
-       
+    
+    properties (Dependent)
+        BirthProbability
+    end
+    
     properties
         BirthIntensity = 0;
         Distribution
@@ -115,6 +119,11 @@ classdef DistributionBasedBirthModelX < BirthModelX
         % See also random
             
             int = this.BirthIntensity*this.Distribution.pdf(xk);
+        end
+        
+        function birthProb = get.BirthProbability(this)
+        %get.BirthProbability Custom getter for BirthProbability property
+            birthProb = this.BirthIntensity;
         end
     end
 end
