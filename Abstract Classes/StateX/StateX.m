@@ -12,6 +12,7 @@ classdef (Abstract) StateX < BaseX & dynamicprops
         % Timestamp: datetime 
         %   An optional timestamp that can be attached to a StateX object.
         Timestamp = []
+        Metadata = struct()
     end
 
     properties (Dependent)
