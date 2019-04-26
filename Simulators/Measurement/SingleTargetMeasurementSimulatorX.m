@@ -49,7 +49,6 @@ classdef SingleTargetMeasurementSimulatorX < MeasurementSimulatorX
         %   scan at each timestep.
             
             % Dummy Detection probability
-            detectionProbability = 1;%this.Model.DetectionProbability;
             MeasurementScans = MeasurementListX.empty();
             
             % Initialise storage
@@ -61,6 +60,7 @@ classdef SingleTargetMeasurementSimulatorX < MeasurementSimulatorX
                 timestamp = targetState.Timestamp;
                 
                 % Compute number of tracks and clutter measurements
+                detectionProbability = this.Model.Detection.pdf(targetState.Vector);
                 targetDetected = binornd(1,detectionProbability);
                 numClutter = 0;
                 if ~isempty(this.Model.Clutter)
