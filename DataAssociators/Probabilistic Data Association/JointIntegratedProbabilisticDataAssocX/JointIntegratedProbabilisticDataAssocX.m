@@ -99,10 +99,7 @@ classdef JointIntegratedProbabilisticDataAssocX < JointProbabilisticDataAssocX
                 numClusterTracks = length(TrackIndList);
                 
                 % Compute gating probability
-                Pg = 1;
-                if(isa(this.Gater,'EllipsoidalGaterX'))
-                    Pg = this.Gater.GatingProbability;
-                end
+                Pg = this.Gater.GatingProbability;
                 
                 if(numClusterMeasurements==0)
                 % If no measurements associated to cluster
@@ -116,25 +113,14 @@ classdef JointIntegratedProbabilisticDataAssocX < JointProbabilisticDataAssocX
                         trackInd = TrackIndList(t);
 
                         % Compute detection probability
-                        Pd = 1;
-                        if(isa(this.DetectionModel, 'DetectionModelX'))
-                            Pd = this.DetectionModel.pdf(this.TrackList{trackInd}.Filter.StatePrediction.Mean);
-                        end
-
-                        % Compute clutter density per unit volume
-                        if(isempty(this.ClutterModel))
-                            lambda = numClusterMeasurements/sum(this.GateVolumes(TrackIndList));
-                        else
-                            lambda = this.ClutterModel.pdf(this.TrackList{trackInd}.Filter.MeasurementPrediction.Mean);
-                        end
-                        lambda(lambda==0) = eps; % Ensure lambda is non-zero
+                        Pd = this.DetectionModel.pdf(this.TrackList{trackInd}.Filter.StatePrediction.Mean);
                         
                         % Extract existence probability
                         Pe = this.TrackList{trackInd}.ExistenceProbability;
                         
                         % Calculate the likelihood ratio
-                        b = [lambda*(1 - Pe),...
-                             lambda*(1 - Pd*Pg)*Pe];
+                        b = [(1 - Pe),...
+                             (1 - Pd*Pg)*Pe];
                         w = b(1)/b(2);
                         
                         % Compute updated existence probability
@@ -156,10 +142,7 @@ classdef JointIntegratedProbabilisticDataAssocX < JointProbabilisticDataAssocX
                         trackInd = TrackIndList(t);
                         
                         % Compute detection probability
-                        Pd = 1;
-                        if(isa(this.DetectionModel, 'DetectionModelX'))
-                            Pd = this.DetectionModel.pdf(this.TrackList{trackInd}.Filter.StatePrediction.Mean);
-                        end
+                        Pd = this.DetectionModel.pdf(this.TrackList{trackInd}.Filter.StatePrediction.Mean);
 
                         % Compute clutter density per unit volume
                         if(isempty(this.ClutterModel))
@@ -174,11 +157,11 @@ classdef JointIntegratedProbabilisticDataAssocX < JointProbabilisticDataAssocX
                         
                         % Compute combined association likelihood
                         this.ClusterList(clusterInd).AssocLikelihoodMatrix(t,:) = ...
-                            [lambda*((1-Pe)+(1-Pd*Pg)*Pe), Pd*Pg*Pe*this.LikelihoodMatrix(trackInd,MeasIndList)];
+                            [((1-Pe)+(1-Pd*Pg)*Pe), Pd*Pg*Pe*this.LikelihoodMatrix(trackInd,MeasIndList)/lambda];
                         
                         % Calculate the likelihood ratio
-                        b = [lambda*(1 - Pe),...
-                             lambda*(1 - Pd*Pg)*Pe];
+                        b = [(1 - Pe),...
+                             (1 - Pd*Pg)*Pe];
                         w(t) = b(1)/b(2); 
                     end
                     

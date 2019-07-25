@@ -1,7 +1,3 @@
-% This is a test/example script which demonstrates the usage of the 
-% ProbabilisticDataAssociationX class.
-% =========================================================================>
-
 %% Load the ground truth data
 load('multiple-robot-tracking.mat');
 
@@ -50,8 +46,9 @@ config.Gater = EllipsoidalGaterX(2,'GateLevel',10)';
 config.DetectionModel = detection_model;
 assocFilter = GlobalNearestNeighbourDataAssocX(config);
 
-%% Metric Generator
-ospa = OSPAX('CutOffThreshold',1,'Order',1);
+%% Metric Generators
+ospa = OSPAX('CutOffThreshold',1,'Order',2);
+gospa = GOSPAX('CutOffThreshold',1,'Order',2);
 
 %% Initiate TrackList
 NumTracks = 3;
@@ -91,6 +88,7 @@ if(ShowPlots)
 end
 
 ospa_vals= zeros(N,3);
+gospa_vals= zeros(N,4);
 for k=2:N
     fprintf('Iteration = %d/%d\n================>\n',k,N);
     
@@ -114,9 +112,11 @@ for k=2:N
         assocFilter.TrackList{t}.Trajectory(end+1) = assocFilter.TrackList{t}.Filter.StatePosterior;
     end
     
-    %% Evaluate performance metric
-    [ospa_vals(k,1), ospa_vals(k,2), ospa_vals(k,3)]= ospa.evaluate(GroundTruthStateSequence{k},assocFilter.TrackList);
-    
+    %% Evaluate performance metrics
+    [ospa_vals(k,1), ospa_vals(k,2), ospa_vals(k,3)] = ...
+        ospa.evaluate(GroundTruthStateSequence{k},assocFilter.TrackList);
+    [gospa_vals(k,1), gospa_vals(k,2), gospa_vals(k,3), gospa_vals(k,4)]= ...
+        gospa.evaluate(GroundTruthStateSequence{k},assocFilter.TrackList);
      %% Plot update step results
     if(ShowPlots)
             
@@ -159,6 +159,15 @@ for k=2:N
 end
 
 figure
-subplot(2,2,[1 2]), plot(1:k,ospa_vals(1:k,1));
-subplot(2,2,3), plot(1:k,ospa_vals(1:k,2));
-subplot(2,2,4), plot(1:k,ospa_vals(1:k,3));
+title("OSPA");
+subplot(2,2,[1 2]), plot(1:k,ospa_vals(1:k,1)), title("OSPA Metric");
+subplot(2,2,3), plot(1:k,ospa_vals(1:k,2)), title("OSPA Localisation");
+subplot(2,2,4), plot(1:k,ospa_vals(1:k,3)), title("OSPA Cardinality");
+
+
+figure
+title("GOSPA");
+subplot(2,3,[1 2 3]), plot(1:k,gospa_vals(1:k,1)), title("GOSPA Metric");
+subplot(2,3,4), plot(1:k,gospa_vals(1:k,2)), title("GOSPA Localisation");
+subplot(2,3,5), plot(1:k,gospa_vals(1:k,3)), title("GOSPA Missed");
+subplot(2,3,6), plot(1:k,gospa_vals(1:k,4)), title("GOSPA False");

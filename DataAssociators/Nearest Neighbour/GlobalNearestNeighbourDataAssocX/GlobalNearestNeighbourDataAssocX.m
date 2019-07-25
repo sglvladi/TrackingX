@@ -135,10 +135,7 @@ classdef GlobalNearestNeighbourDataAssocX < NearestNeighbourDataAssocX
                 numClusterTracks = length(TrackIndList);
                 
                 % Compute gating probability
-                Pg = 1;
-                if(isa(this.Gater,'EllipsoidalGaterX'))
-                    Pg = this.Gater.GatingProbability;
-                end
+                Pg = this.Gater.GatingProbability;
 
                 if(numClusterMeasurements==0)
                 % If no measurements associated to cluster
@@ -159,10 +156,7 @@ classdef GlobalNearestNeighbourDataAssocX < NearestNeighbourDataAssocX
                         trackInd = TrackIndList(t);
 
                         % Compute detection probability
-                        Pd = 1;
-                        if(isa(this.DetectionModel, 'DetectionModelX'))
-                            Pd = this.DetectionModel.pdf(this.TrackList{trackInd}.Filter.StatePrediction.Mean);
-                        end
+                        Pd = this.DetectionModel.pdf(this.TrackList{trackInd}.Filter.StatePrediction.Mean);
 
                         % Compute clutter density per unit volume
                         if(isempty(this.ClutterModel))

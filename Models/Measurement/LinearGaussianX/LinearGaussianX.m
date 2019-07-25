@@ -321,8 +321,9 @@ classdef LinearGaussianX < MeasurementModelX
             % Increase speed by iterating over the smallest matrix 
             if(Ns>Nm && size(Pk,3)==1)
                 Sk = this.matrix()*Pk*this.matrix()' + this.covar();
+                yk_tilde = this.feval(xk);
                 for i=1:size(yk,2)
-                    prob(i,:) = gauss_pdf(yk(:,i), this.feval(xk), Sk);
+                    prob(i,:) = gauss_pdf(yk(:,i), yk_tilde, Sk);
                 end
             else
                 for i=1:size(xk,2)

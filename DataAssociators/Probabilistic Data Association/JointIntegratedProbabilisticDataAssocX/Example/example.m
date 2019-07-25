@@ -9,7 +9,7 @@ NumTracks = 3;
 lambdaV = 10; % Expected number of clutter measurements over entire surveillance region
 V = 10^2;     % Volume of surveillance region (10x10 2D-grid)
 V_bounds = [0 10 0 10]; % [x_min x_max y_min y_max]
-P_D = 0.8;    % Probability of detection
+P_D = 0.5;    % Probability of detection
 timestep_duration = duration(0,0,1);
 
 %% Models
@@ -46,8 +46,9 @@ config.Gater = EllipsoidalGaterX(2,'GateLevel',10)';
 config.DetectionModel = detection_model;
 assocFilter = JointIntegratedProbabilisticDataAssocX(config);
 
-%% Metric Generator
-ospa = OSPAX('CutOffThreshold',1,'Order',1);
+%% Metric Generators
+ospa = OSPAX('CutOffThreshold',1,'Order',2);
+gospa = GOSPAX('CutOffThreshold',1,'Order',2);
 
 %% Initiate TrackList
 TrackList = cell(1,NumTracks);
@@ -89,6 +90,7 @@ if(ShowPlots)
 end
 
 ospa_vals= zeros(N,3);
+gospa_vals= zeros(N,4);
 for k=2:N
     fprintf('Iteration = %d/%d\n================>\n',k,N);
     
@@ -113,8 +115,12 @@ for k=2:N
         Logs.Pe(t,k) = assocFilter.TrackList{t}.ExistenceProbability;
     end
     
-    %% Evaluate performance metric
-    [ospa_vals(k,1), ospa_vals(k,2), ospa_vals(k,3)]= ospa.evaluate(GroundTruthStateSequence{k},assocFilter.TrackList);
+    %% Evaluate performance metrics
+    [ospa_vals(k,1), ospa_vals(k,2), ospa_vals(k,3)] = ...
+        ospa.evaluate(GroundTruthStateSequence{k},assocFilter.TrackList);
+    [gospa_vals(k,1), gospa_vals(k,2), gospa_vals(k,3), gospa_vals(k,4)]= ...
+        gospa.evaluate(GroundTruthStateSequence{k},assocFilter.TrackList);
+    
     
      %% Plot update step results
     if(ShowPlots)
@@ -151,25 +157,26 @@ for k=2:N
         % Plot existence probabilities
         subplot(3,1,3);
         cla;
-        for(i = 1:NumTracks)
+        for i = 1:NumTracks
             plot(1:k, Logs.Pe(i,1:k));
             hold on;
         end
         %plot(1:k,ospa_vals(1:k,1));
         title('P(E) vs Time');
-        pause(0.01);
-        
-        % Plot metric
-%         subplot(3,1,3);
-%         cla;
-%         plot(1:k,ospa_vals(1:k,1));
-%         title('OSPA vs Time');
-%         pause(0.01);
-        
+        pause(0.01);        
     end
 end
 
 figure
-subplot(2,2,[1 2]), plot(1:k,ospa_vals(1:k,1));
-subplot(2,2,3), plot(1:k,ospa_vals(1:k,2));
-subplot(2,2,4), plot(1:k,ospa_vals(1:k,3));
+title("OSPA");
+subplot(2,2,[1 2]), plot(1:k,ospa_vals(1:k,1)), title("OSPA Metric");
+subplot(2,2,3), plot(1:k,ospa_vals(1:k,2)), title("OSPA Localisation");
+subplot(2,2,4), plot(1:k,ospa_vals(1:k,3)), title("OSPA Cardinality");
+
+
+figure
+title("GOSPA");
+subplot(2,3,[1 2 3]), plot(1:k,gospa_vals(1:k,1)), title("GOSPA Metric");
+subplot(2,3,4), plot(1:k,gospa_vals(1:k,2)), title("GOSPA Localisation");
+subplot(2,3,5), plot(1:k,gospa_vals(1:k,3)), title("GOSPA Missed");
+subplot(2,3,6), plot(1:k,gospa_vals(1:k,4)), title("GOSPA False");

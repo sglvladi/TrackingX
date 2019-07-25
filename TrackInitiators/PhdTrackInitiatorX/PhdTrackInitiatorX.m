@@ -105,11 +105,11 @@ classdef PhdTrackInitiatorX < TrackInitiatorX
             % Calculate p_i and w^{n,i} Eq. (21) of [2]
             w_ni = zeros(numMeas, size(measLikelihood,2));
             p_i = zeros(1,numMeas);
+            lambda = this.PhdFilter.Model.Clutter.pdf(this.PhdFilter.MeasurementList.Vectors);
             for i = 1:numMeas
                 P_D = mean(this.PhdFilter.Model.Detection.pdf(this.PhdFilter.StatePrediction.Particles));
-                lambda = mean(this.PhdFilter.Model.Clutter.pdf(this.PhdFilter.MeasurementList.Vectors));
                 w_ni(i,:) = (P_D.*rhi(i).*measLikelihood(i,:)./ ...
-                            (lambda + sum(P_D.*measLikelihood(i,:).*this.PhdFilter.StatePrediction.Weights,2))).*this.PhdFilter.StatePrediction.Weights;
+                            (lambda(i) + sum(P_D.*measLikelihood(i,:).*this.PhdFilter.StatePrediction.Weights,2))).*this.PhdFilter.StatePrediction.Weights;
                 p_i(i)= sum(w_ni(i,:),2);
             end
 

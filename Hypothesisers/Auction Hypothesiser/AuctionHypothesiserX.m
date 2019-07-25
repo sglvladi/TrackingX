@@ -21,7 +21,6 @@ classdef AuctionHypothesiserX < HypothesiserX
         NetObj
         LikelihoodMatrix
         AssocWeightsMatrix
-        Mode = 'Track-Oriented'
         timeout = 5
     end
     
@@ -29,21 +28,9 @@ classdef AuctionHypothesiserX < HypothesiserX
         function this = AuctionHypothesiserX(varargin)
         % AuctionHypothesiserX Constructor method
         % 
-        % Parameters
-        % ----------
-        % Mode: string
-        %   Specifies the mode of operation of the EHM algorithm, which can
-        %   be set to either:
-        %       1) 'Track-Oriented'
-        %       2) 'Measurement-Oriented'
-        %   (default='Track-Oriented')
-        % 
         % Usage
         % -----
-        % * AuctionHypothesiserX() creates a EHM object handle
-        % * AuctionHypothesiserX('Mode',mode) creates an EHM
-        %   object handle, configured to operate in Mode mode. Mode can be
-        %   either 'Track-Oriented' (default) or 'Measurement-Oriented'.
+        % * AuctionHypothesiserX() 
         %
         % See also AuctionHypothesiserX/hypothesise
             % Return early if no arguments are supplied
