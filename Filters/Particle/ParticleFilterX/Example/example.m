@@ -8,7 +8,7 @@
 %   missed detection.
 %
 %% Extract the GroundTruth data from the example workspace
-load('single-target-tracking.mat');
+%load('single-target-tracking.mat');
 NumIter = size(TrueTrack.Trajectory,2);
 
 %% Models

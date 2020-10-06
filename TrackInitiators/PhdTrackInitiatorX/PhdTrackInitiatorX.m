@@ -101,6 +101,7 @@ classdef PhdTrackInitiatorX < TrackInitiatorX
 
             % Rescale PHD likelihood matrix 
             measLikelihood = this.PhdFilter.MeasurementLikelihoodsPerParticle;
+            %measLikelihood = this.PhdFilter.MeasurementLikelihoodsPerComponent;
 
             % Calculate p_i and w^{n,i} Eq. (21) of [2]
             w_ni = zeros(numMeas, size(measLikelihood,2));
@@ -108,14 +109,22 @@ classdef PhdTrackInitiatorX < TrackInitiatorX
             lambda = this.PhdFilter.Model.Clutter.pdf(this.PhdFilter.MeasurementList.Vectors);
             for i = 1:numMeas
                 P_D = mean(this.PhdFilter.Model.Detection.pdf(this.PhdFilter.StatePrediction.Particles));
+                %P_D = mean(this.PhdFilter.Model.Detection.pdf(this.PhdFilter.StatePrediction.Means));
                 w_ni(i,:) = (P_D.*rhi(i).*measLikelihood(i,:)./ ...
                             (lambda(i) + sum(P_D.*measLikelihood(i,:).*this.PhdFilter.StatePrediction.Weights,2))).*this.PhdFilter.StatePrediction.Weights;
                 p_i(i)= sum(w_ni(i,:),2);
             end
-
-            % Select measurements to be used for spawning new tracks
+%             numNewTracks = floor(sum(p_i))
+%             % Select measurements to be used for spawning new tracks
+%             [p_i, ind] = sort(p_i, 'descend');
             CritMeasurements = find(p_i>this.ConfirmThreshold);
-
+%             numCrit = numel(CritMeasurements);
+%             if(numCrit && numNewTracks<numCrit)
+%                 CritMeasurements = ind(CritMeasurements(1:numNewTracks));
+%             else
+%                 CritMeasurements = ind(CritMeasurements);
+%             end
+%             p_i = p_i(ind);
             % Initiate new tracks
             for j = 1:size(CritMeasurements,2)
                 measInd = CritMeasurements(j); % Index of measurement
@@ -125,6 +134,7 @@ classdef PhdTrackInitiatorX < TrackInitiatorX
                 particles = this.PhdFilter.StatePrediction.Particles;
                 weights = w_ni(measInd,:)/sum(w_ni(measInd,:));
                 dist = ParticleDistributionX(particles, weights);
+                dist.resample(5000);
                 if(~isempty(measurement.Timestamp))
                     statePrior = ParticleStateX(dist,...
                                                 measurement.Timestamp);
@@ -138,7 +148,6 @@ classdef PhdTrackInitiatorX < TrackInitiatorX
                                                'StatePrior', statePrior); 
                 track_config.Trajectory = track_config.Filter.StatePosterior;
                 newTrack = TrackX(track_config);
-                
                 TrackList{end+1} = newTrack; 
             end
 

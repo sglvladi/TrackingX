@@ -78,8 +78,13 @@ classdef ConstantDetectionProbabilityX < DetectionModelX
                 xk = varargin{1};
                 Ns = size(xk,2);
             end
-        
             int = this.DetectionProbability*ones(1,Ns);
+            x = [-3422.85261310741,-3191.58441229017,-2993.55608122595,-3228.08558459284, -3422.85261310741];
+            y = [1.472966334316646e+03,1.123217741935625e+03,1.243952901078573e+03,1.579667558371468e+03, 1.472966334316646e+03];
+            a = find(inpolygon(xk(1,:),xk(3,:),x,y));
+            if numel(a)>0
+                int(a) = 0.1;
+            end
         end
     end
 end

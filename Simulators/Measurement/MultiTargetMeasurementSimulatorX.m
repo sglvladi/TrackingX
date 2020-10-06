@@ -118,7 +118,7 @@ classdef MultiTargetMeasurementSimulatorX < BaseX
                         measurementVectors(:, numDetectedTargets+1:end) = this.Model.Clutter.random(numClutter);
                     end
 
-                    MeasurementScans(k) = MeasurementListX(measurementVectors, timestamp);
+                    MeasurementScans(end+1) = MeasurementListX(measurementVectors, timestamp);
                 end
             end
 

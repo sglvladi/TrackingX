@@ -35,7 +35,7 @@ TrackList{1}.addprop('Filter');
 % Generate DataList
 NumMeasurements = 10;
 pred.mean = dyn.feval(prior.mean);
-%measurements = obs2.heval(repmat(pred.mean,1,NumMeasurements),true);
+measurements = obs2.heval(repmat(pred.mean,1,NumMeasurements),true);
 meas2state = obs.heval_inv(measurements);
 
 %% EKF

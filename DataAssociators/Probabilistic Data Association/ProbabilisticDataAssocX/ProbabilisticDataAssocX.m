@@ -316,7 +316,7 @@ classdef ProbabilisticDataAssocX < DataAssociatorX
                     
                     % Construct standard association likelihood matrix
                     this.AssocLikelihoodMatrix(trackInd,:) = ...
-                        [lambda*(1-Pd*Pg), Pd*Pg*this.LikelihoodMatrix(trackInd,:)];
+                        [lambda*(1-Pd*Pg), Pd*this.LikelihoodMatrix(trackInd,:)];
                     
                     % Hypothesise/Compute Association probabilities
                     this.AssocWeightsMatrix(trackInd,:) = this.Hypothesiser.hypothesise(this.AssocLikelihoodMatrix(trackInd,:));

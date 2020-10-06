@@ -14,6 +14,7 @@ classdef MeasurementListX < BaseX
         Models
         Tags
         Timestamp
+        Metadata
     end
     
     methods
@@ -36,6 +37,7 @@ classdef MeasurementListX < BaseX
                     this.Tags = varargin{1}.Tags;
                     this.Models = varargin{1}.Models;
                     this.Timestamp = varargin{1}.Timestamp;
+                    this.Metadata = varargin{1}.Metadata;
 %                     if(isfield(varargin{1},'Tags'))
 %                         this.Tags
                 elseif isa(varargin{1},'MeasurementX')
@@ -43,6 +45,7 @@ classdef MeasurementListX < BaseX
                     this.Vectors = [measurements.Vector];
                     this.Tags = [measurements.Tag];
                     this.Models = [measurements.Model];
+                    this.Metadata = [measurements.Metadata];
                     this.Timestamp = measurements.Timestamp;
                 else
                     this.Vectors = varargin{1};
@@ -51,6 +54,36 @@ classdef MeasurementListX < BaseX
             else
                 this.Vectors = [];
                 this.Timestamp = [];
+            end
+        end
+
+        function measurements = getMeasurements(this, indices)
+            numMeasurements = size(this.Vectors,2);
+            measurements = MeasurementX.empty();
+            if any(indices<1) || any(indices>numMeasurements)
+                error('Index out of range');
+            end
+            for k=indices
+                if ~isempty(this.Models)
+                    model = this.Models(k);
+                else
+                    model = [];
+                end
+                if ~isempty(this.Tags)
+                    tag = this.Tags(k);
+                else
+                    tag = [];
+                end
+                if ~isempty(this.Metadata)
+                    metadata = this.Metadata(k);
+                else
+                    metadata = struct();
+                end
+                measurements(end+1) = MeasurementX(this.Vectors(:,k),...
+                                               this.Timestamp,...
+                                               model,...
+                                               tag);
+                measurements(end).Metadata = metadata;
             end
         end
         
@@ -73,10 +106,16 @@ classdef MeasurementListX < BaseX
                     else
                         tag = [];
                     end
+                    if ~isempty(this.Metadata)
+                        metadata = this.Metadata(k);
+                    else
+                        metadata = struct();
+                    end
                     measurements(k) = MeasurementX(this.Vectors(:,k),...
                                                    this.Timestamp,...
                                                    model,...
                                                    tag);
+                    measurements(k).Metadata = metadata;
                 end
             end
         end

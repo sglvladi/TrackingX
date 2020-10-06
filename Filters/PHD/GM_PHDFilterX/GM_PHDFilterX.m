@@ -22,8 +22,6 @@ classdef GM_PHDFilterX < FilterX
 %             components and measurements. (Optional, default = None)
 %   + SurvivalProbability - The probability that a target may cease to exist
 %                   between consecutive iterations of the filter.
-%   + DetectionProbability - The probablity that a target will be detected in
-%                       a given measurement scan.
 %   + MaxNumComponents - The maximum allowable number of compunents following 
 %                        an update() call 
 %   + MergeThreshold - Minimum distance between the means of components. If
@@ -64,7 +62,6 @@ classdef GM_PHDFilterX < FilterX
         MeasurementPrediction
         StatePosterior
         SurvivalProbability  
-        DetectionProbability 
         MeasWeights = 1;
         
         % Component management
@@ -91,9 +88,6 @@ classdef GM_PHDFilterX < FilterX
             end
             if (isfield(config,'SurvivalProbability'))
                 this.SurvivalProbability = config.SurvivalProbability;
-            end
-            if (isfield(config,'DetectionProbability'))
-                this.DetectionProbability = config.DetectionProbability;
             end
             if (isfield(config,'Filter'))
                 this.Filter = config.Filter;
@@ -201,8 +195,6 @@ classdef GM_PHDFilterX < FilterX
         % SurvivalProbability: scalar
         %   The probability that a target may cease to exist between consecutive 
         %   iterations of the filter.
-        % DetectionProbability: scalar
-        %   The probablity that a target will be detected in a given measurement scan.
         %
         % Usage
         % -----
@@ -257,8 +249,6 @@ classdef GM_PHDFilterX < FilterX
         % SurvivalProbability: scalar
         %   The probability that a target may cease to exist between consecutive 
         %   iterations of the filter.
-        % DetectionProbability: scalar
-        %   The probablity that a target will be detected in a given measurement scan.
         %
         % Usage
         % -----
@@ -389,22 +379,23 @@ classdef GM_PHDFilterX < FilterX
             Weights = zeros(1, numUpdateComponents);
  
             % Create null measurement hypothesis components
+            P_D = this.Model.Detection.pdf(this.StatePrediction.Means);
             Means(:,1:numPredComponents) = this.StatePrediction.Means;
             Covars(:,:,1:numPredComponents) = this.StatePrediction.Covars;
-            Weights(1:numPredComponents) = (1-this.DetectionProbability)*this.StatePrediction.Weights;
+            Weights(1:numPredComponents) = (1-P_D).*this.StatePrediction.Weights;
              
             % Compute measurement likelihoods
             g = this.MeasurementLikelihoodsPerComponent;
              
             % Compute normalising constant
-            Ck = this.DetectionProbability*g.*this.StatePrediction.Weights;
+            Ck = P_D.*g.*this.StatePrediction.Weights;
             C = sum(Ck,2);
             Ck_plus = C + this.Model.Clutter.pdf(this.MeasurementList.Vectors)';
             
             % Compute the weights for all hypotheses (including null)
             weightsPerHypothesis_ = [Weights(1:numPredComponents);
                                      zeros(numMeasurements, numPredComponents)]; % Null
-            weightsPerHypothesis_(2:end,:) = Ck./Ck_plus; % True
+            weightsPerHypothesis_(2:end,:) = this.MeasWeights'.*Ck./Ck_plus; % True
 %             a = sum(weightsPerHypothesis_,1);
             
             % Create true measurement hypothesis components

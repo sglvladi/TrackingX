@@ -13,7 +13,7 @@
 load('multiple-robot-tracking.mat');
 
 % Plot settings
-ShowPlots = 0;              % Set to 0 to hide plots
+ShowPlots = 1;              % Set to 0 to hide plots
 ShowPrediction = 0;         % Set to 0 to skip showing prediction
 ShowUpdate = 1;             % Set to 0 to skip showing update
 

@@ -44,10 +44,10 @@ classdef ConstantHeadingX < TransitionModelX
     end
     
     properties (Access = private)
-        f = @(xkm1,dt) [xkm1(1,:)+dt*xkm1(3,:).*cos(xkm1(4,:)); 
-                        xkm1(2,:)+dt*xkm1(3,:).*sin(xkm1(4,:)); 
+        f = @(xkm1,dt) anglewrap([xkm1(1,:)+dt*xkm1(3,:).*cos(anglewrap(xkm1(4,:),1)); 
+                        xkm1(2,:)+dt*xkm1(3,:).*sin(anglewrap(xkm1(4,:),1)); 
                         xkm1(3,:); 
-                        xkm1(4,:)];
+                        xkm1(4,:)],4);
         Q = @(dt, q_vel, q_head) dt*blkdiag(q_vel^2, q_vel^2, q_vel, q_head);
     end
     
@@ -190,10 +190,12 @@ classdef ConstantHeadingX < TransitionModelX
                     dt = this.TimestepDuration;
                     if(islogical(wk) && wk)
                         wk = this.random(size(xkm1,2),dt);
+                        wk(4,:) = anglewrap(wk(4,:),1);
                     end
                 case 4
                     if(islogical(wk) && wk)
                         wk = this.random(size(xkm1,2),dt);
+                        wk(4,:) = anglewrap(wk(4,:),1);
                     end
             end
             
@@ -274,6 +276,7 @@ classdef ConstantHeadingX < TransitionModelX
             end
               
             wk = gauss_rnd(zeros(this.NumStateDims,1),this.covar(dt),Ns);
+            wk(4,:) = anglewrap(wk(4,:),1);
         end
         
         function prob = pdf(this, xk, xkm1, dt)

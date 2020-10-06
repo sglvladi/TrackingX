@@ -7,7 +7,7 @@ classdef RandSampleTagGeneratorX < TagGeneratorX
 %   TagX objects, by generating (unique) identifiers as random samples from 
 %   a given population of identifiers, with or without replacement. 
 
-    properties (Access = private)
+    properties 
         allocatedIDs_ = []
         withReplacement_ = false;
         idSamples_

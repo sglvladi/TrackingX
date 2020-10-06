@@ -177,7 +177,7 @@ classdef JointProbabilisticDataAssocX < ProbabilisticDataAssocX
 
                         % Construct cluster association likelihood matrix
                         this.ClusterList(clusterInd).AssocLikelihoodMatrix(t,:) = ...
-                            [lambda*(1-Pd*Pg), Pd*Pg*this.LikelihoodMatrix(trackInd,MeasIndList)];
+                            [lambda*(1-Pd*Pg), Pd*this.LikelihoodMatrix(trackInd,MeasIndList)];
                     end
 
                     % Compute likelihood matrix

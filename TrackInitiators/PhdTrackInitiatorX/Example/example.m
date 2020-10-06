@@ -5,7 +5,7 @@
 load('multiple-robot-tracking.mat');
 
 % Plot settings
-ShowPlots = 1;              % Set to 0 to hide plots
+ShowPlots = 0;              % Set to 0 to hide plots
 numTrueTracks = 3;
 
 % Model parameter shortcuts
@@ -49,7 +49,8 @@ N = numel(DataList);
 %% Base Filter
 obs_covar= measurement_model.covar();
 PriorState = GaussianStateX(zeros(4,1), transition_model.covar() + blkdiag(obs_covar(1,1), 0, obs_covar(2,2),0));
-base_filter = KalmanFilterX('Model', model, 'StatePrior', PriorState);
+% base_filter = KalmanFilterX('Model', model, 'StatePrior', PriorState);
+base_filter = ParticleFilterX('Model', model, 'StatePrior', PriorState);
 
 %% Data Associator
 config.ClutterModel = clutter_model;

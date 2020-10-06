@@ -23,7 +23,7 @@ classdef JointIntegratedProbabilisticDataAssocX < JointProbabilisticDataAssocX
 % See also ParticleFilterX, KalmanFilerX.
 
     properties
-        SurvivalProbability = 0.99
+        SurvivalProbability = 0.999
     end
     
     methods

@@ -76,7 +76,7 @@ classdef GOSPAX < MetricGeneratorX
         % See also SystematicResamplerX/resample
             
             gndVectors = [GroundTruth.Vector];
-            trackVectors = [];
+            trackVectors = zeros(size(gndVectors,1),0);
             numTracks = numel(TrackList);
             for i = 1:numTracks
                 trackVectors(:,i) = TrackList{i}.State.Vector;

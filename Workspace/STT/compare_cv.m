@@ -1,33 +1,40 @@
 % Plot settings
-SHOW_PLOTS = 0;
+SHOW_PLOTS = 1;
 SHOW_UPDATE = 1;
 SHOW_ARENA = 0;
 SHOW_PREDICT = 0;
-NUM_SIMS = 10;
+NUM_SIMS = 1;
 V_BOUNDS = [0 25 0 15];
 
-% Extract the ground truth data from the example workspace
-% load('example.mat');
-% x_true = truth(1,:);
-% y_true = truth(2,:);
+%% Extract the GroundTruth data from the example workspace
+load('maneuvering_robot.mat');
+NumIter = size(TrueTrack.Trajectory,2);
+
+%% Models
 % Instantiate a Transitionamic model
-dyn = ConstantVelocityX('NumDims',2,'VelocityErrVariance',0.001);
+transition_model = ConstantVelocityX('NumDims',2,'VelocityErrVariance',0.0001);
+% transition_model = ConstantHeadingX('VelocityErrVariance',(0.02)^2, 'HeadingErrVariance',0.2^2);
 
 % Instantiate an Observation model
-%obs = LinearGaussianX('NumMeasDims',2,'NumStateDims',4,'MeasurementErrVariance',0.02,'Mapping',[1 3]);
-obs = RangeBearing2CartesianX('NumStateDims',4,'MeasurementErrVariance',[0.001,0.04],'Mapping',[1 3]);
-
+% measurement_model = LinearGaussianX('NumMeasDims',2,'NumStateDims',4,'MeasurementErrVariance',1^2,'Mapping',[1 2]);
+%measurement_model = RangeBearing2CartesianX('NumStateDims',4,'MeasurementErrVariance',[0.001,0.02],'Mapping',[1 3]);
+measurement_model = RangeBearing2CartesianX('NumStateDims',4,'MeasurementErrVariance',...
+                                            [(pi/180)^2,0.1^2],'Mapping',[1 3]);
 % Compile the State-Space model
-ssm = StateSpaceModelX(dyn,obs);
+model = StateSpaceModelX(transition_model,measurement_model);
+
+%% Simulation
+% Data Simulator
+dataSim = SingleTargetMeasurementSimulatorX(model);
 
 % Instantiate a FilterList to store each filter
 FilterList = [];
 
 % Instantiate all filters
 %FilterList{end+1} = KalmanFilterX('Model',ssm);
-FilterList{end+1} = ExtendedKalmanFilterX('Model',ssm);
-FilterList{end+1} = UnscentedKalmanFilterX('Model',ssm);
-FilterList{end+1} = ParticleFilterX('Model',ssm);
+FilterList{end+1} = ExtendedKalmanFilterX('Model',model);
+FilterList{end+1} = UnscentedKalmanFilterX('Model', model);
+FilterList{end+1} = ParticleFilterX('Model',model);
 % FilterList{end+1} = ExtendedParticleFilterX(ssm);
 % FilterList{end+1} = UnscentedParticleFilterX(ssm);
 
@@ -36,11 +43,10 @@ numFilters = numel(FilterList);
 
 % Log Containers
 Logs = cell(1, numFilters); % 4 tracks
-N = size(x_true,1)-2;
 for i=1:numFilters
-    Logs{i}.stateMean = zeros(4,N,NUM_SIMS);       
-    Logs{i}.stateCovar = zeros(4,4,N,NUM_SIMS);
-    Logs{i}.positionalError = zeros(1,N,NUM_SIMS);
+    Logs{i}.stateMean = zeros(4,NumIter,NUM_SIMS);       
+    Logs{i}.stateCovar = zeros(4,4,NumIter,NUM_SIMS);
+    Logs{i}.positionalError = zeros(1,NumIter,NUM_SIMS);
     Logs{i}.execTime = zeros(1,NUM_SIMS);
 end
 
@@ -67,54 +73,54 @@ end
 
 for simIter = 1:NUM_SIMS
     
-    fprintf('Sim %d/%d', simIter, NUM_SIMS);
+    fprintf('Sim %d/%d\n', simIter, NUM_SIMS);
     
-    measurementsCellArray = dataGen(obs,GroundTruth,1);
-    % Generate ground truth and measurements
-    for k = 1:N
-        % Generate new measurement from ground truth
-        truth(:,k) = [x_true(k+2,1); y_true(k+2,1)];   
-        measurement(:,k) = measurementsCellArray{k}; 
-    end
-    
-    priorStateMean = obs.finv(measurement(:,1));
-    measErrCovar = ssm.Measurement.covar();
-    stateErrCovar = ssm.Transition.covar();
-    priorStateCovar = 10*stateErrCovar;%+ blkdiag(measErrCovar(1,1),0,measErrCovar(2,2),0);
-    
+    % Simulate some measurements from ground-truth data
+    MeasurementScans = dataSim.simulate(TrueTrack);
+%     measurement_model = RangeBearing2CartesianX('NumStateDims',4,'MeasurementErrVariance',...
+%                                             [(pi/180)^2,0.1^2],'Mapping',[1 2]);
+    measurements = [MeasurementScans.Vectors];
     
     % Reset all filters to prior
+    measurement = MeasurementScans(1).getMeasurements(1);
+    timestamp = measurement.Timestamp;
+    true_mean = TrueTrack.Trajectory(1).Vector;
+%     xPrior = [true_mean(1);true_mean(3);0.2; pi/4];
+    xPrior = [true_mean(1);0.2;true_mean(3); 0.2];
+    PPrior = 30*transition_model.covar();
+    dist = GaussianDistributionX(xPrior,PPrior);
+    StatePrior = ParticleStateX(dist,5000,timestamp);
     for filterInd=1:numFilters
-        if(isa(FilterList{filterInd},'KalmanFilterX'))
-            Prior.State = GaussianStateX(priorStateMean,priorStateCovar);
-        elseif(isa(FilterList{i},'ParticleFilterX'))
-            Prior.State = ParticleStateX(priorStateMean,priorStateCovar,5000);
-        end
-        FilterList{filterInd}.initialise('Prior',Prior);
+        % Setup prior
+        FilterList{filterInd}.initialise('StatePrior',StatePrior);
     end
     
     % START OF SIMULATION
     % ===================>
-    for k = 1:N
+    for k = 1:NumIter
 
         % Update measurements
-        for i=1:numFilters
-            FilterList{i}.MeasurementList = measurement(:,k);
-        end
+        MeasurementList = MeasurementScans(k);
 
         % Iterate and time all filters
         for i=1:numFilters
             tic;
-            FilterList{i}.predict();
-            FilterList{i}.update();
+            filter = FilterList{i};
+            filter.MeasurementList = MeasurementList;
+%             prior = filter.StatePosterior;
+            filter.predict();
+            filter.update();
+%             prediction = filter.predict(prior, MeasurementList.Timestamp);
+%             posterior = filter.update(prediction, MeasurementList);
             Logs{i}.execTime(1,simIter) = Logs{i}.execTime(1,simIter) + toc;
         end
 
         % Store Logs
         for i=1:numFilters
-            Logs{i}.stateMean(:,k,simIter) = FilterList{i}.Posterior.State.Mean;       
-            Logs{i}.stateCovar(:,:,k,simIter) = FilterList{i}.Posterior.State.Covar;
-            Logs{i}.positionalError(1,k,simIter) = ((truth(1,k) - FilterList{i}.Posterior.State.Mean(1))^2 + (truth(2,k) - FilterList{i}.Posterior.State.Mean(3))^2);
+            truth = TrueTrack.Trajectory(k).Vector;
+            Logs{i}.stateMean(:,k,simIter) = FilterList{i}.StatePosterior.Mean;       
+            Logs{i}.stateCovar(:,:,k,simIter) = FilterList{i}.StatePosterior.Covar;
+            Logs{i}.positionalError(1,k,simIter) = ((truth(1,:) - FilterList{i}.StatePosterior.Mean(1))^2 + (truth(3,:) - FilterList{i}.StatePosterior.Mean(3))^2);
         end
 
       % Plot update step results
@@ -129,14 +135,13 @@ for simIter = 1:NUM_SIMS
 
             % NOTE: if your image is RGB, you should use flipdim(img, 1) instead of flipud.
             hold on;
-            meas = obs.finv(measurement(:,k));
-            h2 = plot(ax(1),meas(1),meas(3),'k*','MarkerSize', 10);
-            set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off'); % Exclude line from legend
-            h2 = plot(ax(1),truth(1,1:k),truth(2,1:k),'b.-','LineWidth',1);
-            set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off'); % Exclude line from legend
-            h2 = plot(ax(1),truth(1,k),truth(2,k),'bo','MarkerSize', 10);
-            set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off'); % Exclude line from legend
-
+            meas = measurement_model.finv(measurements(:,1:k));
+            true_means = [TrueTrack.Trajectory(1:k).Vector];
+            h1 = plot(true_means(1,1:k), true_means(3,1:k),'.-k', meas(1,:), meas(3,:), 'rx');
+            for i=1:size(h1,1)
+                h2 = h1(i);
+                set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off'); % Exclude line from legend
+            end
             for i=1:numFilters
                 h2 = plot(Logs{i}.stateMean(1,k,simIter), Logs{i}.stateMean(3,k,simIter), 'o', 'MarkerSize', 10);
                 set(get(get(h2,'Annotation'),'LegendInformation'),'IconDisplayStyle','off'); % Exclude line from legend

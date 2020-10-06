@@ -5,7 +5,7 @@
 load('multiple-robot-tracking.mat');
 
 % Plot settings
-ShowPlots = 1;              % Set to 0 to hide plots
+ShowPlots = 0;              % Set to 0 to hide plots
 numTrueTracks = 3;
 
 % Model parameter shortcuts
@@ -45,6 +45,7 @@ base_filter = KalmanFilterX('Model', model, 'StatePrior', PriorState);
 
 %% Data Associator
 config.ClutterModel = clutter_model;
+config.DetectionModel = detection_model;
 config.Clusterer = NaiveClustererX();
 config.Gater = EllipsoidalGaterX(2,'GateLevel',10)';
 config.DetectionProbability = P_D;

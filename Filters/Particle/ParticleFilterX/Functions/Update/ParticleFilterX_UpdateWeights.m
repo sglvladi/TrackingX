@@ -22,5 +22,9 @@ function [newWeights] = ParticleFilterX_UpdateWeights(lik,y,parts,weights)
     
     % Update and normalise weights
     newWeights = weights.*lik(y,parts);
+    if all(~newWeights)
+%         warning("All weights evaluated as 0! Setting equal to eps");
+        newWeights = newWeights + eps;
+    end
     newWeights = newWeights./sum(newWeights,2);       
 end

@@ -6,7 +6,7 @@ timestamp = datetime();
 N = size(GroundTruth,2);
 velocity = zeros(1,2);
 GroundTruthTracks = GroundTruthTrackX.empty(0,3);
-for i = 1:N
+for i = 1:2:N
     GroundTruth_i = cell2mat(GroundTruth(:,i));
     n = size(GroundTruth_i,2);
     clear GroundTruthList;
@@ -15,8 +15,8 @@ for i = 1:N
     end
     for j = 1:n
         gndVector = [GroundTruth_i(1,j);
-                         velocity(1);
-                         GroundTruth_i(2,j);
+                         GroundTruth_i(2,j)
+                         velocity(1);;
                          velocity(2);];
         if i == 1
             GroundTruthTracks(j) = GroundTruthTrackX(GroundTruthStateX(gndVector,... 

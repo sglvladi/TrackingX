@@ -14,13 +14,14 @@ V_BOUNDS = [0 25 0 15];
 load('maneuvering_robot.mat');
 
 % Instantiate a Dynamic model
-dyn = ConstantHeadingModelX('VelocityErrVariance',(0.03)^2, 'HeadingErrVariance',0.07);
+dyn = ConstantHeadingX('VelocityErrVariance',(0.03)^2, 'HeadingErrVariance',0.07);
 
 % Instantiate an Observation model
-% obs = LinGaussObsModelX_2D('NumStateDims',4,'ObsErrVariance',0.2,'Mapping',[1 2]);
-obs = Polar2CartGaussModelX('NumStateDims',4,'RangeErrVariance',(0.1)^2,...
-                          'ThetaErrVariance',(pi/45)^2,'Mapping',[1 2]);
-                      
+obs = LinearGaussianX('NumMeasDims',2, 'NumStateDims',4,...
+                      'MeasurementErrVariance',0.2,'Mapping',[1 2]);
+% obs = Polar2CartGaussModelX('NumStateDims',4,'RangeErrVariance',(0.1)^2,...
+%                           'ThetaErrVariance',(pi/45)^2,'Mapping',[1 2]);
+%                       
 % Compile the State-Space model
 ssm = StateSpaceModelX(dyn,obs);
 

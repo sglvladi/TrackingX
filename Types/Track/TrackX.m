@@ -33,7 +33,6 @@ classdef TrackX < BaseX & dynamicprops
         Tag
         Trajectory
     end
-    
     methods
         function this = TrackX(varargin)
         % TrackX Constructor method
@@ -138,6 +137,9 @@ classdef TrackX < BaseX & dynamicprops
             end
         end
         
+        function update(this, state)
+            this.Trajectory(end+1) = state;            
+        end
         
         function state = get.State(this)
         % get.State - Getter for dependent State property

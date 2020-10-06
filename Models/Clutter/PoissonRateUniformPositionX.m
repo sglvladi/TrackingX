@@ -159,7 +159,13 @@ classdef PoissonRateUniformPositionX < ClutterModelX
             end
     
             if(strcmp(type,'spatial'))
+                x = [-2858.62556879160,-2856.97056906902,-108.925126527319,-108.988225201227,-2858.62556879160];
+                y = [-4044.74840882411,-974.655039469575,-975.424226884065,-4045.51804181679,-4044.74840882411];
+                a = find(inpolygon(xk(1,:),xk(2,:),x,y));
                 int = this.ClutterRate*this.uniform_.pdf(xk);
+%                 if numel(a)>0
+%                     int(a) = int(a)*200;
+%                 end
             else
                 int = this.poisson_.pdf(xk);
             end

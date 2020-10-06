@@ -1,0 +1,1 @@
+prior = GaussianStateX([0; 0.04979784; 0;-5], diag([10, 1, 10, 1]));

@@ -109,6 +109,12 @@ classdef ExtendedKalmanFilterX < KalmanFilterX
         
             % Predict state and measurement
             statePrediction = this.predictState(varargin{:});
+            if nargin>1 && isa(varargin{1},'StateX')
+               % Replace a potential prior with the generated prediction
+               % before forwarding the arguments to the measurement
+               % prediction. Failure to do so will result in errors!!!
+               varargin{1} = statePrediction; 
+            end
             measurementPrediction = this.predictMeasurement(varargin{:});                                                               
         end
         

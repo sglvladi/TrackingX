@@ -7,16 +7,20 @@ SkipFrames = 0;
 load('3_robots.mat');
 
 % Instantiate a Dynamic model
-dyn = ConstantVelocityModelX_2D('VelocityErrVariance',0.0001);
+dyn = ConstantVelocityX('NumDims',2,'VelocityErrVariance',0.0001);
 dyn = ConstantHeadingModelX('VelocityErrVariance',(0.03)^2, 'HeadingErrVariance',0.07);
 
 
 % Instantiate an Observation model
 % obs = LinGaussObsModelX_2D('NumStateDims',4,'ObsErrVariance',0.1,'Mapping',[1 3]);
-obs = Polar2CartGaussModelX('NumStateDims',4,'RangeErrVariance',(0.1)^2,...
-                          'ThetaErrVariance',(pi/45)^2,'Mapping',[1 3]);
+obs = RangeBearing2CartesianX('NumStateDims',4,'MeasurementErrVariance',...
+                              [(pi/45)^2,0.1^2],'Mapping',[1 3]);
+clutter_model = PoissonRateUniformPositionX('ClutterRate',lambdaV,...
+                                            'Limits',[V_bounds(1:2);...
+                                                      V_bounds(3:4)]);   
+detection_model = ConstantDetectionProbabilityX('DetectionProbability',P_D);
 % Compile the State-Space model
-ssm = StateSpaceModelX(dyn,obs);
+ssm = StateSpaceModelX(dyn,obs,'Clutter',clutter_model, 'Detection', detection_model);
 
 % Instantiate a Kalman Filter object
 kf = KalmanFilterX(ssm);
@@ -37,10 +41,15 @@ for i=1:NumTracks
     TrackList{i} = TrackX();
     TrackList{i}.addprop('Filter');
     
-    Params_kf.PriorStateMean = [GroundTruth{1}(1,i); 0; GroundTruth{1}(2,i); 0];
-    Params_kf.PriorStateCovar = dyn.covariance(); %blkdiag(POmodel.Params.R(1)/2, 2^2, 2*pi);%CVmodel.Params.Q(1);
-    Params_kf.Model = ssm;
-    %TrackList{i}.Filter = ExtendedKalmanFilterX(Params_kf);
+%     Params_kf.PriorStateMean = [GroundTruth{1}(1,i); 0; GroundTruth{1}(2,i); 0];
+%     Params_kf.PriorStateCovar = dyn.covariance(); %blkdiag(POmodel.Params.R(1)/2, 2^2, 2*pi);%CVmodel.Params.Q(1);
+%     Params_kf.Model = ssm;
+    xPrior = [GroundTruth{1}(1,i); 0; GroundTruth{1}(2,i); 0];
+    PPrior = 10*transition_model.covar();
+    dist = GaussianDistributionX(xPrior,PPrior);
+    StatePrior = ParticleStateX(dist,5000,timestamp);
+    TrackList{i}.Filter = ExtendedKalmanFilterX(ssm);
+    TrackList{1}.Filter.initialise('Model',ssm,'StatePrior',StatePrior);
     %TrackList{i}.Filter = UnscentedKalmanFilterX(Params_kf);
     
     

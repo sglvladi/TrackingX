@@ -7,17 +7,17 @@ state = [2000; 0.1; 0; 0];
 
 % Instantiate an Observation model
 % obs = LinGaussObsModelX_2D('NumStateDims',4,'ObsErrVariance',0.2,'Mapping',[1 2]);
-obs = Polar2CartGaussModelX('NumStateDims',4,'RangeErrVariance',(1)^2,...
-                          'ThetaErrVariance',(pi/90)^2,'Mapping',[1 3]);
+obs = RangeBearing2CartesianX('NumStateDims',4,'MeasurementErrVariance',[(pi/90)^2,(1)^2],...
+                              'Mapping',[1 3]);
 
 % View the transition matrix and process covariance matrices
-R = obs.covariance();
+R = obs.covar();
 
 % Predict the target's position and velocity after the interval has passed
-measurement  = obs.heval(state);
+measurement  = obs.feval(state);
 
 %% EKF
-[ekf_mean, H_jac] = ExtendedKalmanFilterX.computeJac_(@(x)obs.heval_inv(x),measurement);
+[ekf_mean, H_jac] = ExtendedKalmanFilterX.computeJac_(@(x)obs.finv(x),measurement);
 ekf_covar = H_jac*R*H_jac';
 
 %% UKF
@@ -30,7 +30,7 @@ beta  = 2;
 X = formSigmaPoints(measurement, R, c);
 % Perform Unscented Transform to get predicted measurement mean,
 % covariance and cross-covariance
-[ukf_mean,ukf_covar,Pxy] = unscentedTransform(@(x)obs.heval_inv(x),X,Wmean,Wcov,OOM);
+[ukf_mean,ukf_covar,Pxy] = unscentedTransform(@(x)obs.finv(x),X,Wmean,Wcov,OOM);
 
 %% PF
 % Generate 50 random noise samples from the dynamic model
@@ -38,7 +38,7 @@ noise = obs.random(50000000);
 
 % Add noise to the measurements
 Yk1 = noise + measurement;
-Xk1 = obs.heval_inv(Yk1);
+Xk1 = obs.finv(Yk1);
 
 Xk = [Xk1];%,Xk2];
 Yk = [Yk1];%,Yk2];
@@ -90,8 +90,8 @@ contour(x1,x2,F,4,'r','LineWidth',2);
 title('Unscented Transform (UKF)')
 xlabel('X (m)');
 ylabel('Y (m)');
-xlim([1985,2005]);
-ylim([-200,200]);
+xlim(xLim);
+ylim(yLim);
 view(0,-90);
 
 
@@ -113,8 +113,8 @@ xlabel('X (m)');
 ylabel('Y (m)');
 %set(gca,'Xdir','reverse')
 set(gca,'Ydir','reverse')
-xlim([1985,2005]);
-ylim([-200,200]);
+xlim(xLim);
+ylim(yLim);
 view(0,-90);
 
 % model = PositionalObsModelX(config);%PositionalObsModelX(config);%Polar2CartGaussianModelX(config);

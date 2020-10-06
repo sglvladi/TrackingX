@@ -1,4 +1,4 @@
-classdef SingleTargetGroundTruthSimulatorX < GroundTruthSimulatorX
+ classdef SingleTargetGroundTruthSimulatorX < GroundTruthSimulatorX
 % SingleTargetGroundTruthSimulatorX class
 % 
 % Summary of SingleTargetGroundTruthSimulatorX:

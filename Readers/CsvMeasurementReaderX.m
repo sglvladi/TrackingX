@@ -35,7 +35,7 @@ classdef CsvMeasurementReaderX < MeasurementReaderX
     methods (Access = protected)
         function initialise_(this, config)
             this.Filename = config.Filename;
-            this.Table_ = readtable(this.Filename);
+            this.Table_ = readtable(this.Filename,'Delimiter', ',');
             this.StateFields = config.StateFields;
             this.TimeField = config.TimeField;
             this.TimeValues_ = this.Table_{:,{this.TimeField}};

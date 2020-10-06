@@ -2,7 +2,7 @@
 
 % Initialise some components
 mu  = randi(500,2,8);
-p   = [1 0; 0 1];
+p   = [10^2 0; 0 10^2];
 P = repmat(p,1,1,8);
 w   = rand(1,8);
 
@@ -36,3 +36,10 @@ prob = gm.pdf(samples);
 [a,b,c,d,e] = gm.cluster(samples');
 
 
+plot(samples(1,:), samples(2,:), '.')
+[bandwidth,density,X,Y]=kde2d(samples');
+h = surf(X,Y,density);
+shading interp
+colormap(jet(3000))
+hold on
+plotgaussellipse(gm.Mean,gm.Covar)

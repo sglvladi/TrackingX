@@ -110,7 +110,7 @@ classdef MofN_TrackInitiatorX < TrackInitiatorX
 
                 % Update detection history
                 for t=1:numConfirmedTracks
-                    validInds = find(AssocWeightsMatrix(t,2:end));
+                    validInds = find(AssocWeightsMatrix(t,2:end)~=0);
                     if(~isempty(this.DataAssociator.MeasurementList.Tags))
                         validMeas = MeasurementListX(MeasurementList.Vectors(:,validInds), MeasurementList.Timestamp, MeasurementList.Tags(validInds));
                     else
@@ -126,9 +126,19 @@ classdef MofN_TrackInitiatorX < TrackInitiatorX
                 del_tracks = 0;
                 del_flag = 0;
                 for t = 1:numConfirmedTracks
+                    N = this.DeleteThreshold(1);
                     M = this.DeleteThreshold(2);
+                    
+                    xk = ConfirmedTrackList{t}.State.Mean;
+                    x = [-3422.85261310741,-3191.58441229017,-2993.55608122595,-3228.08558459284, -3422.85261310741];
+                    y = [1.472966334316646e+03,1.123217741935625e+03,1.243952901078573e+03,1.579667558371468e+03, 1.472966334316646e+03];
+                    a = find(inpolygon(xk(1,:),xk(3,:),x,y));
+                    if numel(a)>0
+                        N = 29;
+                        M = 30;
+                    end
                     % Check condition
-                    del_cond = sum(ConfirmedTrackList{t}.DetectionHistory(end-(M-1):end)==0) >= this.DeleteThreshold(1);
+                    del_cond = sum(ConfirmedTrackList{t}.DetectionHistory(end-(M-1):end)==0) >= N;
                     if isa(this.CustomDeleteConditionFcn, 'function_handle')
                         c_del_cond = this.CustomDeleteConditionFcn(this,ConfirmedTrackList{t});
                         del_cond = del_cond || c_del_cond;
@@ -170,7 +180,7 @@ classdef MofN_TrackInitiatorX < TrackInitiatorX
             % Update Detection and Miss counters for all tracks
             for t=1:numel(this.DataAssociator.TrackList)
                 % Update counts
-                validInds = find(this.DataAssociator.ValidationMatrix(t,:));
+                validInds = find(this.DataAssociator.AssocWeightsMatrix(t,2:end)~=0);
                 if(~isempty(this.DataAssociator.MeasurementList.Tags))
                     validMeas = MeasurementListX(MeasurementList.Vectors(:,validInds), MeasurementList.Timestamp, MeasurementList.Tags(validInds));
                 else
@@ -187,11 +197,29 @@ classdef MofN_TrackInitiatorX < TrackInitiatorX
             del_flag = 0;
             for t = 1:numel(this.DataAssociator.TrackList)
                 P = this.DataAssociator.TrackList{t}.State.Covar;
+                N_c = this.ConfirmThreshold(1);
                 M_c = this.ConfirmThreshold(2);
+                N_d = this.DeleteThreshold(1);
                 M_d = this.DeleteThreshold(2);
+                xk = this.DataAssociator.TrackList{t}.State.Mean;
+                x = [-3422.85261310741,-3191.58441229017,-2993.55608122595,-3228.08558459284, -3422.85261310741];
+                y = [1.472966334316646e+03,1.123217741935625e+03,1.243952901078573e+03,1.579667558371468e+03, 1.472966334316646e+03];
+                a = find(inpolygon(xk(1,:),xk(3,:),x,y));
+                if numel(a)>0
+                    N_d = 29;
+                    M_d = 30;
+                end
                 
+                x = [-469.710602736631,-2572.92295458513,-2516.31234127506,-1320.74163107899,-835.307363807233, -469.710602736631];
+                y = [-4915.41679013513,-4065.50122858976,-2858.60918927224,-1380.19032924249,-1261.08679763585, -4915.41679013513];
+                b = find(inpolygon(xk(1,:),xk(3,:),x,y));
+                if numel(b)>0
+                    N_c = 6;
+                    M_c = 10;
+                end
                 % Check condition
-                del_cond = sum(this.DataAssociator.TrackList{t}.DetectionHistory(end-(M_d-1):end)==0) >= this.DeleteThreshold(1);
+                del_cond = sum(this.DataAssociator.TrackList{t}.DetectionHistory(end-(M_d-1):end)==0) >= N_d;
+
                 if isa(this.CustomDeleteConditionFcn, 'function_handle')
                     c_del_cond = this.CustomDeleteConditionFcn(this,this.DataAssociator.TrackList{t});
                     del_cond = del_cond || c_del_cond;
@@ -200,7 +228,7 @@ classdef MofN_TrackInitiatorX < TrackInitiatorX
                     this.DataAssociator.TrackList{t} = []; 
                     del_tracks = del_tracks + 1;
                     del_flag = 1;
-                elseif(sum(this.DataAssociator.TrackList{t}.DetectionHistory(end-(M_c-1):end)==1)>= this.ConfirmThreshold(1))
+                elseif(sum(this.DataAssociator.TrackList{t}.DetectionHistory(end-(M_c-1):end)==1) >= N_c)
 %                     disp("Confirming new track");
                     ConfirmedTrackList{end+1} = this.DataAssociator.TrackList{t};
                     this.DataAssociator.TrackList{t} = [];
@@ -231,7 +259,7 @@ classdef MofN_TrackInitiatorX < TrackInitiatorX
                 else
                     statePrior = GaussianStateX(dist);
                 end
-                windowSize = max(this.ConfirmThreshold(2), this.DeleteThreshold(2));
+                windowSize = 40; %max(this.ConfirmThreshold(2), this.DeleteThreshold(2));
                 track_config = struct('Filter', copy(this.InitFilter), ...
                                       'Tag', this.TagGenerator.generate(), ...
                                       'DetectionHistory', [-ones(1,windowSize-1),1],...

@@ -8,12 +8,15 @@ load('multiple-robot-tracking.mat');
 %% Plot settings
 ShowPlots = 1;              % Set to 0 to hide plots
 numTrueTracks = 3;
-
+GroundTruthTracks = GroundTruthTracks(1:numTrueTracks);
+for i=1:length(GroundTruthStateSequence)
+    GroundTruthStateSequence{i} = GroundTruthStateSequence{i}(1:numTrueTracks);
+end
 %% Model parameter shortcuts
-lambdaV = 1; % Expected number of clutter measurements over entire surveillance region
+lambdaV = 50; % Expected number of clutter measurements over entire surveillance region
 V = 10^2;     % Volume of surveillance region (10x10 2D-grid)
 V_bounds = [0 10 0 10]; % [x_min x_max y_min y_max]
-P_D = 0.6;    % Probability of detection
+P_D = 0.9;    % Probability of detection
 timestep_duration = duration(0,0,1);
 
 %% Models
@@ -54,7 +57,7 @@ assocFilter = ProbabilisticDataAssocX(config);
 ospa = OSPAX('CutOffThreshold',1,'Order',1);
 
 %% Initiate TrackList
-NumTracks = 3;
+NumTracks = numTrueTracks;
 TrackList = cell(1,NumTracks);
 for i=1:NumTracks
     xPrior = [GroundTruth{1}(1,i); 0; GroundTruth{1}(2,i); 0];
